@@ -1,19 +1,16 @@
 import React, { useState, useMemo } from 'react';
 import { Product, Ingredient, ProductionRun, StockMovement } from '../types';
 import {
-  TrendingUp,
-  Boxes,
-  IndianRupee,
-  Layers,
-  ArrowUpRight,
-  PieChart as PieIcon,
-  BarChart3,
-  Activity,
-  Calendar,
-  Flame,
-  CheckCircle2,
-  Clock,
-} from 'lucide-react';
+  FiTrendingUp,
+  FiBox,
+  FiDollarSign,
+  FiLayers,
+  FiArrowUpRight,
+  FiPieChart,
+  FiBarChart2,
+  FiActivity,
+  FiCalendar,
+} from 'react-icons/fi';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -50,22 +47,20 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | 'all'>('7d');
 
   // Real financial calculations
-  const totalFinishedGoodsValuation = products.reduce((acc, p) => acc + (p.currentStock * p.wholesalePrice), 0);
-  const totalRawValuation = ingredients.reduce((acc, ing) => acc + (ing.currentStock * ing.avgCostPerUnit), 0);
+  const totalFinishedGoodsValuation = products.reduce((acc, p) => acc + p.currentStock * p.wholesalePrice, 0);
+  const totalRawValuation = ingredients.reduce((acc, ing) => acc + ing.currentStock * ing.avgCostPerUnit, 0);
   const totalWorkingCapital = totalFinishedGoodsValuation + totalRawValuation;
 
-  // Real Production Volume over time (last 7 or 14 days)
+  // Real Production Volume over time
   const productionTrendsData = useMemo(() => {
-    const dateMap = new Map<string, { date: string; outputKg: number; plannedKg: number; count: number }>();
-
-    // Seed last 7 days so chart is continuous
+    const dateMap = new Map<string, { date: string; outputKg: number; count: number }>();
     const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 14 : 30;
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const iso = d.toISOString().split('T')[0];
       const displayDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      dateMap.set(iso, { date: displayDate, outputKg: 0, plannedKg: 0, count: 0 });
+      dateMap.set(iso, { date: displayDate, outputKg: 0, count: 0 });
     }
 
     productionRuns.forEach((run) => {
@@ -73,7 +68,6 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
         const item = dateMap.get(run.productionDate);
         if (item) {
           item.outputKg += run.actualQuantity;
-          item.plannedKg += run.plannedQuantity;
           item.count += 1;
         }
       }
@@ -82,7 +76,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
     return Array.from(dateMap.values());
   }, [productionRuns, timeRange]);
 
-  // Real Consumption by Ingredient (sum actualQuantity consumed across runs)
+  // Real Consumption by Ingredient
   const ingredientConsumptionData = useMemo(() => {
     const ingMap = new Map<string, { name: string; quantity: number; unit: string }>();
 
@@ -98,7 +92,6 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
       });
     });
 
-    // If no logged consumption records yet, fallback to active stock movement 'out'
     if (ingMap.size === 0) {
       stockMovements
         .filter((m) => m.itemType === 'raw' && m.movementType === 'out')
@@ -118,7 +111,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
       .slice(0, 6);
   }, [productionRuns, stockMovements]);
 
-  // Inventory Health Segments (Image 2 style)
+  // Inventory Health Segments
   const healthSegments = useMemo(() => {
     const total = ingredients.length || 1;
     const depleted = ingredients.filter((i) => i.currentStock <= 0).length;
@@ -137,38 +130,25 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
 
   // Capital Distribution Pie Data
   const valuationPieData = useMemo(() => [
-    { name: 'ഫിനിഷ്ഡ് സ്നാക്കുകൾ (Finished)', value: totalFinishedGoodsValuation, color: '#EA580C' },
-    { name: 'അസംസ്കൃത വസ്തുക്കൾ (Raw Materials)', value: totalRawValuation, color: '#F59E0B' },
+    { name: 'Finished Snacks', value: totalFinishedGoodsValuation, color: '#EA580C' },
+    { name: 'Raw Materials', value: totalRawValuation, color: '#F59E0B' },
   ], [totalFinishedGoodsValuation, totalRawValuation]);
 
-  // Top Products by Stock Valuation
-  const topProductsByValue = useMemo(() => {
-    return products
-      .map((p) => ({
-        name: p.name,
-        value: Math.round(p.currentStock * p.wholesalePrice),
-        stock: p.currentStock,
-        unit: p.unit,
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6);
-  }, [products]);
-
   return (
-    <div className="space-y-6 pb-20">
+    <div className="space-y-6 pb-20 max-w-6xl">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
         <div>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-950/40 text-epso-orange flex items-center justify-center font-bold">
-              <Activity className="w-4 h-4" />
+              <FiActivity className="w-4 h-4" />
             </div>
-            <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white font-malayalam">
-              വിപുലമായ ഉൾക്കാഴ്ചകളും അനലിറ്റിക്സും
+            <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white">
+              Production Insights
             </h1>
           </div>
-          <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-malayalam mt-1">
-            തത്സമയ ഉൽപ്പാദന പ്രവണതകൾ, അസംസ്കൃത വസ്തുക്കളുടെ ഉപഭോഗം & സാമ്പത്തിക വിവരങ്ങൾ
+          <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
+            ഉൽപ്പാദന ട്രെൻഡുകളും അസംസ്കൃത വസ്തുക്കളുടെ ഉപഭോഗവും
           </p>
         </div>
 
@@ -178,19 +158,19 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
             <button
               key={rng}
               onClick={() => setTimeRange(rng)}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 timeRange === rng
                   ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
                   : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
               }`}
             >
-              {rng === '7d' ? '7 ദിവസം (7D)' : rng === '30d' ? '30 ദിവസം (30D)' : 'എല്ലാം (All)'}
+              {rng === '7d' ? '7 Days' : rng === '30d' ? '30 Days' : 'All Time'}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Primary Financial Metric Strip (Image 2 style) */}
+      {/* Financial Metric Strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Total Working Capital */}
         <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark">
@@ -199,14 +179,14 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
               ആകെ പാൻട്രി മൂലധനം (Working Capital)
             </span>
             <div className="p-2 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-epso-orange">
-              <IndianRupee className="w-4 h-4" />
+              <FiDollarSign className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl sm:text-3xl font-black text-stone-900 dark:text-white">
             ₹{totalWorkingCapital.toLocaleString('en-IN')}
           </div>
-          <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1 font-malayalam">
-            ഫിനിഷ്ഡ് ഗുഡ്സ് + അസംസ്കൃത വസ്തുക്കളുടെ ആകെ മൂല്യം
+          <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
+            ഫിനിഷ്ഡ് ഗുഡ്സ് + ചേരുവകളുടെ ആകെ മൂല്യം
           </p>
         </div>
 
@@ -214,17 +194,17 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
         <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
-              ഫിനിഷ്ഡ് ഉൽപ്പന്നങ്ങൾ (Finished Snacks)
+              ഫിനിഷ്ഡ് സ്നാക്സ് (Finished Goods)
             </span>
             <div className="p-2 rounded-xl bg-red-50 dark:bg-red-950/40 text-epso-red">
-              <Boxes className="w-4 h-4" />
+              <FiBox className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl sm:text-3xl font-black text-stone-900 dark:text-white">
             ₹{totalFinishedGoodsValuation.toLocaleString('en-IN')}
           </div>
-          <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1 font-malayalam">
-            {products.length} സ്നാക്കുകൾ വെയർഹൗസിൽ സ്റ്റോക്കുള്ളത്
+          <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
+            {products.length} സ്നാക്കുകൾ സ്റ്റോക്കുള്ളത്
           </p>
         </div>
 
@@ -235,41 +215,41 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
               അസംസ്കൃത വസ്തുക്കൾ (Raw Materials)
             </span>
             <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-500">
-              <Layers className="w-4 h-4" />
+              <FiLayers className="w-4 h-4" />
             </div>
           </div>
           <div className="text-2xl sm:text-3xl font-black text-stone-900 dark:text-white">
             ₹{totalRawValuation.toLocaleString('en-IN')}
           </div>
-          <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1 font-malayalam">
+          <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
             {ingredients.length} രജിസ്റ്റർ ചെയ്ത ചേരുവകൾ
           </p>
         </div>
       </div>
 
-      {/* Stock Health Segmented Capacity Bar (Image 2 style) */}
+      {/* Stock Health Segmented Capacity Bar */}
       <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
           <div>
-            <h3 className="text-sm font-extrabold text-stone-900 dark:text-white font-malayalam">
-              അസംസ്കൃത വസ്തുക്കളുടെ സ്റ്റോക്ക് ആരോഗ്യം (Raw Stock Capacity)
+            <h3 className="text-sm font-black text-stone-900 dark:text-white">
+              Raw Stock Capacity Health
             </h3>
-            <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam">
+            <p className="text-xs text-stone-400 font-malayalam">
               സുരക്ഷിത പരിധി, കുറഞ്ഞ സ്റ്റോക്ക്, തീർന്നുപോയ ഇനങ്ങളുടെ വിഭജനം
             </p>
           </div>
           <div className="flex items-center gap-4 text-xs font-bold">
             <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-              സുരക്ഷിതം: {healthSegments.safePercent}%
+              Safe: {healthSegments.safePercent}%
             </span>
             <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-              കുറവ്: {healthSegments.lowPercent}%
+              Low: {healthSegments.lowPercent}%
             </span>
             <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
               <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
-              തീർന്നവ: {healthSegments.depletedPercent}%
+              Depleted: {healthSegments.depletedPercent}%
             </span>
           </div>
         </div>
@@ -299,13 +279,13 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
         <div className="flex items-center justify-between mb-4">
           <div>
             <div className="flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-epso-orange" />
-              <h3 className="text-sm font-extrabold text-stone-900 dark:text-white font-malayalam">
-                ദിവസേനയുള്ള ഉൽപ്പാദന ട്രെൻഡ് (Daily Production Volume Curve)
+              <FiTrendingUp className="w-4 h-4 text-epso-orange" />
+              <h3 className="text-sm font-black text-stone-900 dark:text-white">
+                Daily Production Volume Curve
               </h3>
             </div>
-            <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
-              അടുക്കളയിൽ രേഖപ്പെടുത്തിയ ഉൽപ്പാദന അളവ് (കിലോഗ്രാം / Output in kg)
+            <p className="text-xs text-stone-400 font-malayalam mt-0.5">
+              അടുക്കളയിൽ രേഖപ്പെടുത്തിയ ഉൽപ്പാദന അളവ് (Output in kg)
             </p>
           </div>
         </div>
@@ -320,27 +300,16 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#2E2828' : '#F1F2F4'} vertical={false} />
-              <XAxis
-                dataKey="date"
-                stroke={isDark ? '#A39E9B' : '#6B7280'}
-                fontSize={11}
-                tickLine={false}
-              />
-              <YAxis
-                stroke={isDark ? '#A39E9B' : '#6B7280'}
-                fontSize={11}
-                tickLine={false}
-                tickFormatter={(val) => `${val}kg`}
-              />
+              <XAxis dataKey="date" stroke={isDark ? '#A39E9B' : '#6B7280'} fontSize={11} tickLine={false} />
+              <YAxis stroke={isDark ? '#A39E9B' : '#6B7280'} fontSize={11} tickLine={false} tickFormatter={(val) => `${val}kg`} />
               <Tooltip
                 contentStyle={{
                   backgroundColor: isDark ? '#141212' : '#FFFFFF',
                   borderColor: isDark ? '#2E2828' : '#E5E7EB',
                   borderRadius: '14px',
                   fontSize: '11px',
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
                 }}
-                formatter={(val: any) => [`${val} kg`, 'ഉൽപ്പാദനം (Output)']}
+                formatter={(val: any) => [`${val} kg`, 'Output']}
               />
               <Area
                 type="monotone"
@@ -358,17 +327,17 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
         </div>
       </div>
 
-      {/* Secondary Dual Charts: Consumption Bar Chart & Capital Pie */}
+      {/* Dual Charts: Consumption Bar Chart & Capital Pie */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Ingredient Consumption Velocity */}
         <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-sm font-extrabold text-stone-900 dark:text-white font-malayalam">
-                ഏറ്റവും കൂടുതൽ ഉപയോഗിച്ച ചേരുവകൾ (Ingredient Consumption)
+              <h3 className="text-sm font-black text-stone-900 dark:text-white">
+                Top Consumed Raw Materials
               </h3>
-              <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam">
-                ബാച്ചുകളിൽ ഉപയോഗിച്ച അളവ് (Total Consumed in Production)
+              <p className="text-xs text-stone-400 font-malayalam">
+                ബാച്ചുകളിൽ ഏറ്റവും കൂടുതൽ ഉപയോഗിച്ച ചേരുവകൾ
               </p>
             </div>
           </div>
@@ -391,7 +360,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
                       borderRadius: '12px',
                       fontSize: '11px',
                     }}
-                    formatter={(val: any, _, item: any) => [`${val} ${item.payload.unit}`, 'ഉപയോഗിച്ചത് (Consumed)']}
+                    formatter={(val: any, _, item: any) => [`${val} ${item.payload.unit}`, 'Consumed']}
                   />
                   <Bar dataKey="quantity" fill="#F59E0B" radius={[0, 6, 6, 0]} isAnimationActive={true} animationDuration={1000} />
                 </BarChart>
@@ -404,10 +373,10 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
         <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-sm font-extrabold text-stone-900 dark:text-white font-malayalam">
-                മൂലധന വിതരണം (Capital Distribution)
+              <h3 className="text-sm font-black text-stone-900 dark:text-white">
+                Capital Distribution
               </h3>
-              <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam">
+              <p className="text-xs text-stone-400 font-malayalam">
                 ഫിനിഷ്ഡ് സ്നാക്കുകൾ vs അസംസ്കൃത ചേരുവകൾ
               </p>
             </div>
@@ -432,7 +401,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'മൂല്യം (Valuation)']}
+                  formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Valuation']}
                   contentStyle={{
                     backgroundColor: isDark ? '#141212' : '#FFFFFF',
                     borderColor: isDark ? '#2E2828' : '#E5E7EB',
@@ -443,7 +412,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
                 <Legend
                   verticalAlign="bottom"
                   height={36}
-                  formatter={(val) => <span className="text-xs font-semibold text-stone-700 dark:text-stone-300 font-malayalam">{val}</span>}
+                  formatter={(val) => <span className="text-xs font-semibold text-stone-700 dark:text-stone-300">{val}</span>}
                 />
               </PieChart>
             </ResponsiveContainer>

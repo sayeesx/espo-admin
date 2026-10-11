@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { Sun, Moon, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { FiSun, FiMoon, FiAlertCircle } from 'react-icons/fi';
 
 export const PinGate: React.FC = () => {
   const { loginWithPin, isLoading } = useAuth();
@@ -17,7 +17,6 @@ export const PinGate: React.FC = () => {
   }, []);
 
   const handleDigitChange = async (index: number, val: string) => {
-    // Take only the last digit if multiple were typed
     const char = val.replace(/\D/g, '').slice(-1);
     const newDigits = [...digits];
     newDigits[index] = char;
@@ -28,7 +27,6 @@ export const PinGate: React.FC = () => {
       inputRefs.current[index + 1]?.focus();
     }
 
-    // If all 5 digits are filled, attempt login
     if (char && index === 4 && newDigits.every((d) => d !== '')) {
       const fullPin = newDigits.join('');
       await submitPin(fullPin);
@@ -93,7 +91,7 @@ export const PinGate: React.FC = () => {
           aria-label="Toggle theme"
           className="p-2 rounded-xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] text-stone-600 dark:text-stone-300 press-apple"
         >
-          {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-stone-700" />}
+          {theme === 'dark' ? <FiSun className="w-4 h-4 text-amber-400" /> : <FiMoon className="w-4 h-4 text-stone-700" />}
         </button>
       </div>
 
@@ -141,7 +139,7 @@ export const PinGate: React.FC = () => {
         {/* Error message */}
         {errorMsg && (
           <div className="flex items-center gap-1.5 mt-4 text-xs font-semibold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-3 py-2 rounded-xl border border-red-200 dark:border-red-900/50">
-            <AlertCircle className="w-4 h-4 shrink-0" />
+            <FiAlertCircle className="w-4 h-4 shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}

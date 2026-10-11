@@ -11,7 +11,6 @@ import { ProductsAdminView } from './components/ProductsAdminView';
 import { IngredientsAdminView } from './components/IngredientsAdminView';
 import { RecipesAdminView } from './components/RecipesAdminView';
 import { StockLedgerAdminView } from './components/StockLedgerAdminView';
-import { SecurityAdminView } from './components/SecurityAdminView';
 import {
   fetchProducts,
   fetchIngredients,
@@ -97,7 +96,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#141212] text-[#141212] dark:text-[#FFFFFF] transition-colors pb-16 md:pb-12">
-      {/* Mobile Top App Header (Image 1 style) */}
+      {/* Mobile Top App Header */}
       <MobileAppHeader
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -106,7 +105,7 @@ export const App: React.FC = () => {
         notificationCount={notificationCount}
       />
 
-      {/* Desktop Header */}
+      {/* Desktop Vertical Sidebar */}
       <Header
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -115,97 +114,93 @@ export const App: React.FC = () => {
         notificationCount={notificationCount}
       />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 md:pt-6">
-        {isInitialLoading ? (
-          <div className="min-h-[60vh] flex flex-col items-center justify-center">
-            {/* Custom Brand Flame Swirl Vortex Loader */}
-            <div className="relative w-14 h-14 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-full border-2 border-epso-red/20 dark:border-amber-400/20" />
-              <div className="w-12 h-12 rounded-full border-3 border-transparent border-t-epso-red border-r-epso-amber animate-epso-spin" />
-              <img
-                src="/favicon.png"
-                alt="Loading"
-                className="w-6 h-6 object-contain animate-epso-pulse"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
-              />
+      {/* Main Content Area with Desktop Sidebar Offset */}
+      <div className="md:pl-64 lg:pl-72 transition-all">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 md:pt-6">
+          {isInitialLoading ? (
+            <div className="min-h-[60vh] flex flex-col items-center justify-center">
+              {/* Custom Brand Flame Swirl Vortex Loader */}
+              <div className="relative w-14 h-14 flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-2 border-epso-red/20 dark:border-amber-400/20" />
+                <div className="w-12 h-12 rounded-full border-3 border-transparent border-t-epso-red border-r-epso-amber animate-epso-spin" />
+                <img
+                  src="/favicon.png"
+                  alt="Loading"
+                  className="w-6 h-6 object-contain animate-epso-pulse"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
+                />
+              </div>
+              <p className="mt-4 text-xs font-semibold text-stone-500 dark:text-stone-400 font-malayalam">
+                ഡാറ്റാബേസിൽ നിന്ന് വിവരങ്ങൾ ശേഖരിക്കുന്നു...
+              </p>
             </div>
-            <p className="mt-4 text-xs font-semibold text-stone-500 dark:text-stone-400 font-malayalam">
-              ഡാറ്റാബേസിൽ നിന്ന് വിവരങ്ങൾ ശേഖരിക്കുന്നു...
-            </p>
-          </div>
-        ) : (
-          <>
-            {activeTab === 'dashboard' && (
-              <DashboardView
-                products={products}
-                ingredients={ingredients}
-                productionRuns={productionRuns}
-                onNavigateTab={setActiveTab}
-              />
-            )}
+          ) : (
+            <>
+              {activeTab === 'dashboard' && (
+                <DashboardView
+                  products={products}
+                  ingredients={ingredients}
+                  productionRuns={productionRuns}
+                  onNavigateTab={setActiveTab}
+                />
+              )}
 
-            {activeTab === 'insights' && (
-              <InsightsAdminView
-                products={products}
-                ingredients={ingredients}
-                productionRuns={productionRuns}
-                stockMovements={stockMovements}
-                onNavigateTab={setActiveTab}
-              />
-            )}
+              {activeTab === 'insights' && (
+                <InsightsAdminView
+                  products={products}
+                  ingredients={ingredients}
+                  productionRuns={productionRuns}
+                  stockMovements={stockMovements}
+                  onNavigateTab={setActiveTab}
+                />
+              )}
 
-            {activeTab === 'notifications' && (
-              <NotificationsAdminView
-                ingredients={ingredients}
-                products={products}
-                productionRuns={productionRuns}
-                auditLogs={auditLogs}
-                onNavigateTab={setActiveTab}
-                onRefresh={loadAllData}
-              />
-            )}
+              {activeTab === 'notifications' && (
+                <NotificationsAdminView
+                  ingredients={ingredients}
+                  products={products}
+                  productionRuns={productionRuns}
+                  auditLogs={auditLogs}
+                  onNavigateTab={setActiveTab}
+                  onRefresh={loadAllData}
+                />
+              )}
 
-            {activeTab === 'products' && (
-              <ProductsAdminView
-                products={products}
-                onRefresh={loadAllData}
-              />
-            )}
+              {activeTab === 'products' && (
+                <ProductsAdminView
+                  products={products}
+                  onRefresh={loadAllData}
+                />
+              )}
 
-            {activeTab === 'ingredients' && (
-              <IngredientsAdminView
-                ingredients={ingredients}
-                onRefresh={loadAllData}
-              />
-            )}
+              {activeTab === 'ingredients' && (
+                <IngredientsAdminView
+                  ingredients={ingredients}
+                  onRefresh={loadAllData}
+                />
+              )}
 
-            {activeTab === 'recipes' && (
-              <RecipesAdminView
-                recipes={recipes}
-                products={products}
-                ingredients={ingredients}
-                onRefresh={loadAllData}
-              />
-            )}
+              {activeTab === 'recipes' && (
+                <RecipesAdminView
+                  recipes={recipes}
+                  products={products}
+                  ingredients={ingredients}
+                  onRefresh={loadAllData}
+                />
+              )}
 
-            {activeTab === 'movements' && (
-              <StockLedgerAdminView
-                movements={stockMovements}
-                onRefresh={loadAllData}
-              />
-            )}
-
-            {activeTab === 'security' && (
-              <SecurityAdminView
-                auditLogs={auditLogs}
-                onRefresh={loadAllData}
-              />
-            )}
-          </>
-        )}
-      </main>
+              {activeTab === 'movements' && (
+                <StockLedgerAdminView
+                  movements={stockMovements}
+                  onRefresh={loadAllData}
+                />
+              )}
+            </>
+          )}
+        </main>
+      </div>
 
       {/* Mobile PWA Bottom Navigation Bar */}
       <MobileBottomNav

@@ -1,19 +1,17 @@
 import React, { useState } from 'react';
 import { Ingredient, IngredientCategory, UnitType } from '../types';
 import {
-  Plus,
-  Search,
-  Edit2,
-  Trash2,
-  Boxes,
-  AlertTriangle,
-  ArrowUpDown,
-  CheckCircle2,
-  XCircle,
-  IndianRupee,
-  Layers,
-  SlidersHorizontal,
-} from 'lucide-react';
+  FiPlus,
+  FiSearch,
+  FiEdit2,
+  FiTrash2,
+  FiAlertTriangle,
+  FiRepeat,
+  FiCheckCircle,
+  FiXCircle,
+  FiDollarSign,
+  FiLayers,
+} from 'react-icons/fi';
 import {
   saveIngredient,
   deleteIngredient,
@@ -156,40 +154,45 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     return true;
   });
 
+  const lowStockCount = ingredients.filter((i) => i.isActive && i.minStock > 0 && i.currentStock <= i.minStock).length;
+  const basicCount = ingredients.filter((i) => i.category === 'basic').length;
+  const otherCount = ingredients.filter((i) => i.category === 'other').length;
+
   return (
     <div className="space-y-6">
       {/* Header and Add Button */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
         <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-stone-900 dark:text-white font-malayalam">
-            അസംസ്കൃത വസ്തുക്കൾ & ചേരുവകൾ
+          <h1 className="text-xl sm:text-2xl font-extrabold text-stone-900 dark:text-white tracking-tight">
+            Ingredients
           </h1>
           <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
-            ചേരുവകൾ ചേർക്കുക, സ്റ്റോക്ക് ക്രമീകരിക്കുക, വാങ്ങൽ നിരക്കുകൾ നിശ്ചയിക്കുക
+            അസംസ്കൃത ചേരുവകളും സ്റ്റോക്ക് പരിധിയും
           </p>
         </div>
         <button
           onClick={openCreateModal}
           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors"
         >
-          <Plus className="w-4 h-4" />
-          <span className="font-malayalam">പുതിയ ചേരുവ ചേർക്കുക</span>
+          <FiPlus className="w-4 h-4" />
+          <span>New Ingredient</span>
         </button>
       </div>
 
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+          <FiSearch className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="ചേരുവ തിരയുക (Search ingredient)..."
+            placeholder="Search ingredient..."
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-epso-red/30 dark:focus:ring-amber-500/30 transition-all font-malayalam"
           />
         </div>
 
+        {/* English Status Tabs */}
         <div className="flex items-center gap-1.5 p-1 bg-stone-100 dark:bg-[#1E1B1B] rounded-xl border border-stone-200 dark:border-[#2E2828] overflow-x-auto">
           <button
             onClick={() => setFilterCategory('all')}
@@ -199,7 +202,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
             }`}
           >
-            എല്ലാം ({ingredients.length})
+            All ({ingredients.length})
           </button>
           <button
             onClick={() => setFilterCategory('basic')}
@@ -209,7 +212,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
             }`}
           >
-            Category A (ബേസിക്)
+            Basic ({basicCount})
           </button>
           <button
             onClick={() => setFilterCategory('other')}
@@ -219,7 +222,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
             }`}
           >
-            Category B (മറ്റുള്ളവ)
+            Other ({otherCount})
           </button>
           <button
             onClick={() => setFilterCategory('low_stock')}
@@ -229,8 +232,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
             }`}
           >
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-            <span>കുറഞ്ഞത് ({ingredients.filter((i) => i.isActive && i.minStock > 0 && i.currentStock <= i.minStock).length})</span>
+            <FiAlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+            <span>Low Stock ({lowStockCount})</span>
           </button>
         </div>
       </div>
@@ -239,7 +242,6 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredIngredients.map((ing) => {
           const isLowStock = ing.isActive && ing.minStock > 0 && ing.currentStock <= ing.minStock;
-          const totalInventoryValue = ing.currentStock * ing.avgCostPerUnit;
 
           return (
             <div
@@ -258,7 +260,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       <span>{ing.name}</span>
                       {isLowStock && (
                         <span title="കുറഞ്ഞ സ്റ്റോക്ക് മുന്നറിയിപ്പ്" className="text-amber-500">
-                          <AlertTriangle className="w-4 h-4 inline" />
+                          <FiAlertTriangle className="w-4 h-4 inline" />
                         </span>
                       )}
                     </h3>
@@ -274,7 +276,17 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                         : 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-400'
                     }`}
                   >
-                    {ing.isActive ? 'സജീവം' : 'നിർജ്ജീവം'}
+                    {ing.isActive ? (
+                      <>
+                        <FiCheckCircle className="w-3 h-3 text-emerald-500" />
+                        <span>Active</span>
+                      </>
+                    ) : (
+                      <>
+                        <FiXCircle className="w-3 h-3 text-stone-400" />
+                        <span>Inactive</span>
+                      </>
+                    )}
                   </span>
                 </div>
 
@@ -283,7 +295,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   {/* Current Stock */}
                   <div className="flex items-center justify-between">
                     <span className="text-stone-500 dark:text-stone-400 font-malayalam">
-                      നിലവിലെ സ്റ്റോക്ക് (Stock):
+                      സ്റ്റോക്ക് (Current Stock):
                     </span>
                     <span className={`font-extrabold text-sm ${isLowStock ? 'text-amber-600 dark:text-amber-400' : 'text-stone-900 dark:text-white'}`}>
                       {ing.currentStock} {ing.unit}
@@ -293,7 +305,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   {/* Min Stock Alert */}
                   <div className="flex items-center justify-between">
                     <span className="text-stone-500 dark:text-stone-400 font-malayalam">
-                      അലേർട്ട് പരിധി (Min Alert):
+                      കുറഞ്ഞ പരിധി (Min Alert):
                     </span>
                     <span className="font-semibold text-stone-600 dark:text-stone-300">
                       {ing.minStock} {ing.unit}
@@ -303,11 +315,10 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   {/* Avg Cost per Unit */}
                   <div className="flex items-center justify-between pt-1 border-t border-stone-200/60 dark:border-[#282323]">
                     <span className="text-stone-500 dark:text-stone-400 font-malayalam">
-                      വാങ്ങൽ വില (Cost / Unit):
+                      വാങ്ങൽ നിരക്ക് (Cost / Unit):
                     </span>
-                    <span className="font-bold text-stone-900 dark:text-white flex items-center">
-                      <IndianRupee className="w-3 h-3 inline mr-0.5" />
-                      {ing.avgCostPerUnit.toLocaleString('en-IN')} / {ing.unit}
+                    <span className="font-bold text-stone-900 dark:text-white">
+                      ₹{ing.avgCostPerUnit.toLocaleString('en-IN')} / {ing.unit}
                     </span>
                   </div>
                 </div>
@@ -325,7 +336,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   onClick={() => openAdjustModal(ing)}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold press-apple transition-colors border border-amber-500/30"
                 >
-                  <ArrowUpDown className="w-3.5 h-3.5" />
+                  <FiRepeat className="w-3.5 h-3.5" />
                   <span className="font-malayalam">സ്റ്റോക്ക് മാറ്റുക</span>
                 </button>
                 <button
@@ -333,14 +344,14 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   className="p-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] border border-stone-200 dark:border-[#2E2828] press-apple transition-colors"
                   title="തിരുത്തുക (Edit)"
                 >
-                  <Edit2 className="w-3.5 h-3.5" />
+                  <FiEdit2 className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => handleDelete(ing)}
                   className="p-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border border-transparent hover:border-red-200 dark:hover:border-red-900 press-apple transition-colors"
                   title="ഡിലീറ്റ് ചെയ്യുക"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <FiTrash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -350,7 +361,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
       {filteredIngredients.length === 0 && (
         <div className="py-12 text-center text-xs text-stone-400 dark:text-stone-500 font-malayalam">
-          ചേരുവകൾ ഒന്നും കണ്ടെത്താനായില്ല (No ingredients match)
+          ചേരുവകൾ ഒന്നും കണ്ടെത്താനായില്ല (No ingredients found)
         </div>
       )}
 
@@ -376,7 +387,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       : 'bg-stone-50 dark:bg-[#141212] text-stone-600 dark:text-stone-300 border-stone-200 dark:border-[#2E2828]'
                   }`}
                 >
-                  + സ്റ്റോക്ക് ചേർക്കുക (Inward)
+                  + ഇൻവാർഡ് (Inward)
                 </button>
                 <button
                   type="button"
@@ -387,13 +398,13 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       : 'bg-stone-50 dark:bg-[#141212] text-stone-600 dark:text-stone-300 border-stone-200 dark:border-[#2E2828]'
                   }`}
                 >
-                  - സ്റ്റോക്ക് കുറയ്ക്കുക (Outward)
+                  - ഔട്ട്‌വാർഡ് (Outward)
                 </button>
               </div>
 
               <div>
                 <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                  മാറ്റേണ്ട അളവ് ({selectedIngredient.unit}) *
+                  അളവ് ({selectedIngredient.unit}) *
                 </label>
                 <input
                   type="number"
@@ -437,14 +448,14 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   onClick={() => setAdjustModalOpen(false)}
                   className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold font-malayalam"
                 >
-                  റദ്ദാക്കുക
+                  റദ്ദാക്കുക (Cancel)
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting || adjustDelta <= 0}
                   className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm press-apple font-malayalam"
                 >
-                  {isSubmitting ? 'സൂക്ഷിക്കുന്നു...' : 'സ്റ്റോക്ക് അപ്ഡേറ്റ് ചെയ്യുക'}
+                  {isSubmitting ? 'സൂക്ഷിക്കുന്നു...' : 'അപ്ഡേറ്റ് ചെയ്യുക (Update)'}
                 </button>
               </div>
             </form>
@@ -457,16 +468,16 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
           <div className="w-full max-w-md bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal">
             <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
-              {selectedIngredient ? 'ചേരുവ തിരുത്തുക' : 'പുതിയ ചേരുവ ചേർക്കുക'}
+              {selectedIngredient ? 'ചേരുവ തിരുത്തുക (Edit)' : 'പുതിയ ചേരുവ (New Ingredient)'}
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4">
-              അസംസ്കൃത വസ്തുക്കളുടെ വിവരങ്ങളും നിരക്കുകളും നിശ്ചയിക്കുക
+              അസംസ്കൃത വസ്തുക്കളുടെ വിവരങ്ങളും നിരക്കുകളും
             </p>
 
             <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
               <div>
                 <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                  ചേരുവയുടെ പേര് (Ingredient Name) *
+                  ചേരുവയുടെ പേര് (Name) *
                 </label>
                 <input
                   type="text"
@@ -488,8 +499,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                     onChange={(e) => setCategory(e.target.value as IngredientCategory)}
                     className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none font-malayalam"
                   >
-                    <option value="basic">Category A (ബേസിക്)</option>
-                    <option value="other">Category B (മറ്റുള്ളവ)</option>
+                    <option value="basic">Category A (Basic)</option>
+                    <option value="other">Category B (Other)</option>
                   </select>
                 </div>
 
@@ -499,7 +510,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   </label>
                   <select
                     value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
+                    onChange={(e) => setUnit(e.target.value as UnitType)}
                     className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
                   >
                     <option value="kg">Kilogram (kg)</option>
@@ -515,7 +526,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                    കുറഞ്ഞ സ്റ്റോക്ക് മുന്നറിയിപ്പ് (Min Alert)
+                    കുറഞ്ഞ പരിധി (Min Alert)
                   </label>
                   <input
                     type="number"
@@ -529,7 +540,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
                 <div>
                   <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                    ശരാശരി വാങ്ങൽ വില (Cost / {unit})
+                    വാങ്ങൽ നിരക്ക് (Cost / {unit})
                   </label>
                   <input
                     type="number"
@@ -544,20 +555,20 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
               <div>
                 <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                  കുറിപ്പുകൾ (Notes / Supplier)
+                  കുറിപ്പ് (Notes / Supplier)
                 </label>
                 <input
                   type="text"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="ഉദാ: പ്രീമിയം ബ്രാൻഡ് സപ്ലയർ"
+                  placeholder="ഉദാ: സപ്ലയർ വിവരങ്ങൾ..."
                   className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none font-malayalam"
                 />
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828]">
                 <span className="font-bold text-stone-900 dark:text-white font-malayalam">
-                  സജീവം (Active)
+                  Active (സജീവം)
                 </span>
                 <input
                   type="checkbox"
@@ -573,7 +584,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   onClick={() => setFormModalOpen(false)}
                   className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold font-malayalam"
                 >
-                  റദ്ദാക്കുക
+                  റദ്ദാക്കുക (Cancel)
                 </button>
                 <button
                   type="submit"

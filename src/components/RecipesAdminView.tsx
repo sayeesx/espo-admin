@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import { Recipe, Product, Ingredient, RecipeItem } from '../types';
 import {
-  Plus,
-  Trash2,
-  Edit2,
-  ScrollText,
-  IndianRupee,
-  Layers,
-  Sparkles,
-  Calculator,
-} from 'lucide-react';
+  FiPlus,
+  FiTrash2,
+  FiEdit2,
+  FiBookOpen,
+  FiDollarSign,
+  FiLayers,
+} from 'react-icons/fi';
 import { saveRecipe, deleteRecipe } from '../services/supabase';
 
 interface RecipesAdminViewProps {
@@ -145,19 +143,19 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
         <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-stone-900 dark:text-white font-malayalam">
-            പാചകക്കുറിപ്പുകൾ & ബാച്ച് ഫോർമുലേഷൻ (BOM)
+          <h1 className="text-xl sm:text-2xl font-extrabold text-stone-900 dark:text-white tracking-tight">
+            Recipes & Formulation
           </h1>
           <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
-            ഓരോ സ്നാക്കിനുമുള്ള അസംസ്കൃത വസ്തുക്കളുടെ കൃത്യമായ അളവും ബാച്ച് ചെലവും
+            ബാച്ച് ഫോർമുലേഷനും അസംസ്കൃത വസ്തുക്കളുടെ അനുപാതവും
           </p>
         </div>
         <button
           onClick={openCreateModal}
           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors"
         >
-          <Plus className="w-4 h-4" />
-          <span className="font-malayalam">പുതിയ ഫോർമുലേഷൻ ചേർക്കുക</span>
+          <FiPlus className="w-4 h-4" />
+          <span>New Recipe</span>
         </button>
       </div>
 
@@ -184,8 +182,7 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                   </div>
                   <div className="text-right">
                     <span className="text-xs font-bold text-stone-900 dark:text-white flex items-center justify-end">
-                      <IndianRupee className="w-3.5 h-3.5 inline mr-0.5" />
-                      {batchCost.toFixed(1)} / ബാച്ച്
+                      ₹{batchCost.toFixed(1)} / ബാച്ച്
                     </span>
                     <span className="text-[10px] text-stone-400 dark:text-stone-500 block">
                       (₹{costPerUnit.toFixed(1)} / {r.baseOutputUnit})
@@ -225,15 +222,15 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                   onClick={() => openEditModal(r)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-[#282323] text-stone-700 dark:text-stone-300 text-xs font-bold font-malayalam hover:bg-stone-200 transition-colors"
                 >
-                  <Edit2 className="w-3.5 h-3.5" />
-                  <span>തിരുത്തുക</span>
+                  <FiEdit2 className="w-3.5 h-3.5" />
+                  <span>തിരുത്തുക (Edit)</span>
                 </button>
                 <button
                   onClick={() => handleDelete(r)}
                   className="p-1.5 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
                   title="ഡിലീറ്റ് ചെയ്യുക"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <FiTrash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -243,7 +240,7 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
 
       {recipes.length === 0 && (
         <div className="py-12 text-center text-xs text-stone-400 dark:text-stone-500 font-malayalam">
-          പാചകക്കുറിപ്പുകൾ ഇതുവരെ ചേർത്തിട്ടില്ല. മുകളിൽ കൊടുത്തിട്ടുള്ള ബട്ടൺ വഴി ചേർക്കുക.
+          പാചകക്കുറിപ്പുകൾ ചേർത്തിട്ടില്ല (No recipes found)
         </div>
       )}
 
@@ -252,10 +249,10 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
           <div className="w-full max-w-lg bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal my-8">
             <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
-              {editingRecipe ? 'പാചകക്കുറിപ്പ് തിരുത്തുക' : 'പുതിയ പാചകക്കുറിപ്പ് (Recipe BOM)'}
+              {editingRecipe ? 'പാചകക്കുറിപ്പ് തിരുത്തുക (Edit)' : 'പുതിയ പാചകക്കുറിപ്പ് (New Recipe)'}
             </h2>
             <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4">
-              ഉൽപ്പന്നവും ആവശ്യമായ അസംസ്കൃത വസ്തുക്കളുടെ അളവുകളും നൽകുക
+              ഉൽപ്പന്നവും ചേരുവകളുടെ കൃത്യമായ അനുപാതവും
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
@@ -310,15 +307,15 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
               <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828]">
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-stone-900 dark:text-white font-malayalam">
-                    ചേരുവകളുടെ ലിസ്റ്റ് (Recipe Ingredients)
+                    ചേരുവകളുടെ ലിസ്റ്റ് (Ingredients)
                   </span>
                   <button
                     type="button"
                     onClick={handleAddItemRow}
                     className="flex items-center gap-1 text-[11px] text-epso-red dark:text-amber-400 font-bold hover:underline"
                   >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span className="font-malayalam">ചേരുവ ചേർക്കുക</span>
+                    <FiPlus className="w-3.5 h-3.5" />
+                    <span>ചേരുവ ചേർക്കുക</span>
                   </button>
                 </div>
 
@@ -355,7 +352,7 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                           onClick={() => handleRemoveItemRow(idx)}
                           className="p-1 text-red-500 hover:text-red-700"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <FiTrash2 className="w-3.5 h-3.5" />
                         </button>
                       )}
                     </div>
@@ -365,7 +362,7 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                 {/* Real-time batch cost estimate */}
                 <div className="mt-3 pt-2 border-t border-stone-200 dark:border-[#2E2828] flex items-center justify-between text-xs">
                   <span className="text-stone-500 dark:text-stone-400 font-malayalam">
-                    ഏകദേശ ചേരുവ ചെലവ് (Est. Batch Cost):
+                    ഏകദേശ ബാച്ച് ചെലവ് (Est. Batch Cost):
                   </span>
                   <span className="font-extrabold text-stone-900 dark:text-white">
                     ₹{calculateTotalBatchCost().toFixed(2)}
@@ -381,7 +378,7 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                   rows={2}
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
-                  placeholder="ഉദാ: എണ്ണ ചൂടാക്കി വറുത്തെടുക്കുക..."
+                  placeholder="ഉദാ: ചേരുവകൾ കൃത്യമായി ഇളക്കി ചേർക്കുക..."
                   className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none font-malayalam"
                 />
               </div>
@@ -392,7 +389,7 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                   onClick={() => setModalOpen(false)}
                   className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold font-malayalam"
                 >
-                  റദ്ദാക്കുക
+                  റദ്ദാക്കുക (Cancel)
                 </button>
                 <button
                   type="submit"

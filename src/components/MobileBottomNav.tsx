@@ -1,12 +1,5 @@
 import React from 'react';
-import {
-  LayoutDashboard,
-  Activity,
-  Package,
-  Bell,
-  ShieldCheck,
-  Boxes,
-} from 'lucide-react';
+import { FiGrid, FiActivity, FiPackage, FiBell, FiClock } from 'react-icons/fi';
 import { AdminTab } from './Header';
 
 interface MobileBottomNavProps {
@@ -26,21 +19,21 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     icon: React.ElementType;
     hasBadge?: boolean;
   }[] = [
-    { id: 'dashboard', label: 'Home', icon: LayoutDashboard },
-    { id: 'insights', label: 'Insights', icon: Activity },
-    { id: 'products', label: 'Products', icon: Package },
-    { id: 'notifications', label: 'Alerts', icon: Bell, hasBadge: true },
-    { id: 'security', label: 'Security', icon: ShieldCheck },
+    { id: 'dashboard', label: 'Home', icon: FiGrid },
+    { id: 'insights', label: 'Insights', icon: FiActivity },
+    { id: 'products', label: 'Products', icon: FiPackage },
+    { id: 'movements', label: 'Ledger', icon: FiClock },
+    { id: 'notifications', label: 'Alerts', icon: FiBell, hasBadge: true },
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#181515]/95 backdrop-blur-xl border-t border-stone-200/80 dark:border-[#2E2828] pb-safe transition-colors">
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#181515]/95 backdrop-blur-xl border-t border-stone-200/80 dark:border-[#2E2828] pb-safe transition-colors select-none">
       <div className="flex items-center justify-around h-16 px-2">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive =
             activeTab === tab.id ||
-            (tab.id === 'products' && (activeTab === 'ingredients' || activeTab === 'recipes' || activeTab === 'movements'));
+            (tab.id === 'products' && (activeTab === 'ingredients' || activeTab === 'recipes'));
 
           return (
             <button
@@ -48,7 +41,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               onClick={() => onTabChange(tab.id)}
               className={`flex-1 flex flex-col items-center justify-center py-1 transition-all relative press-apple cursor-pointer ${
                 isActive
-                  ? 'text-epso-orange dark:text-amber-400 font-extrabold'
+                  ? 'text-epso-orange dark:text-amber-400 font-black'
                   : 'text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-300'
               }`}
             >

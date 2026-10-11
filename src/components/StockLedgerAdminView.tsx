@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import { StockMovement } from '../types';
 import {
-  History,
-  Search,
-  ArrowDownRight,
-  ArrowUpRight,
-  RefreshCw,
-  Layers,
-  Calendar,
-  User,
-} from 'lucide-react';
+  FiSearch,
+  FiArrowDownRight,
+  FiArrowUpRight,
+  FiRefreshCw,
+  FiClock,
+  FiLayers,
+} from 'react-icons/fi';
 
 interface StockLedgerAdminViewProps {
   movements: StockMovement[];
@@ -34,40 +32,45 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
     return true;
   });
 
+  const inCount = movements.filter((m) => m.movementType === 'in').length;
+  const outCount = movements.filter((m) => m.movementType === 'out').length;
+  const adjustCount = movements.filter((m) => m.movementType === 'adjust').length;
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
         <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-stone-900 dark:text-white font-malayalam">
-            സ്റ്റോക്ക് ലെഡ്ജർ & മൂവ്‌മെന്റ് ഹിസ്റ്ററി
+          <h1 className="text-xl sm:text-2xl font-extrabold text-stone-900 dark:text-white tracking-tight">
+            Stock Ledger
           </h1>
           <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
-            അസംസ്കൃത വസ്തുക്കളുടെയും ഉൽപ്പന്നങ്ങളുടെയും എല്ലാ ഇൻ / ഔട്ട് ഇടപാടുകളും
+            അസംസ്കൃത വസ്തുക്കളുടെയും ഉൽപ്പന്നങ്ങളുടെയും മൂവ്‌മെന്റ് വിവരങ്ങൾ
           </p>
         </div>
         <button
           onClick={onRefresh}
           className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#322c2c] text-stone-700 dark:text-stone-300 font-bold text-xs press-apple transition-colors"
         >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span className="font-malayalam">പുതുക്കുക (Refresh)</span>
+          <FiRefreshCw className="w-3.5 h-3.5" />
+          <span>Refresh</span>
         </button>
       </div>
 
       {/* Filter and Search */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+          <FiSearch className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="ഇനം, ഓപ്പറേറ്റർ, റഫറൻസ് നമ്പർ തിരയുക..."
+            placeholder="Search item, operator, reference..."
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-epso-red/30 dark:focus:ring-amber-500/30 transition-all font-malayalam"
           />
         </div>
 
+        {/* English Status Tabs */}
         <div className="flex items-center gap-1.5 p-1 bg-stone-100 dark:bg-[#1E1B1B] rounded-xl border border-stone-200 dark:border-[#2E2828]">
           <button
             onClick={() => setFilterType('all')}
@@ -77,7 +80,7 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
             }`}
           >
-            എല്ലാം ({movements.length})
+            All ({movements.length})
           </button>
           <button
             onClick={() => setFilterType('in')}
@@ -87,7 +90,7 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
             }`}
           >
-            ഇൻവേർഡ് (In)
+            In ({inCount})
           </button>
           <button
             onClick={() => setFilterType('out')}
@@ -97,7 +100,7 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
             }`}
           >
-            ഔട്ട്‌വേർഡ് (Out)
+            Out ({outCount})
           </button>
           <button
             onClick={() => setFilterType('adjust')}
@@ -107,7 +110,7 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
             }`}
           >
-            ക്രമീകരണം (Adjust)
+            Adjust ({adjustCount})
           </button>
         </div>
       </div>
@@ -116,20 +119,20 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
       <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark">
         {filteredMovements.length === 0 ? (
           <div className="py-12 text-center text-xs text-stone-400 dark:text-stone-500 font-malayalam">
-            സ്റ്റോക്ക് മൂവ്‌മെന്റ് രേഖകൾ ഒന്നും കണ്ടെത്താനായില്ല (No stock ledger records found)
+            സ്റ്റോക്ക് മൂവ്‌മെന്റ് രേഖകൾ ലഭ്യമല്ല (No stock records found)
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
               <thead>
                 <tr className="border-b border-stone-100 dark:border-[#2E2828] text-stone-400 font-semibold font-malayalam">
-                  <th className="py-2.5 px-3">ഇനം (Item)</th>
-                  <th className="py-2.5 px-3">തരം (Type)</th>
-                  <th className="py-2.5 px-3">മാറ്റം (Qty)</th>
-                  <th className="py-2.5 px-3">മുൻപ് / പുതിയത്</th>
-                  <th className="py-2.5 px-3">റഫറൻസ് / കാരണം</th>
-                  <th className="py-2.5 px-3">ഓപ്പറേറ്റർ</th>
-                  <th className="py-2.5 px-3">തീയതി</th>
+                  <th className="py-2.5 px-3">Item</th>
+                  <th className="py-2.5 px-3">Type</th>
+                  <th className="py-2.5 px-3">Change (Qty)</th>
+                  <th className="py-2.5 px-3">Old → New</th>
+                  <th className="py-2.5 px-3">Reference / Reason</th>
+                  <th className="py-2.5 px-3">Operator</th>
+                  <th className="py-2.5 px-3">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-[#2E2828]/50">
@@ -160,13 +163,13 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
                         >
                           {isIn ? (
                             <>
-                              <ArrowDownRight className="w-3 h-3" />
-                              <span>IN (വരവ്)</span>
+                              <FiArrowDownRight className="w-3 h-3" />
+                              <span>IN</span>
                             </>
                           ) : isOut ? (
                             <>
-                              <ArrowUpRight className="w-3 h-3" />
-                              <span>OUT (ചിലവ്)</span>
+                              <FiArrowUpRight className="w-3 h-3" />
+                              <span>OUT</span>
                             </>
                           ) : (
                             <span>ADJUST</span>

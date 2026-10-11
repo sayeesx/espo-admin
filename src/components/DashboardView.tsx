@@ -1,21 +1,21 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Product, Ingredient, ProductionRun } from '../types';
 import {
-  IndianRupee,
-  TrendingUp,
-  AlertTriangle,
-  Package,
-  Boxes,
-  Layers,
-  Clock,
-  ArrowUpRight,
-  Flame,
-  CheckCircle2,
-  Calendar,
-  Activity,
-  ChevronRight,
-  Sparkles,
-} from 'lucide-react';
+  FiGrid,
+  FiTrendingUp,
+  FiAlertTriangle,
+  FiPackage,
+  FiBox,
+  FiLayers,
+  FiClock,
+  FiArrowUpRight,
+  FiDollarSign,
+  FiCalendar,
+  FiActivity,
+  FiChevronRight,
+  FiChevronLeft,
+  FiCheckCircle,
+} from 'react-icons/fi';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -105,7 +105,7 @@ const CircularGauge: React.FC<CircularGaugeProps> = ({
           )}
         </div>
       </div>
-      <span className="text-[10px] font-bold text-stone-500 dark:text-stone-400 mt-1.5 truncate">
+      <span className="text-[10px] font-bold text-stone-500 dark:text-stone-400 mt-1.5 truncate font-malayalam">
         {subtext}
       </span>
     </div>
@@ -119,6 +119,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateTab,
 }) => {
   const { isDark } = useTheme();
+  const dateScrollRef = useRef<HTMLDivElement>(null);
+  const desktopDateScrollRef = useRef<HTMLDivElement>(null);
 
   // Selected date filter for the interactive calendar strip
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -147,38 +149,53 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const todayOutputKg = todayRuns.reduce((acc, r) => acc + (r.actualQuantity || 0), 0);
   const dailyTargetBatches = 8;
 
-  // Percentage Calculations for Gauges (Image 1 reference)
+  // Percentage Calculations for Gauges
   const batchesProgressPercent = Math.min(100, Math.round((todayRuns.length / dailyTargetBatches) * 100));
   const safeStockCount = ingredients.filter((i) => i.currentStock > i.minStock).length;
   const stockHealthPercent = ingredients.length > 0 ? Math.round((safeStockCount / ingredients.length) * 100) : 100;
   const productsWithRecipeCount = products.filter((p) => p.recipeId).length;
   const recipeCoveragePercent = products.length > 0 ? Math.round((productsWithRecipeCount / products.length) * 100) : 0;
 
-  // Date Strip Days (7 days ending today, Image 1 reference)
-  const dateStrip = useMemo(() => {
-    const list: { iso: string; dayName: string; dayNum: number; isToday: boolean }[] = [];
-    for (let i = 6; i >= 0; i--) {
+  // Multi-week dates (14 days past + today + 7 days future) for smooth horizontal scrolling
+  const multiWeekDays = useMemo(() => {
+    const list: { iso: string; dayName: string; dayNum: number; monthName: string; isToday: boolean }[] = [];
+    for (let i = 14; i >= -7; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const iso = d.toISOString().split('T')[0];
       const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+      const monthName = d.toLocaleDateString('en-US', { month: 'short' });
       const dayNum = d.getDate();
       list.push({
         iso,
         dayName,
         dayNum,
+        monthName,
         isToday: iso === todayIso,
       });
     }
     return list;
   }, [todayIso]);
 
+  // Scroll calendar horizontally
+  const handleScrollWeeks = (direction: 'left' | 'right', isDesktop: boolean = false) => {
+    const ref = isDesktop ? desktopDateScrollRef.current : dateScrollRef.current;
+    if (ref) {
+      const offset = direction === 'left' ? -260 : 260;
+      ref.scrollBy({ left: offset, behavior: 'smooth' });
+    }
+  };
+
   // Production Volume Wave Chart (Last 7 Days)
   const waveChartData = useMemo(() => {
     const dateMap = new Map<string, { date: string; iso: string; output: number }>();
-    dateStrip.forEach((d) => {
-      dateMap.set(d.iso, { date: `${d.dayNum} ${d.dayName}`, iso: d.iso, output: 0 });
-    });
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const iso = d.toISOString().split('T')[0];
+      const label = `${d.getDate()} ${d.toLocaleDateString('en-US', { weekday: 'short' })}`;
+      dateMap.set(iso, { date: label, iso, output: 0 });
+    }
 
     productionRuns.forEach((run) => {
       if (run.status === 'completed' && run.productionDate) {
@@ -190,7 +207,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     });
 
     return Array.from(dateMap.values());
-  }, [dateStrip, productionRuns]);
+  }, [productionRuns]);
 
   // Filtered recent production runs (if date selected in date strip)
   const displayedRuns = useMemo(() => {
@@ -216,20 +233,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   return (
     <div className="space-y-6 pb-20">
       {/* ============================================================ */}
-      {/* MOBILE APP PWA LAYOUT (Inspired strictly by Reference Image 1) */}
+      {/* MOBILE APP PWA LAYOUT                                        */}
       {/* ============================================================ */}
       <div className="md:hidden space-y-4">
         {/* "Your Activity" Card with 3 Circular Ring Progress Gauges */}
         <div className="p-4 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
           <div className="flex items-center justify-between mb-3 px-1">
-            <div className="flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-epso-orange" />
-              <h2 className="text-sm font-black text-stone-900 dark:text-white font-malayalam">
-                ഇന്നത്തെ പ്രവർത്തനം (Your Activity)
+            <div>
+              <h2 className="text-sm font-black text-stone-900 dark:text-white">
+                Daily Operations
               </h2>
+              <p className="text-[11px] text-stone-400 font-malayalam">
+                ഇന്നത്തെ പ്രവർത്തനങ്ങൾ
+              </p>
             </div>
-            <span className="text-[10px] font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider">
-              Live Tracker
+            <span className="text-[10px] font-black text-stone-400 uppercase tracking-wider">
+              Live
             </span>
           </div>
 
@@ -241,7 +260,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               subValue={`/${dailyTargetBatches}`}
               percentage={batchesProgressPercent}
               color="#EA580C"
-              subtext={todayRuns.length >= dailyTargetBatches ? 'Target Done' : `${dailyTargetBatches - todayRuns.length} left`}
+              subtext={todayRuns.length >= dailyTargetBatches ? 'ടാർഗെറ്റ് കഴിഞ്ഞു' : `${dailyTargetBatches - todayRuns.length} ബാക്കി`}
             />
 
             {/* Ring 2: Stock Health (Green) */}
@@ -251,7 +270,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               subValue="/100%"
               percentage={stockHealthPercent}
               color="#10B981"
-              subtext={lowStockIngredients.length > 0 ? `${lowStockIngredients.length} low` : 'All Safe'}
+              subtext={lowStockIngredients.length > 0 ? `${lowStockIngredients.length} കുറവ്` : 'സുരക്ഷിതം'}
             />
 
             {/* Ring 3: Capacity / Coverage (Amber) */}
@@ -261,57 +280,89 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               subValue="/100%"
               percentage={recipeCoveragePercent}
               color="#F59E0B"
-              subtext={`${productsWithRecipeCount}/${products.length} ready`}
+              subtext={`${productsWithRecipeCount}/${products.length} റെഡി`}
             />
           </div>
         </div>
 
-        {/* Date Selector Strip (Calendar horizontal strip, Image 1 reference) */}
-        <div className="flex items-center justify-between gap-1 overflow-x-auto p-1.5 bg-white dark:bg-[#1E1B1B] rounded-2xl border border-stone-200 dark:border-[#2E2828] no-scrollbar">
-          {dateStrip.map((d) => {
-            const isSelected = selectedDate === d.iso || (!selectedDate && d.isToday);
-            return (
+        {/* Multi-Week Horizontal Scrolling Calendar Strip with smooth week navigation */}
+        <div className="bg-white dark:bg-[#1E1B1B] rounded-2xl p-2 border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-1.5">
+          <div className="flex items-center justify-between px-2">
+            <span className="text-xs font-black text-stone-800 dark:text-stone-200">
+              Calendar Dates
+            </span>
+            <div className="flex items-center gap-1">
               <button
-                key={d.iso}
                 type="button"
-                onClick={() => setSelectedDate(selectedDate === d.iso ? null : d.iso)}
-                className={`flex-1 py-2 px-1 rounded-xl flex flex-col items-center justify-center transition-all press-apple cursor-pointer min-w-[42px] ${
-                  isSelected
-                    ? 'bg-epso-orange text-white shadow-md font-black ring-2 ring-epso-orange/30'
-                    : 'text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-[#282323]'
-                }`}
+                onClick={() => handleScrollWeeks('left')}
+                className="p-1 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500"
+                title="Previous Week"
               >
-                <span className={`text-[10px] uppercase font-bold ${isSelected ? 'text-white' : 'text-stone-400'}`}>
-                  {d.dayName}
-                </span>
-                <span className="text-sm font-black mt-0.5 leading-none">
-                  {d.dayNum}
-                </span>
+                <FiChevronLeft className="w-3.5 h-3.5" />
               </button>
-            );
-          })}
+              <button
+                type="button"
+                onClick={() => handleScrollWeeks('right')}
+                className="p-1 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500"
+                title="Next Week"
+              >
+                <FiChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div
+            ref={dateScrollRef}
+            className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1"
+          >
+            {multiWeekDays.map((d) => {
+              const isSelected = selectedDate === d.iso || (!selectedDate && d.isToday);
+              return (
+                <button
+                  key={d.iso}
+                  type="button"
+                  onClick={() => setSelectedDate(selectedDate === d.iso ? null : d.iso)}
+                  className={`py-2 px-2.5 rounded-xl flex flex-col items-center justify-center transition-all press-apple cursor-pointer shrink-0 min-w-[48px] ${
+                    isSelected
+                      ? 'bg-epso-orange text-white shadow-md font-black ring-2 ring-epso-orange/30'
+                      : 'text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-[#282323]'
+                  }`}
+                >
+                  <span className={`text-[10px] uppercase font-bold ${isSelected ? 'text-white' : 'text-stone-400'}`}>
+                    {d.dayName}
+                  </span>
+                  <span className="text-sm font-black mt-0.5 leading-none">
+                    {d.dayNum}
+                  </span>
+                  <span className={`text-[8px] uppercase mt-0.5 ${isSelected ? 'text-white/80' : 'text-stone-400'}`}>
+                    {d.monthName}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Production Output Wave Area Chart Card (Image 1 reference) */}
+        {/* Production Output Wave Area Chart Card */}
         <div className="p-4 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <div className="flex items-center gap-2">
-                <Flame className="w-4 h-4 text-epso-orange" />
-                <h3 className="text-sm font-extrabold text-stone-900 dark:text-white font-malayalam">
-                  ഉൽപ്പാദന പ്രവണത (Production Output)
+              <div className="flex items-center gap-1.5">
+                <FiActivity className="w-4 h-4 text-epso-orange" />
+                <h3 className="text-sm font-black text-stone-900 dark:text-white">
+                  Production Output
                 </h3>
               </div>
-              <p className="text-[11px] text-stone-400 font-medium">
-                Daily output in kg • 7-day curve
+              <p className="text-[11px] text-stone-400 font-malayalam">
+                ദിവസേനയുള്ള ഉൽപ്പാദന ട്രെൻഡ് (kg)
               </p>
             </div>
             <button
               onClick={() => onNavigateTab('insights')}
               className="text-xs text-epso-orange dark:text-amber-400 font-black flex items-center gap-0.5"
             >
-              <span>കൂടുതൽ</span>
-              <ChevronRight className="w-3.5 h-3.5" />
+              <span>More</span>
+              <FiChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -356,18 +407,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <span className="text-base font-black text-stone-900 dark:text-white">
                 {todayOutputKg} kg
               </span>
-              <p className="text-[10px] text-stone-400 font-bold">ഇന്ന് ഉൽപ്പാദിപ്പിച്ചത്</p>
+              <p className="text-[10px] text-stone-400 font-semibold font-malayalam">ഇന്ന് ഉൽപ്പാദിപ്പിച്ചത്</p>
             </div>
             <button
               onClick={() => onNavigateTab('movements')}
-              className="px-3 py-1.5 rounded-xl bg-epso-orange hover:bg-orange-600 text-white font-extrabold text-xs transition-all press-apple shadow-xs cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-epso-orange hover:bg-orange-600 text-white font-black text-xs transition-all press-apple shadow-xs cursor-pointer"
             >
-              ബാച്ച് ലോഗ് (Logs)
+              Batch Logs
             </button>
           </div>
         </div>
 
-        {/* Working Capital & Stock Capacity Quick Metrics (Image 2 reference) */}
+        {/* Working Capital & Stock Capacity Quick Metrics */}
         <div className="p-4 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-stone-500 font-malayalam">
@@ -378,7 +429,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </div>
 
-          {/* Continuous Multi-segment capacity bar */}
           <div className="w-full h-3 rounded-full overflow-hidden bg-stone-100 dark:bg-stone-800 flex shadow-inner">
             <div
               style={{ width: `${stockHealthPercent}%` }}
@@ -393,22 +443,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="flex items-center justify-between text-[11px] font-bold text-stone-500">
-            <span>ഫിനിഷ്ഡ് സ്നാക്സ്: ₹{totalFinishedGoodsValuation.toLocaleString('en-IN')}</span>
-            <span>അസംസ്കൃത വസ്തുക്കൾ: ₹{totalRawValuation.toLocaleString('en-IN')}</span>
+            <span>Finished: ₹{totalFinishedGoodsValuation.toLocaleString('en-IN')}</span>
+            <span>Raw: ₹{totalRawValuation.toLocaleString('en-IN')}</span>
           </div>
         </div>
 
-        {/* Recent Batches List (Matching Image 1 "Workout History" style) */}
+        {/* Recent Batches List */}
         <div className="space-y-2.5">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-extrabold text-stone-900 dark:text-white uppercase tracking-wider font-malayalam">
-              {selectedDate ? `ബാച്ചുകൾ (${selectedDate})` : 'സമീപകാല ബാച്ചുകൾ (Recent Batches)'}
+            <h3 className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider">
+              {selectedDate ? `Batches (${selectedDate})` : 'Recent Batches'}
             </h3>
             <button
               onClick={() => onNavigateTab('movements')}
               className="text-xs text-epso-orange font-bold hover:underline"
             >
-              എല്ലാം കാണുക
+              View All
             </button>
           </div>
 
@@ -445,7 +495,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </div>
                 </div>
 
-                {/* In-line Ingredients Consumed breakdown pills */}
                 {run.ingredientsConsumed && run.ingredientsConsumed.length > 0 && (
                   <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-stone-100 dark:border-[#282323]">
                     {run.ingredientsConsumed.slice(0, 3).map((ing, idx) => (
@@ -470,24 +519,95 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* ============================================================ */}
-      {/* DESKTOP VIEW (Visible on md: and above)                      */}
+      {/* DESKTOP VIEW                                                 */}
       {/* ============================================================ */}
       <div className="hidden md:block space-y-6">
-        {/* Top Welcome & KPI Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
+        {/* Top Header */}
+        <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-[#2E2828]">
           <div>
-            <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white font-malayalam">
-              ഉടമസ്ഥൻ അഡ്മിൻ ഡാഷ്‌ബോർഡ്
+            <h1 className="text-2xl font-black text-stone-900 dark:text-white">
+              Dashboard
             </h1>
-            <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
-              തത്സമയ വിൽപന മൂല്യനിർണ്ണയം, ഉൽപ്പാദന കണക്കുകൾ & സ്റ്റോക്ക് മാനേജ്മെന്റ്
+            <p className="text-xs text-stone-400 font-malayalam mt-0.5">
+              തത്സമയ വിൽപന മൂല്യനിർണ്ണയവും ഉൽപ്പാദന കണക്കുകളും
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>തത്സമയ സിങ്ക് (Live Supabase)</span>
-            </span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>Live Supabase</span>
+          </span>
+        </div>
+
+        {/* Multi-Week Horizontal Scrolling Calendar Strip (Desktop) */}
+        <div className="bg-white dark:bg-[#1E1B1B] rounded-2xl p-3 border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-2">
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-2">
+              <FiCalendar className="w-4 h-4 text-epso-orange" />
+              <span className="text-xs font-bold text-stone-800 dark:text-stone-200">
+                Weekly Production Calendar
+              </span>
+              <span className="text-[11px] text-stone-400 font-malayalam">
+                (ആഴ്ചയിലെ ദിവസങ്ങൾ)
+              </span>
+              {selectedDate && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedDate(null)}
+                  className="text-[10px] text-epso-orange hover:underline font-bold ml-2"
+                >
+                  Reset filter
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => handleScrollWeeks('left', true)}
+                className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500 border border-stone-200 dark:border-[#332c2c] transition-colors"
+                title="Previous Week"
+              >
+                <FiChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleScrollWeeks('right', true)}
+                className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500 border border-stone-200 dark:border-[#332c2c] transition-colors"
+                title="Next Week"
+              >
+                <FiChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <div
+            ref={desktopDateScrollRef}
+            className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1"
+          >
+            {multiWeekDays.map((d) => {
+              const isSelected = selectedDate === d.iso || (!selectedDate && d.isToday);
+              return (
+                <button
+                  key={d.iso}
+                  type="button"
+                  onClick={() => setSelectedDate(selectedDate === d.iso ? null : d.iso)}
+                  className={`py-2 px-3 rounded-xl flex flex-col items-center justify-center transition-all press-apple cursor-pointer shrink-0 min-w-[56px] ${
+                    isSelected
+                      ? 'bg-epso-orange text-white shadow-md font-black ring-2 ring-epso-orange/30'
+                      : 'text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-[#282323]'
+                  }`}
+                >
+                  <span className={`text-[10px] uppercase font-bold ${isSelected ? 'text-white' : 'text-stone-400'}`}>
+                    {d.dayName}
+                  </span>
+                  <span className="text-base font-black mt-0.5 leading-none">
+                    {d.dayNum}
+                  </span>
+                  <span className={`text-[9px] uppercase mt-0.5 ${isSelected ? 'text-white/80' : 'text-stone-400'}`}>
+                    {d.monthName}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -496,22 +616,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400">
-                <AlertTriangle className="w-5 h-5 shrink-0" />
+                <FiAlertTriangle className="w-5 h-5 shrink-0" />
               </div>
               <div>
                 <h2 className="text-sm font-bold text-amber-900 dark:text-amber-300 font-malayalam">
                   കുറഞ്ഞ സ്റ്റോക്ക് മുന്നറിയിപ്പ് ({lowStockIngredients.length} ചേരുവകൾ)
                 </h2>
                 <p className="text-xs text-amber-700 dark:text-amber-400 font-malayalam">
-                  {lowStockIngredients.map((i) => i.name).slice(0, 3).join(', ')} കുറവാണ്. ഉടൻ വാങ്ങുക.
+                  {lowStockIngredients.map((i) => i.name).slice(0, 3).join(', ')} കുറവാണ്.
                 </p>
               </div>
             </div>
             <button
               onClick={() => onNavigateTab('notifications')}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white whitespace-nowrap press-apple font-malayalam"
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white whitespace-nowrap press-apple"
             >
-              അറിയിപ്പുകൾ കാണുക (Alerts)
+              View Alerts
             </button>
           </div>
         )}
@@ -525,14 +645,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 ഉൽപ്പന്ന സ്റ്റോക്ക് മൂല്യം
               </span>
               <div className="p-2 rounded-xl bg-red-50 dark:bg-red-950/40 text-epso-red dark:text-amber-400">
-                <IndianRupee className="w-4 h-4" />
+                <FiDollarSign className="w-4 h-4" />
               </div>
             </div>
             <div className="text-2xl font-black text-stone-900 dark:text-white">
               ₹{totalFinishedGoodsValuation.toLocaleString('en-IN')}
             </div>
-            <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1 font-malayalam">
-              മൊത്തവില അടിസ്ഥാനത്തിൽ (Wholesale Valuation)
+            <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
+              മൊത്തവില അടിസ്ഥാനത്തിൽ (Wholesale)
             </p>
           </div>
 
@@ -543,13 +663,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 അസംസ്കൃത വസ്തു മൂല്യം
               </span>
               <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
-                <Boxes className="w-4 h-4" />
+                <FiBox className="w-4 h-4" />
               </div>
             </div>
             <div className="text-2xl font-black text-stone-900 dark:text-white">
               ₹{totalRawValuation.toLocaleString('en-IN')}
             </div>
-            <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1 font-malayalam">
+            <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
               {ingredients.length} രജിസ്റ്റർ ചെയ്ത ചേരുവകൾ
             </p>
           </div>
@@ -561,15 +681,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 ഉൽപ്പാദന ബാച്ചുകൾ
               </span>
               <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
-                <TrendingUp className="w-4 h-4" />
+                <FiTrendingUp className="w-4 h-4" />
               </div>
             </div>
             <div className="text-2xl font-black text-stone-900 dark:text-white">
               {completedBatchesCount}
-              <span className="text-sm font-normal text-stone-400 ml-1.5">ബാച്ചുകൾ</span>
+              <span className="text-sm font-normal text-stone-400 ml-1.5 font-malayalam">ബാച്ചുകൾ</span>
             </div>
-            <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1 font-malayalam">
-              ആകെ പൂർത്തിയായ നിർമ്മാണ ബാച്ചുകൾ (Total Runs)
+            <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
+              ആകെ പൂർത്തിയായ ബാച്ചുകൾ
             </p>
           </div>
 
@@ -580,14 +700,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 സ്നാക്ക് ഉൽപ്പന്നങ്ങൾ
               </span>
               <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400">
-                <Package className="w-4 h-4" />
+                <FiPackage className="w-4 h-4" />
               </div>
             </div>
             <div className="text-2xl font-black text-stone-900 dark:text-white">
               {products.length}
-              <span className="text-sm font-normal text-stone-400 ml-1.5">ഇനങ്ങൾ</span>
+              <span className="text-sm font-normal text-stone-400 ml-1.5 font-malayalam">ഇനങ്ങൾ</span>
             </div>
-            <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1 font-malayalam">
+            <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
               {products.filter((p) => p.wholesalePrice > 0).length} മൊത്തവില നിശ്ചയിച്ചവ
             </p>
           </div>
@@ -599,19 +719,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-sm font-bold text-stone-900 dark:text-white font-malayalam">
-                  ഉൽപ്പന്ന സ്റ്റോക്ക് മൂല്യ വിതരണം (Stock Valuation)
+                <h2 className="text-sm font-black text-stone-900 dark:text-white">
+                  Stock Valuation by Product
                 </h2>
-                <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam">
+                <p className="text-xs text-stone-400 font-malayalam">
                   ഉയർന്ന മൂല്യമുള്ള ഫിനിഷ്ഡ് സ്നാക്കുകൾ
                 </p>
               </div>
               <button
                 onClick={() => onNavigateTab('products')}
-                className="text-xs text-epso-red dark:text-amber-400 font-bold flex items-center gap-1 hover:underline"
+                className="text-xs text-epso-red dark:text-amber-400 font-black flex items-center gap-1 hover:underline"
               >
-                <span>കൂടുതൽ</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
+                <span>View More</span>
+                <FiArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
@@ -636,7 +756,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       borderRadius: '12px',
                       fontSize: '11px',
                     }}
-                    formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'മൂല്യം (Valuation)']}
+                    formatter={(val: any) => [`₹${Number(val).toLocaleString('en-IN')}`, 'Valuation']}
                   />
                   <Bar dataKey="value" radius={[6, 6, 0, 0]} isAnimationActive={true} animationDuration={1000}>
                     {productValuationData.map((_, index) => (
@@ -652,19 +772,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-sm font-bold text-stone-900 dark:text-white font-malayalam">
-                  ഉൽപ്പാദന പ്രവണത (Production Trends Curve)
+                <h2 className="text-sm font-black text-stone-900 dark:text-white">
+                  Production Output Curve
                 </h2>
-                <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam">
+                <p className="text-xs text-stone-400 font-malayalam">
                   ദിവസേനയുള്ള ഉൽപ്പാദന അളവ് (Output in kg)
                 </p>
               </div>
               <button
                 onClick={() => onNavigateTab('insights')}
-                className="text-xs text-epso-orange dark:text-amber-400 font-bold flex items-center gap-1 hover:underline"
+                className="text-xs text-epso-orange dark:text-amber-400 font-black flex items-center gap-1 hover:underline"
               >
-                <span>അനലിറ്റിക്സ്</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
+                <span>Insights</span>
+                <FiArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>
 
@@ -709,16 +829,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Clock className="w-4 h-4 text-epso-red dark:text-amber-400" />
-              <h2 className="text-sm font-bold text-stone-900 dark:text-white font-malayalam">
-                സമീപകാല ഉൽപ്പാദന ബാച്ചുകൾ (Recent Production Runs)
+              <FiClock className="w-4 h-4 text-epso-red dark:text-amber-400" />
+              <h2 className="text-sm font-black text-stone-900 dark:text-white">
+                Recent Production Runs
               </h2>
             </div>
             <button
               onClick={() => onNavigateTab('movements')}
               className="text-xs text-epso-red dark:text-amber-400 font-bold hover:underline"
             >
-              എല്ലാ രേഖകളും കാണുക (All)
+              View All
             </button>
           </div>
 
@@ -731,12 +851,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <table className="w-full text-xs text-left">
                 <thead>
                   <tr className="border-b border-stone-100 dark:border-[#2E2828] text-stone-400 font-semibold">
-                    <th className="py-2.5 px-3">റൺ നമ്പർ (Run #)</th>
-                    <th className="py-2.5 px-3">ഉൽപ്പന്നം (Product)</th>
-                    <th className="py-2.5 px-3">തീയതി (Date)</th>
-                    <th className="py-2.5 px-3">അളവ് (Output)</th>
-                    <th className="py-2.5 px-3">ഓപ്പറേറ്റർ (Operator)</th>
-                    <th className="py-2.5 px-3">സ്റ്റാറ്റസ് (Status)</th>
+                    <th className="py-2.5 px-3">Run #</th>
+                    <th className="py-2.5 px-3">Product</th>
+                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3">Output</th>
+                    <th className="py-2.5 px-3">Operator</th>
+                    <th className="py-2.5 px-3">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100 dark:divide-[#2E2828]/50">
@@ -759,7 +879,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </td>
                       <td className="py-2.5 px-3">
                         <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-400">
-                          പൂർത്തിയായി (Completed)
+                          Completed
                         </span>
                       </td>
                     </tr>
