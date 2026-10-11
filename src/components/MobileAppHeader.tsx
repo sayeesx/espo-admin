@@ -1,0 +1,92 @@
+import React from 'react';
+import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import { Bell, Sun, Moon, RefreshCw, LogOut } from 'lucide-react';
+import { AdminTab } from './Header';
+
+interface MobileAppHeaderProps {
+  activeTab: AdminTab;
+  onTabChange: (tab: AdminTab) => void;
+  onRefresh: () => void;
+  isRefreshing?: boolean;
+  notificationCount: number;
+}
+
+export const MobileAppHeader: React.FC<MobileAppHeaderProps> = ({
+  activeTab,
+  onTabChange,
+  onRefresh,
+  isRefreshing,
+  notificationCount,
+}) => {
+  const { theme, toggleTheme } = useTheme();
+
+  return (
+    <div className="md:hidden sticky top-0 z-30 bg-white/95 dark:bg-[#181515]/95 backdrop-blur-xl border-b border-stone-200/80 dark:border-[#2E2828] px-4 pt-safe py-3 transition-colors">
+      <div className="flex items-center justify-between">
+        {/* User Avatar & Greeting (Image 1 reference) */}
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-epso-red to-epso-amber text-white flex items-center justify-center font-black text-sm shadow-md ring-2 ring-white dark:ring-[#2E2828]">
+              EA
+            </div>
+            {/* Live Online Dot */}
+            <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-[#181515]" />
+          </div>
+
+          <div>
+            <span className="text-[11px] font-bold text-stone-400 dark:text-stone-500 block leading-tight font-malayalam">
+              നമസ്കാരം (Good Morning)
+            </span>
+            <span className="text-sm font-black text-stone-900 dark:text-white leading-tight block">
+              Epso Admin
+            </span>
+          </div>
+        </div>
+
+        {/* Right Controls: Refresh, Theme Toggle, Notification Bell */}
+        <div className="flex items-center gap-2">
+          {/* Refresh button */}
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="w-9 h-9 rounded-full flex items-center justify-center bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-300 transition-colors press-apple cursor-pointer"
+            title="Refresh from Supabase"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-epso-orange' : ''}`} />
+          </button>
+
+          {/* Theme toggle */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="w-9 h-9 rounded-full flex items-center justify-center bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-300 transition-colors press-apple cursor-pointer"
+            title="Toggle theme"
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-stone-700" />}
+          </button>
+
+          {/* Notification Bell with Badge (Image 1 reference) */}
+          <button
+            type="button"
+            onClick={() => onTabChange('notifications')}
+            className={`w-9 h-9 rounded-full relative flex items-center justify-center transition-colors press-apple cursor-pointer ${
+              activeTab === 'notifications'
+                ? 'bg-epso-red text-white dark:bg-amber-400 dark:text-stone-950 shadow-md'
+                : 'bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-300'
+            }`}
+            title="Notifications"
+          >
+            <Bell className="w-4 h-4" />
+            {notificationCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-epso-red text-white text-[10px] font-black flex items-center justify-center shadow-sm animate-pulse border-2 border-white dark:border-[#181515]">
+                {notificationCount > 9 ? '9+' : notificationCount}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
