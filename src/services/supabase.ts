@@ -221,6 +221,12 @@ export async function adjustIngredientStock(
   if (fetchErr) throw fetchErr;
 
   const prevStock = Number(ing.current_stock) || 0;
+  if (delta < 0 && prevStock <= 0) {
+    throw new Error('സ്റ്റോക്ക് 0 ആണ്, നെഗറ്റീവ് ആക്കാൻ കഴിയില്ല (Stock is 0, cannot deduct)');
+  }
+  if (delta < 0 && Math.abs(delta) > prevStock) {
+    throw new Error('ലഭ്യമായ സ്റ്റോക്കിനേക്കാൾ കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല (Cannot deduct more than available stock)');
+  }
   const newStock = Math.max(0, prevStock + delta);
 
   // Update ingredient balance
@@ -373,6 +379,22 @@ export async function saveRecipe(
 export async function deleteRecipe(id: string): Promise<void> {
   await supabase.from('recipe_items').delete().eq('recipe_id', id);
   const { error } = await supabase.from('recipes').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteProductionRun(id: string): Promise<void> {
+  const { data: run } = await supabase
+    .from('production_runs')
+    .select('run_number')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (run?.run_number) {
+    await supabase.from('stock_movements').delete().ilike('reference', `%${run.run_number}%`);
+  }
+
+  await supabase.from('production_consumption').delete().eq('run_id', id);
+  const { error } = await supabase.from('production_runs').delete().eq('id', id);
   if (error) throw error;
 }
 

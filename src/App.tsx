@@ -21,9 +21,49 @@ import {
 } from './services/supabase';
 import { Product, Ingredient, Recipe, ProductionRun, StockMovement, AuditLog } from './types';
 
+const DISMISSED_NOTIFICATIONS_KEY = 'epso_admin_dismissed_notifications';
+const ACTIVE_TAB_KEY = 'epso_admin_active_tab';
+
 export const App: React.FC = () => {
   const { isAuthenticated } = useAuth();
-  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
+
+  // Tab persistence: check URL parameter first, then localStorage, defaulting to 'dashboard'
+  const getInitialTab = (): AdminTab => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab') as AdminTab;
+      const validTabs: AdminTab[] = [
+        'dashboard',
+        'insights',
+        'notifications',
+        'products',
+        'ingredients',
+        'recipes',
+        'movements',
+      ];
+      if (tabParam && validTabs.includes(tabParam)) return tabParam;
+
+      const savedTab = localStorage.getItem(ACTIVE_TAB_KEY) as AdminTab;
+      if (savedTab && validTabs.includes(savedTab)) return savedTab;
+    } catch {
+      // fallback
+    }
+    return 'dashboard';
+  };
+
+  const [activeTab, setActiveTab] = useState<AdminTab>(getInitialTab);
+
+  const handleTabChange = useCallback((newTab: AdminTab) => {
+    setActiveTab(newTab);
+    try {
+      localStorage.setItem(ACTIVE_TAB_KEY, newTab);
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', newTab);
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
@@ -34,6 +74,50 @@ export const App: React.FC = () => {
 
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  // Persistent dismissed notification IDs
+  const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(() => {
+    try {
+      const raw = localStorage.getItem(DISMISSED_NOTIFICATIONS_KEY);
+      return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const handleDismissNotification = useCallback((id: string) => {
+    setDismissedNotificationIds((prev) => {
+      const next = new Set(prev).add(id);
+      try {
+        localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(Array.from(next)));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
+  const handleDismissAllNotifications = useCallback((ids: string[]) => {
+    setDismissedNotificationIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      try {
+        localStorage.setItem(DISMISSED_NOTIFICATIONS_KEY, JSON.stringify(Array.from(next)));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
+  const handleRestoreNotifications = useCallback(() => {
+    setDismissedNotificationIds(new Set());
+    try {
+      localStorage.removeItem(DISMISSED_NOTIFICATIONS_KEY);
+    } catch {
+      // ignore
+    }
+  }, []);
 
   const loadAllData = useCallback(async () => {
     setIsRefreshing(true);
@@ -74,21 +158,39 @@ export const App: React.FC = () => {
     }
   }, [isAuthenticated, loadAllData]);
 
-  // Real-time calculation of pending alerts for notification badges
+  // Real-time calculation of pending alerts for notification badges (excluding dismissed alerts)
   const notificationCount = useMemo(() => {
     let count = 0;
     ingredients.forEach((i) => {
-      if (i.isActive && (i.currentStock <= 0 || (i.minStock > 0 && i.currentStock <= i.minStock))) {
-        count++;
+      if (i.isActive) {
+        if (i.currentStock <= 0 && !dismissedNotificationIds.has(`stock-zero-${i.id}`)) {
+          count++;
+        } else if (i.minStock > 0 && i.currentStock <= i.minStock && !dismissedNotificationIds.has(`stock-low-${i.id}`)) {
+          count++;
+        }
       }
     });
+
     products.forEach((p) => {
-      if (p.isActive && !p.recipeId) {
+      if (p.isActive && !p.recipeId && !dismissedNotificationIds.has(`recipe-missing-${p.id}`)) {
         count++;
       }
     });
+
+    productionRuns.slice(0, 15).forEach((run) => {
+      if (run.status === 'cancelled' && !dismissedNotificationIds.has(`batch-cancel-${run.id}`)) {
+        count++;
+      } else if (
+        run.plannedQuantity > 0 &&
+        run.actualQuantity < run.plannedQuantity * 0.85 &&
+        !dismissedNotificationIds.has(`batch-short-${run.id}`)
+      ) {
+        count++;
+      }
+    });
+
     return count;
-  }, [ingredients, products]);
+  }, [ingredients, products, productionRuns, dismissedNotificationIds]);
 
   if (!isAuthenticated) {
     return <PinGate />;
@@ -99,7 +201,7 @@ export const App: React.FC = () => {
       {/* Mobile Top App Header */}
       <MobileAppHeader
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         onRefresh={loadAllData}
         isRefreshing={isRefreshing}
         notificationCount={notificationCount}
@@ -108,7 +210,7 @@ export const App: React.FC = () => {
       {/* Desktop Vertical Sidebar */}
       <Header
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         onRefresh={loadAllData}
         isRefreshing={isRefreshing}
         notificationCount={notificationCount}
@@ -118,21 +220,10 @@ export const App: React.FC = () => {
       <div className="md:pl-64 lg:pl-72 transition-all">
         <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 md:pt-6">
           {isInitialLoading ? (
-            <div className="min-h-[60vh] flex flex-col items-center justify-center">
-              {/* Custom Brand Flame Swirl Vortex Loader */}
-              <div className="relative w-14 h-14 flex items-center justify-center">
-                <div className="absolute inset-0 rounded-full border-2 border-epso-red/20 dark:border-amber-400/20" />
-                <div className="w-12 h-12 rounded-full border-3 border-transparent border-t-epso-red border-r-epso-amber animate-epso-spin" />
-                <img
-                  src="/favicon.png"
-                  alt="Loading"
-                  className="w-6 h-6 object-contain animate-epso-pulse"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
-                />
-              </div>
-              <p className="mt-4 text-xs font-semibold text-stone-500 dark:text-stone-400 font-malayalam">
+            <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+              {/* Clean, Simple Modern Circular Loading Spinner */}
+              <div className="w-10 h-10 rounded-full border-3 border-stone-200 dark:border-stone-800 border-t-epso-red dark:border-t-amber-500 animate-spin" />
+              <p className="text-xs font-semibold text-stone-500 dark:text-stone-400 font-malayalam">
                 ഡാറ്റാബേസിൽ നിന്ന് വിവരങ്ങൾ ശേഖരിക്കുന്നു...
               </p>
             </div>
@@ -143,7 +234,8 @@ export const App: React.FC = () => {
                   products={products}
                   ingredients={ingredients}
                   productionRuns={productionRuns}
-                  onNavigateTab={setActiveTab}
+                  onNavigateTab={handleTabChange}
+                  onRefresh={loadAllData}
                 />
               )}
 
@@ -153,7 +245,7 @@ export const App: React.FC = () => {
                   ingredients={ingredients}
                   productionRuns={productionRuns}
                   stockMovements={stockMovements}
-                  onNavigateTab={setActiveTab}
+                  onNavigateTab={handleTabChange}
                 />
               )}
 
@@ -163,7 +255,11 @@ export const App: React.FC = () => {
                   products={products}
                   productionRuns={productionRuns}
                   auditLogs={auditLogs}
-                  onNavigateTab={setActiveTab}
+                  dismissedIds={dismissedNotificationIds}
+                  onDismiss={handleDismissNotification}
+                  onDismissAll={handleDismissAllNotifications}
+                  onRestore={handleRestoreNotifications}
+                  onNavigateTab={handleTabChange}
                   onRefresh={loadAllData}
                 />
               )}
@@ -205,7 +301,7 @@ export const App: React.FC = () => {
       {/* Mobile PWA Bottom Navigation Bar */}
       <MobileBottomNav
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={handleTabChange}
         notificationCount={notificationCount}
       />
     </div>

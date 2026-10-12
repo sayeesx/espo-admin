@@ -44,56 +44,134 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
   onNavigateTab,
 }) => {
   const { isDark } = useTheme();
-  const [timeRange, setTimeRange] = useState<'7d' | '30d' | 'all'>('7d');
+  const [timeRange, setTimeRange] = useState<'today' | '7d' | '30d' | 'all' | 'custom'>('7d');
+  const [customStartDate, setCustomStartDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().split('T')[0];
+  });
+  const [customEndDate, setCustomEndDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+
+  // Compute effective date range normalized (handles Day N to Day M and vice versa)
+  const { fromDate, toDate, isReversed } = useMemo(() => {
+    const today = new Date();
+    const todayIso = today.toISOString().split('T')[0];
+
+    if (timeRange === 'today') {
+      return { fromDate: todayIso, toDate: todayIso, isReversed: false };
+    } else if (timeRange === '7d') {
+      const d = new Date();
+      d.setDate(d.getDate() - 6);
+      return { fromDate: d.toISOString().split('T')[0], toDate: todayIso, isReversed: false };
+    } else if (timeRange === '30d') {
+      const d = new Date();
+      d.setDate(d.getDate() - 29);
+      return { fromDate: d.toISOString().split('T')[0], toDate: todayIso, isReversed: false };
+    } else if (timeRange === 'custom') {
+      const s = customStartDate || customEndDate || todayIso;
+      const e = customEndDate || customStartDate || todayIso;
+      const reversed = s > e;
+      const [start, end] = reversed ? [e, s] : [s, e];
+      return { fromDate: start, toDate: end, isReversed: reversed };
+    }
+    // 'all'
+    return { fromDate: '', toDate: '', isReversed: false };
+  }, [timeRange, customStartDate, customEndDate]);
+
+  // Filter production runs based on active date range
+  const filteredProductionRuns = useMemo(() => {
+    if (!fromDate && !toDate) return productionRuns;
+    return productionRuns.filter((run) => {
+      const d = run.productionDate || (run.createdAt ? run.createdAt.split('T')[0] : '');
+      if (!d) return false;
+      if (fromDate && d < fromDate) return false;
+      if (toDate && d > toDate) return false;
+      return true;
+    });
+  }, [productionRuns, fromDate, toDate]);
+
+  // Filter stock movements based on active date range
+  const filteredStockMovements = useMemo(() => {
+    if (!fromDate && !toDate) return stockMovements;
+    return stockMovements.filter((m) => {
+      const d = m.createdAt ? m.createdAt.split('T')[0] : '';
+      if (!d) return false;
+      if (fromDate && d < fromDate) return false;
+      if (toDate && d > toDate) return false;
+      return true;
+    });
+  }, [stockMovements, fromDate, toDate]);
 
   // Real financial calculations
   const totalFinishedGoodsValuation = products.reduce((acc, p) => acc + p.currentStock * p.wholesalePrice, 0);
   const totalRawValuation = ingredients.reduce((acc, ing) => acc + ing.currentStock * ing.avgCostPerUnit, 0);
   const totalWorkingCapital = totalFinishedGoodsValuation + totalRawValuation;
 
-  // Real Production Volume over time
+  // Output stats in selected range
+  const completedRunsInRange = useMemo(
+    () => filteredProductionRuns.filter((r) => r.status === 'completed'),
+    [filteredProductionRuns]
+  );
+  const totalOutputInRangeKg = useMemo(
+    () => completedRunsInRange.reduce((acc, r) => acc + (r.actualQuantity || 0), 0),
+    [completedRunsInRange]
+  );
+
+  // Real Production Volume over time based on filtered date range
   const productionTrendsData = useMemo(() => {
     const dateMap = new Map<string, { date: string; outputKg: number; count: number }>();
-    const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 14 : 30;
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const iso = d.toISOString().split('T')[0];
-      const displayDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      dateMap.set(iso, { date: displayDate, outputKg: 0, count: 0 });
+
+    if (fromDate && toDate) {
+      const start = new Date(fromDate);
+      const end = new Date(toDate);
+      const diffTime = end.getTime() - start.getTime();
+      const diffDays = Math.max(0, Math.round(diffTime / (1000 * 3600 * 24)));
+
+      if (diffDays <= 60) {
+        for (let i = 0; i <= diffDays; i++) {
+          const d = new Date(start);
+          d.setDate(d.getDate() + i);
+          const iso = d.toISOString().split('T')[0];
+          const displayDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          dateMap.set(iso, { date: displayDate, outputKg: 0, count: 0 });
+        }
+      }
     }
 
-    productionRuns.forEach((run) => {
+    filteredProductionRuns.forEach((run) => {
       if (run.status === 'completed' && run.productionDate) {
-        const item = dateMap.get(run.productionDate);
-        if (item) {
-          item.outputKg += run.actualQuantity;
-          item.count += 1;
-        }
+        const iso = run.productionDate;
+        const displayDate = new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const item = dateMap.get(iso) || { date: displayDate, outputKg: 0, count: 0 };
+        item.outputKg = Number((item.outputKg + (run.actualQuantity || 0)).toFixed(2));
+        item.count += 1;
+        dateMap.set(iso, item);
       }
     });
 
-    return Array.from(dateMap.values());
-  }, [productionRuns, timeRange]);
+    return Array.from(dateMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([, val]) => val);
+  }, [filteredProductionRuns, fromDate, toDate]);
 
-  // Real Consumption by Ingredient
+  // Real Consumption by Ingredient in selected range
   const ingredientConsumptionData = useMemo(() => {
     const ingMap = new Map<string, { name: string; quantity: number; unit: string }>();
 
-    productionRuns.forEach((run) => {
+    filteredProductionRuns.forEach((run) => {
       (run.ingredientsConsumed || []).forEach((c) => {
         const existing = ingMap.get(c.ingredientId) || {
           name: c.ingredientName || 'Ingredient',
           quantity: 0,
           unit: c.unit,
         };
-        existing.quantity += c.actualQuantity;
+        existing.quantity = Number((existing.quantity + c.actualQuantity).toFixed(2));
         ingMap.set(c.ingredientId, existing);
       });
     });
 
     if (ingMap.size === 0) {
-      stockMovements
+      filteredStockMovements
         .filter((m) => m.itemType === 'raw' && m.movementType === 'out')
         .forEach((m) => {
           const existing = ingMap.get(m.itemId) || {
@@ -101,7 +179,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
             quantity: 0,
             unit: m.unit,
           };
-          existing.quantity += m.quantity;
+          existing.quantity = Number((existing.quantity + m.quantity).toFixed(2));
           ingMap.set(m.itemId, existing);
         });
     }
@@ -109,7 +187,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
     return Array.from(ingMap.values())
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 6);
-  }, [productionRuns, stockMovements]);
+  }, [filteredProductionRuns, filteredStockMovements]);
 
   // Inventory Health Segments
   const healthSegments = useMemo(() => {
@@ -136,37 +214,168 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
 
   return (
     <div className="space-y-6 pb-20 max-w-6xl">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-950/40 text-epso-orange flex items-center justify-center font-bold">
-              <FiActivity className="w-4 h-4" />
+      {/* Top Header & Date Range Toolbar */}
+      <div className="flex flex-col gap-4 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-950/40 text-epso-orange flex items-center justify-center font-bold">
+                <FiActivity className="w-4 h-4" />
+              </div>
+              <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white">
+                Production Insights
+              </h1>
             </div>
-            <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white">
-              Production Insights
-            </h1>
+            <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
+              ഉൽപ്പാദന ട്രെൻഡുകളും അസംസ്കൃത വസ്തുക്കളുടെ ഉപഭോഗവും
+            </p>
           </div>
-          <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
-            ഉൽപ്പാദന ട്രെൻഡുകളും അസംസ്കൃത വസ്തുക്കളുടെ ഉപഭോഗവും
-          </p>
-        </div>
 
-        {/* Range Selector */}
-        <div className="flex items-center gap-1.5 p-1 bg-stone-100 dark:bg-[#1E1B1B] rounded-xl border border-stone-200 dark:border-[#2E2828]">
-          {(['7d', '30d', 'all'] as const).map((rng) => (
+          {/* Preset Buttons */}
+          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 dark:bg-[#1E1B1B] rounded-xl border border-stone-200 dark:border-[#2E2828]">
             <button
-              key={rng}
-              onClick={() => setTimeRange(rng)}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                timeRange === rng
+              onClick={() => setTimeRange('today')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                timeRange === 'today'
                   ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
                   : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
               }`}
             >
-              {rng === '7d' ? '7 Days' : rng === '30d' ? '30 Days' : 'All Time'}
+              Today
             </button>
-          ))}
+            <button
+              onClick={() => setTimeRange('7d')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                timeRange === '7d'
+                  ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
+                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+              }`}
+            >
+              7 Days
+            </button>
+            <button
+              onClick={() => setTimeRange('30d')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                timeRange === '30d'
+                  ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
+                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+              }`}
+            >
+              30 Days
+            </button>
+            <button
+              onClick={() => setTimeRange('all')}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                timeRange === 'all'
+                  ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
+                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+              }`}
+            >
+              All Time
+            </button>
+            <button
+              onClick={() => setTimeRange('custom')}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                timeRange === 'custom'
+                  ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
+                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+              }`}
+            >
+              <FiCalendar className="w-3.5 h-3.5" />
+              Custom Range
+            </button>
+          </div>
+        </div>
+
+        {/* Custom Date Range Picker (Day N to Day M vice versa) */}
+        {timeRange === 'custom' && (
+          <div className="flex flex-wrap items-center gap-3 p-3 bg-stone-50 dark:bg-[#1A1818] rounded-xl border border-stone-200 dark:border-[#2E2828] animate-in fade-in duration-200">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-stone-600 dark:text-stone-300">From Date (Day N):</span>
+              <input
+                type="date"
+                value={customStartDate}
+                onChange={(e) => setCustomStartDate(e.target.value)}
+                className="px-2.5 py-1.5 text-xs font-medium bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-lg text-stone-800 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-epso-orange"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-stone-600 dark:text-stone-300">To Date (Day M):</span>
+              <input
+                type="date"
+                value={customEndDate}
+                onChange={(e) => setCustomEndDate(e.target.value)}
+                className="px-2.5 py-1.5 text-xs font-medium bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-lg text-stone-800 dark:text-stone-200 focus:outline-none focus:ring-2 focus:ring-epso-orange"
+              />
+            </div>
+
+            {/* Quick Helper / Swap button */}
+            <div className="flex items-center gap-2 ml-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  const s = customStartDate;
+                  setCustomStartDate(customEndDate);
+                  setCustomEndDate(s);
+                }}
+                className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-stone-300 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-800 transition-colors"
+                title="Swap From and To dates"
+              >
+                ⇄ Swap (Day M ↔ Day N)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const today = new Date().toISOString().split('T')[0];
+                  setCustomStartDate(today);
+                  setCustomEndDate(today);
+                }}
+                className="px-2.5 py-1 text-[11px] font-bold rounded-lg border border-stone-300 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-800 transition-colors"
+              >
+                Set Today
+              </button>
+            </div>
+
+            {fromDate && toDate && (
+              <div className="w-full text-[11px] text-stone-500 dark:text-stone-400 flex items-center gap-1.5">
+                <span>Active Range:</span>
+                <span className="font-bold text-epso-orange">
+                  {fromDate} {fromDate !== toDate ? `to ${toDate}` : '(Single Day)'}
+                </span>
+                {isReversed && (
+                  <span className="text-amber-500 font-semibold">(Auto-adjusted order)</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Range Summary Indicators */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="p-3 bg-stone-50 dark:bg-[#1A1818] rounded-xl border border-stone-200 dark:border-[#2E2828]">
+          <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Filtered Batches</div>
+          <div className="text-lg font-black text-stone-900 dark:text-white mt-0.5">
+            {completedRunsInRange.length}
+          </div>
+        </div>
+        <div className="p-3 bg-stone-50 dark:bg-[#1A1818] rounded-xl border border-stone-200 dark:border-[#2E2828]">
+          <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Output in Range</div>
+          <div className="text-lg font-black text-epso-orange mt-0.5">
+            {totalOutputInRangeKg.toFixed(1)} kg
+          </div>
+        </div>
+        <div className="p-3 bg-stone-50 dark:bg-[#1A1818] rounded-xl border border-stone-200 dark:border-[#2E2828]">
+          <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Pantry Capital</div>
+          <div className="text-lg font-black text-stone-900 dark:text-white mt-0.5">
+            ₹{totalWorkingCapital.toLocaleString('en-IN')}
+          </div>
+        </div>
+        <div className="p-3 bg-stone-50 dark:bg-[#1A1818] rounded-xl border border-stone-200 dark:border-[#2E2828]">
+          <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Ingredients Monitored</div>
+          <div className="text-lg font-black text-stone-900 dark:text-white mt-0.5">
+            {ingredients.length} items
+          </div>
         </div>
       </div>
 

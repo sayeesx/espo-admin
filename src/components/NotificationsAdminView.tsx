@@ -11,13 +11,19 @@ import {
   FiArrowRight,
   FiX,
   FiTrendingDown,
+  FiPrinter,
 } from 'react-icons/fi';
+import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 
 interface NotificationsAdminViewProps {
   ingredients: Ingredient[];
   products: Product[];
   productionRuns: ProductionRun[];
   auditLogs?: AuditLog[];
+  dismissedIds?: Set<string>;
+  onDismiss?: (id: string) => void;
+  onDismissAll?: (ids: string[]) => void;
+  onRestore?: () => void;
   onNavigateTab: (tab: any) => void;
   onRefresh: () => void;
 }
@@ -49,11 +55,17 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
   ingredients,
   products,
   productionRuns,
+  dismissedIds: externalDismissedIds,
+  onDismiss,
+  onDismissAll,
+  onRestore,
   onNavigateTab,
   onRefresh,
 }) => {
   const [filter, setFilter] = useState<NotificationFilter>('all');
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  const [localDismissedIds, setLocalDismissedIds] = useState<Set<string>>(new Set());
+  const [purchaseListModalOpen, setPurchaseListModalOpen] = useState(false);
+  const activeDismissed = externalDismissedIds || localDismissedIds;
 
   // Generate dynamic real-time notifications from active state (No security)
   const notifications = useMemo<AdminNotification[]>(() => {
@@ -169,25 +181,34 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
 
   const filteredNotifications = useMemo(() => {
     return notifications
-      .filter((n) => !dismissedIds.has(n.id))
+      .filter((n) => !activeDismissed.has(n.id))
       .filter((n) => {
         if (filter === 'stock') return n.type === 'critical_stock' || n.type === 'low_stock';
         if (filter === 'batches') return n.type === 'batch_variance';
         if (filter === 'recipes') return n.type === 'recipe_missing';
         return true;
       });
-  }, [notifications, filter, dismissedIds]);
+  }, [notifications, filter, activeDismissed]);
 
-  const criticalCount = notifications.filter((n) => n.severity === 'critical' && !dismissedIds.has(n.id)).length;
-  const warningCount = notifications.filter((n) => n.severity === 'warning' && !dismissedIds.has(n.id)).length;
-  const infoCount = notifications.filter((n) => n.severity === 'info' && !dismissedIds.has(n.id)).length;
+  const criticalCount = notifications.filter((n) => n.severity === 'critical' && !activeDismissed.has(n.id)).length;
+  const warningCount = notifications.filter((n) => n.severity === 'warning' && !activeDismissed.has(n.id)).length;
+  const infoCount = notifications.filter((n) => n.severity === 'info' && !activeDismissed.has(n.id)).length;
 
   const handleDismiss = (id: string) => {
-    setDismissedIds((prev) => new Set(prev).add(id));
+    if (onDismiss) {
+      onDismiss(id);
+    } else {
+      setLocalDismissedIds((prev) => new Set(prev).add(id));
+    }
   };
 
   const handleDismissAll = () => {
-    setDismissedIds(new Set(notifications.map((n) => n.id)));
+    const ids = notifications.map((n) => n.id);
+    if (onDismissAll) {
+      onDismissAll(ids);
+    } else {
+      setLocalDismissedIds(new Set(ids));
+    }
   };
 
   return (
@@ -209,6 +230,23 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setPurchaseListModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-300 hover:bg-amber-100 transition-colors cursor-pointer"
+            title="Print purchase list for low stock items"
+          >
+            <FiPrinter className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span>Print Purchase List</span>
+          </button>
+          {activeDismissed.size > 0 && onRestore && (
+            <button
+              onClick={onRestore}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-amber-300 dark:border-amber-800 transition-colors cursor-pointer"
+              title="Restore dismissed alerts"
+            >
+              Restore All
+            </button>
+          )}
           <button
             onClick={onRefresh}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-[#2E2828] hover:bg-stone-50 press-apple transition-colors cursor-pointer"
@@ -421,6 +459,13 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
           })
         )}
       </div>
+
+      {/* Printable Purchase List Modal */}
+      <PrintPurchaseListModal
+        isOpen={purchaseListModalOpen}
+        onClose={() => setPurchaseListModalOpen(false)}
+        ingredients={ingredients}
+      />
     </div>
   );
 };

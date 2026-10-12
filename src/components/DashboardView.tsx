@@ -15,7 +15,9 @@ import {
   FiChevronRight,
   FiChevronLeft,
   FiCheckCircle,
+  FiTrash2,
 } from 'react-icons/fi';
+import { deleteProductionRun } from '../services/supabase';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -35,6 +37,7 @@ interface DashboardViewProps {
   ingredients: Ingredient[];
   productionRuns: ProductionRun[];
   onNavigateTab: (tab: any) => void;
+  onRefresh?: () => void;
 }
 
 interface CircularGaugeProps {
@@ -117,13 +120,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   ingredients,
   productionRuns,
   onNavigateTab,
+  onRefresh,
 }) => {
   const { isDark } = useTheme();
   const dateScrollRef = useRef<HTMLDivElement>(null);
   const desktopDateScrollRef = useRef<HTMLDivElement>(null);
 
-  // Selected date filter for the interactive calendar strip
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // Today's Date ISO
+  const todayIso = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  // Selected date filter for the interactive calendar strip - defaults to todayIso
+  const [selectedDate, setSelectedDate] = useState<string | null>(todayIso);
+  const activeDate = selectedDate || todayIso;
 
   // Financial & inventory calculations
   const totalFinishedGoodsValuation = products.reduce((acc, p) => {
@@ -143,14 +151,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const completedBatchesCount = productionRuns.filter((r) => r.status === 'completed').length;
   const totalProducedUnits = productionRuns.reduce((acc, r) => acc + (r.actualQuantity || 0), 0);
 
-  // Today's Date ISO
-  const todayIso = new Date().toISOString().split('T')[0];
-  const todayRuns = productionRuns.filter((r) => r.productionDate === todayIso && r.status === 'completed');
-  const todayOutputKg = todayRuns.reduce((acc, r) => acc + (r.actualQuantity || 0), 0);
+  // Active Date Runs & Output based on selected date
+  const activeDateRuns = useMemo(
+    () => productionRuns.filter((r) => r.productionDate === activeDate && r.status === 'completed'),
+    [productionRuns, activeDate]
+  );
+  const activeOutputKg = useMemo(
+    () => activeDateRuns.reduce((acc, r) => acc + (r.actualQuantity || 0), 0),
+    [activeDateRuns]
+  );
   const dailyTargetBatches = 8;
 
   // Percentage Calculations for Gauges
-  const batchesProgressPercent = Math.min(100, Math.round((todayRuns.length / dailyTargetBatches) * 100));
+  const batchesProgressPercent = Math.min(100, Math.round((activeDateRuns.length / dailyTargetBatches) * 100));
   const safeStockCount = ingredients.filter((i) => i.currentStock > i.minStock).length;
   const stockHealthPercent = ingredients.length > 0 ? Math.round((safeStockCount / ingredients.length) * 100) : 100;
   const productsWithRecipeCount = products.filter((p) => p.recipeId).length;
@@ -209,13 +222,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return Array.from(dateMap.values());
   }, [productionRuns]);
 
-  // Filtered recent production runs (if date selected in date strip)
+  // Filtered recent production runs based on selectedDate
   const displayedRuns = useMemo(() => {
     if (selectedDate) {
       return productionRuns.filter((r) => r.productionDate === selectedDate);
     }
-    return productionRuns.slice(0, 6);
+    return productionRuns;
   }, [productionRuns, selectedDate]);
+
+  const handleDeleteBatch = async (run: ProductionRun) => {
+    const confirm = window.confirm(
+      `ബാച്ച് #${run.runNumber} (${run.productName}) ഡാറ്റാബേസിൽ നിന്നും പൂർണ്ണമായി ഒഴിവാക്കണോ?\nAre you sure you want to permanently delete this production batch?`
+    );
+    if (!confirm) return;
+
+    try {
+      await deleteProductionRun(run.id);
+      alert(`ബാച്ച് #${run.runNumber} പൂർണ്ണമായി ഒഴിവാക്കി.`);
+      onRefresh?.();
+    } catch (err: any) {
+      alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Failed to delete batch'}`);
+    }
+  };
 
   // Chart data: Top products by estimated wholesale value
   const productValuationData = products
@@ -256,11 +284,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {/* Ring 1: Batches (Orange) */}
             <CircularGauge
               label="Batches"
-              value={String(todayRuns.length)}
+              value={String(activeDateRuns.length)}
               subValue={`/${dailyTargetBatches}`}
               percentage={batchesProgressPercent}
               color="#EA580C"
-              subtext={todayRuns.length >= dailyTargetBatches ? 'ടാർഗെറ്റ് കഴിഞ്ഞു' : `${dailyTargetBatches - todayRuns.length} ബാക്കി`}
+              subtext={activeDateRuns.length >= dailyTargetBatches ? 'ടാർഗെറ്റ് കഴിഞ്ഞു' : `${Math.max(0, dailyTargetBatches - activeDateRuns.length)} ബാക്കി`}
             />
 
             {/* Ring 2: Stock Health (Green) */}
@@ -286,12 +314,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
 
         {/* Multi-Week Horizontal Scrolling Calendar Strip with smooth week navigation */}
-        <div className="bg-white dark:bg-[#1E1B1B] rounded-2xl p-2 border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-1.5">
+        <div className="bg-white dark:bg-[#1E1B1B] rounded-2xl p-2 border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-2">
           <div className="flex items-center justify-between px-2">
-            <span className="text-xs font-black text-stone-800 dark:text-stone-200">
-              Calendar Dates
-            </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-black text-stone-800 dark:text-stone-200">
+                Calendar
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedDate(null)}
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-lg transition-colors ${
+                  !selectedDate
+                    ? 'bg-epso-orange text-white'
+                    : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 bg-stone-100 dark:bg-[#282323]'
+                }`}
+              >
+                All Dates
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <input
+                type="date"
+                value={selectedDate || ''}
+                onChange={(e) => setSelectedDate(e.target.value || null)}
+                className="text-[11px] px-2 py-0.5 rounded-lg border border-stone-200 dark:border-[#332c2c] bg-stone-50 dark:bg-[#282323] text-stone-800 dark:text-white"
+                title="Choose custom date"
+              />
               <button
                 type="button"
                 onClick={() => handleScrollWeeks('left')}
@@ -316,7 +365,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1"
           >
             {multiWeekDays.map((d) => {
-              const isSelected = selectedDate === d.iso || (!selectedDate && d.isToday);
+              const isSelected = selectedDate === d.iso;
               return (
                 <button
                   key={d.iso}
@@ -405,9 +454,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="flex items-center justify-between pt-2 border-t border-stone-100 dark:border-[#282323] text-xs">
             <div>
               <span className="text-base font-black text-stone-900 dark:text-white">
-                {todayOutputKg} kg
+                {activeOutputKg} kg
               </span>
-              <p className="text-[10px] text-stone-400 font-semibold font-malayalam">ഇന്ന് ഉൽപ്പാദിപ്പിച്ചത്</p>
+              <p className="text-[10px] text-stone-400 font-semibold font-malayalam">
+                {selectedDate ? `${selectedDate} ഉൽപ്പാദനം` : 'ഇന്ന് ഉൽപ്പാദിപ്പിച്ചത്'}
+              </p>
             </div>
             <button
               onClick={() => onNavigateTab('movements')}
@@ -451,20 +502,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Recent Batches List */}
         <div className="space-y-2.5">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider">
-              {selectedDate ? `Batches (${selectedDate})` : 'Recent Batches'}
-            </h3>
-            <button
-              onClick={() => onNavigateTab('movements')}
-              className="text-xs text-epso-orange font-bold hover:underline"
-            >
-              View All
-            </button>
+            <div>
+              <h3 className="text-xs font-black text-stone-900 dark:text-white uppercase tracking-wider">
+                {selectedDate ? `Batches: ${selectedDate}` : 'All Recent Batches'}
+              </h3>
+              <p className="text-[10px] text-stone-400 font-semibold">
+                {displayedRuns.length} batches found
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {selectedDate && (
+                <button
+                  onClick={() => setSelectedDate(null)}
+                  className="text-xs text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 font-bold"
+                >
+                  Clear filter
+                </button>
+              )}
+              <button
+                onClick={() => onNavigateTab('movements')}
+                className="text-xs text-epso-orange font-bold hover:underline"
+              >
+                View All
+              </button>
+            </div>
           </div>
 
           {displayedRuns.length === 0 ? (
             <div className="p-6 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] text-center text-xs text-stone-400 font-malayalam">
-              തിരഞ്ഞെടുത്ത തീയതിയിൽ ബാച്ചുകൾ രേഖപ്പെടുത്തിയിട്ടില്ല
+              {selectedDate
+                ? `${selectedDate} തീയതിയിൽ ബാച്ചുകൾ കണ്ടെത്തിയില്ല`
+                : 'ബാച്ചുകൾ രേഖപ്പെടുത്തിയിട്ടില്ല'}
             </div>
           ) : (
             displayedRuns.map((run) => (
@@ -488,9 +556,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </div>
 
                   <div className="text-right">
-                    <span className="text-sm font-black text-stone-900 dark:text-white">
-                      {run.actualQuantity} {run.unit}
-                    </span>
+                    <div className="flex items-center justify-end gap-2">
+                      <span className="text-sm font-black text-stone-900 dark:text-white">
+                        {run.actualQuantity} {run.unit}
+                      </span>
+                      <button
+                        onClick={() => handleDeleteBatch(run)}
+                        className="p-1 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                        title="Delete Batch Permanently"
+                      >
+                        <FiTrash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                     <p className="text-[10px] text-stone-400 font-semibold">{run.operatorName}</p>
                   </div>
                 </div>
@@ -532,10 +609,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               തത്സമയ വിൽപന മൂല്യനിർണ്ണയവും ഉൽപ്പാദന കണക്കുകളും
             </p>
           </div>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Live Supabase</span>
-          </span>
         </div>
 
         {/* Multi-Week Horizontal Scrolling Calendar Strip (Desktop) */}
@@ -544,22 +617,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex items-center gap-2">
               <FiCalendar className="w-4 h-4 text-epso-orange" />
               <span className="text-xs font-bold text-stone-800 dark:text-stone-200">
-                Weekly Production Calendar
+                Production Calendar
               </span>
               <span className="text-[11px] text-stone-400 font-malayalam">
-                (ആഴ്ചയിലെ ദിവസങ്ങൾ)
+                {selectedDate ? `(${selectedDate})` : '(എല്ലാ ദിവസങ്ങളും)'}
               </span>
-              {selectedDate && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedDate(null)}
-                  className="text-[10px] text-epso-orange hover:underline font-bold ml-2"
-                >
-                  Reset filter
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => setSelectedDate(null)}
+                className={`text-[10px] font-bold px-2.5 py-1 rounded-lg ml-2 transition-colors ${
+                  !selectedDate
+                    ? 'bg-epso-orange text-white'
+                    : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 bg-stone-100 dark:bg-[#282323]'
+                }`}
+              >
+                All Dates
+              </button>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={selectedDate || ''}
+                onChange={(e) => setSelectedDate(e.target.value || null)}
+                className="text-xs px-2.5 py-1 rounded-xl border border-stone-200 dark:border-[#332c2c] bg-stone-50 dark:bg-[#282323] text-stone-800 dark:text-white"
+                title="Select any custom calendar date"
+              />
               <button
                 type="button"
                 onClick={() => handleScrollWeeks('left', true)}
@@ -584,7 +666,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1"
           >
             {multiWeekDays.map((d) => {
-              const isSelected = selectedDate === d.iso || (!selectedDate && d.isToday);
+              const isSelected = selectedDate === d.iso;
               return (
                 <button
                   key={d.iso}
@@ -830,21 +912,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <FiClock className="w-4 h-4 text-epso-red dark:text-amber-400" />
-              <h2 className="text-sm font-black text-stone-900 dark:text-white">
-                Recent Production Runs
-              </h2>
+              <div>
+                <h2 className="text-sm font-black text-stone-900 dark:text-white">
+                  {selectedDate ? `Production Batches: ${selectedDate}` : 'All Production Batches'}
+                </h2>
+                <p className="text-[11px] text-stone-400 font-semibold font-malayalam">
+                  {displayedRuns.length} ബാച്ചുകൾ കണ്ടെത്തി
+                </p>
+              </div>
             </div>
-            <button
-              onClick={() => onNavigateTab('movements')}
-              className="text-xs text-epso-red dark:text-amber-400 font-bold hover:underline"
-            >
-              View All
-            </button>
+            <div className="flex items-center gap-2">
+              {selectedDate && (
+                <button
+                  onClick={() => setSelectedDate(null)}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-[#282323] text-stone-600 dark:text-stone-300 hover:text-stone-900 font-bold"
+                >
+                  Clear Date Filter
+                </button>
+              )}
+              <button
+                onClick={() => onNavigateTab('movements')}
+                className="text-xs text-epso-red dark:text-amber-400 font-bold hover:underline"
+              >
+                View Ledger
+              </button>
+            </div>
           </div>
 
-          {productionRuns.length === 0 ? (
+          {displayedRuns.length === 0 ? (
             <div className="py-8 text-center text-xs text-stone-400 dark:text-stone-500 font-malayalam">
-              ഉൽപ്പാദന ബാച്ചുകൾ ഇതുവരെ രേഖപ്പെടുത്തിയിട്ടില്ല.
+              {selectedDate ? `${selectedDate} തീയതിയിൽ ബാച്ചുകൾ കണ്ടെത്തിയില്ല.` : 'ഉൽപ്പാദന ബാച്ചുകൾ ഇതുവരെ രേഖപ്പെടുത്തിയിട്ടില്ല.'}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -857,10 +954,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <th className="py-2.5 px-3">Output</th>
                     <th className="py-2.5 px-3">Operator</th>
                     <th className="py-2.5 px-3">Status</th>
+                    <th className="py-2.5 px-3 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100 dark:divide-[#2E2828]/50">
-                  {productionRuns.slice(0, 5).map((run) => (
+                  {displayedRuns.slice(0, 15).map((run) => (
                     <tr key={run.id} className="hover:bg-stone-50 dark:hover:bg-[#282323] transition-colors">
                       <td className="py-2.5 px-3 font-mono font-bold text-stone-900 dark:text-white">
                         {run.runNumber}
@@ -878,9 +976,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         {run.operatorName}
                       </td>
                       <td className="py-2.5 px-3">
-                        <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-400">
-                          Completed
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            run.status === 'completed'
+                              ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-400'
+                              : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400'
+                          }`}
+                        >
+                          {run.status === 'completed' ? 'Completed' : 'Cancelled'}
                         </span>
+                      </td>
+                      <td className="py-2.5 px-3 text-right">
+                        <button
+                          onClick={() => handleDeleteBatch(run)}
+                          className="p-1 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                          title="Delete Batch Permanently"
+                        >
+                          <FiTrash2 className="w-3.5 h-3.5" />
+                        </button>
                       </td>
                     </tr>
                   ))}

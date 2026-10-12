@@ -11,12 +11,14 @@ import {
   FiXCircle,
   FiDollarSign,
   FiLayers,
+  FiPrinter,
 } from 'react-icons/fi';
 import {
   saveIngredient,
   deleteIngredient,
   adjustIngredientStock,
 } from '../services/supabase';
+import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 
 interface IngredientsAdminViewProps {
   ingredients: Ingredient[];
@@ -33,6 +35,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   // Modals
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
+  const [purchaseListModalOpen, setPurchaseListModalOpen] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
 
   // Form states
@@ -115,6 +118,16 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     e.preventDefault();
     if (!selectedIngredient || adjustDelta <= 0) return;
 
+    if (!adjustIsAdd && selectedIngredient.currentStock <= 0) {
+      alert('മുന്നറിയിപ്പ്: സ്റ്റോക്ക് 0 ആണ്! നെഗറ്റീവ് ആകാൻ കഴിയില്ല.');
+      return;
+    }
+
+    if (!adjustIsAdd && adjustDelta > selectedIngredient.currentStock) {
+      alert(`മുന്നറിയിപ്പ്: ലഭ്യമായ സ്റ്റോക്കിൽ (${selectedIngredient.currentStock} ${selectedIngredient.unit}) കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല!`);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const delta = adjustIsAdd ? adjustDelta : -adjustDelta;
@@ -170,14 +183,48 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
             അസംസ്കൃത ചേരുവകളും സ്റ്റോക്ക് പരിധിയും
           </p>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors"
-        >
-          <FiPlus className="w-4 h-4" />
-          <span>New Ingredient</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPurchaseListModalOpen(true)}
+            className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer"
+            title="Print purchase list for low stock ingredients"
+          >
+            <FiPrinter className="w-4 h-4 text-epso-orange" />
+            <span>Print Purchase List</span>
+            {lowStockCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                {lowStockCount}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={openCreateModal}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
+          >
+            <FiPlus className="w-4 h-4" />
+            <span>New Ingredient</span>
+          </button>
+        </div>
       </div>
+
+      {/* Low Stock Requisition Alert Strip */}
+      {lowStockCount > 0 && (
+        <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
+          <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-bold font-malayalam">
+            <FiAlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+            <span>{lowStockCount} ചേരുവകൾ കുറഞ്ഞ സ്റ്റോക്കിലാണ് / തീർന്നുപോയി (About to Stock Out)</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPurchaseListModalOpen(true)}
+            className="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
+          >
+            <FiPrinter className="w-3.5 h-3.5" />
+            <span>പർച്ചേസ് ലിസ്റ്റ് തയ്യാറാക്കുക (Print List)</span>
+          </button>
+        </div>
+      )}
 
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -341,17 +388,11 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 </button>
                 <button
                   onClick={() => openEditModal(ing)}
-                  className="p-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] border border-stone-200 dark:border-[#2E2828] press-apple transition-colors"
+                  className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] border border-stone-200 dark:border-[#2E2828] press-apple transition-colors text-xs font-bold"
                   title="തിരുത്തുക (Edit)"
                 >
                   <FiEdit2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => handleDelete(ing)}
-                  className="p-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border border-transparent hover:border-red-200 dark:hover:border-red-900 press-apple transition-colors"
-                  title="ഡിലീറ്റ് ചെയ്യുക"
-                >
-                  <FiTrash2 className="w-4 h-4" />
+                  <span className="font-malayalam">തിരുത്തുക</span>
                 </button>
               </div>
             </div>
@@ -434,9 +475,17 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 </select>
               </div>
 
+              {/* Warning when stock is 0 and trying to deduct */}
+              {!adjustIsAdd && selectedIngredient.currentStock <= 0 && (
+                <div className="p-3 rounded-xl bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-900/60 text-xs text-red-900 dark:text-red-200 font-bold font-malayalam flex items-center gap-2">
+                  <FiAlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+                  <span>മുന്നറിയിപ്പ്: സ്റ്റോക്ക് 0 ആണ്! നെഗറ്റീവ് ആക്കാൻ കഴിയില്ല.</span>
+                </div>
+              )}
+
               <div className="p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] text-xs">
                 <span className="text-stone-400 font-malayalam block">പുതിയ സ്റ്റോക്ക് ബാലൻസ്:</span>
-                <span className="text-base font-extrabold text-stone-900 dark:text-white">
+                <span className={`text-base font-extrabold ${!adjustIsAdd && adjustDelta > selectedIngredient.currentStock ? 'text-red-600' : 'text-stone-900 dark:text-white'}`}>
                   {Math.max(0, selectedIngredient.currentStock + (adjustIsAdd ? adjustDelta : -adjustDelta))}{' '}
                   {selectedIngredient.unit}
                 </span>
@@ -578,26 +627,53 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100 dark:border-[#2E2828]">
-                <button
-                  type="button"
-                  onClick={() => setFormModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold font-malayalam"
-                >
-                  റദ്ദാക്കുക (Cancel)
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple font-malayalam"
-                >
-                  {isSubmitting ? 'സൂക്ഷിക്കുന്നു...' : 'സൂക്ഷിക്കുക (Save)'}
-                </button>
+              <div className="flex items-center justify-between gap-2 pt-3 border-t border-stone-100 dark:border-[#2E2828]">
+                {selectedIngredient ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedIngredient) {
+                        setFormModalOpen(false);
+                        handleDelete(selectedIngredient);
+                      }
+                    }}
+                    className="px-3 py-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold font-malayalam flex items-center gap-1.5 transition-colors"
+                  >
+                    <FiTrash2 className="w-4 h-4" />
+                    <span>ഡിലീറ്റ്</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold font-malayalam"
+                  >
+                    റദ്ദാക്കുക (Cancel)
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple font-malayalam"
+                  >
+                    {isSubmitting ? 'സൂക്ഷിക്കുന്നു...' : 'സൂക്ഷിക്കുക (Save)'}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* Printable Purchase & Reorder List Modal */}
+      <PrintPurchaseListModal
+        isOpen={purchaseListModalOpen}
+        onClose={() => setPurchaseListModalOpen(false)}
+        ingredients={ingredients}
+      />
     </div>
   );
 };
