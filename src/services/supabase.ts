@@ -394,7 +394,7 @@ export async function deleteProductionRun(id: string): Promise<void> {
   }
 
   await supabase.from('production_consumption').delete().eq('run_id', id);
-  const { error } = await supabase.from('production_runs').delete().eq('id', id);
+  const { error } = await supabase.from('production_runs').delete().eq('id', id).select('id');
   if (error) throw error;
 }
 
