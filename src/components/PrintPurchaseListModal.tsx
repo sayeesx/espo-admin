@@ -445,8 +445,8 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
                         <div className="flex items-center gap-1">
                           <input
                             type="number"
-                            min="0.1"
-                            step="0.5"
+                            min="0.001"
+                            step="any"
                             value={qty}
                             disabled={!isChecked}
                             onChange={(e) => handleQtyChange(ing.id, parseFloat(e.target.value))}
