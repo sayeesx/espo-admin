@@ -267,6 +267,7 @@ export const App: React.FC = () => {
               {activeTab === 'products' && (
                 <ProductsAdminView
                   products={products}
+                  ingredients={ingredients}
                   onRefresh={loadAllData}
                 />
               )}
@@ -290,6 +291,7 @@ export const App: React.FC = () => {
               {activeTab === 'movements' && (
                 <StockLedgerAdminView
                   movements={stockMovements}
+                  ingredients={ingredients}
                   onRefresh={loadAllData}
                 />
               )}

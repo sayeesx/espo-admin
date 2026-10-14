@@ -27,8 +27,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-[#181515]/95 backdrop-blur-xl border-t border-stone-200/80 dark:border-[#2E2828] pb-safe transition-colors select-none">
-      <div className="flex items-center justify-around h-16 px-2">
+    <nav className="md:hidden fixed bottom-3 inset-x-3 z-40 max-w-md mx-auto select-none pointer-events-none">
+      <div className="bg-white/90 dark:bg-[#1A1616]/90 backdrop-blur-2xl rounded-2xl border border-stone-200/80 dark:border-[#2E2828] shadow-[0_10px_35px_rgba(0,0,0,0.12)] dark:shadow-[0_10px_35px_rgba(0,0,0,0.5)] p-1.5 flex items-center justify-between gap-1 pointer-events-auto">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive =
@@ -39,26 +39,37 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`flex-1 flex flex-col items-center justify-center py-1 transition-all relative press-apple cursor-pointer ${
+              className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all duration-200 relative press-apple cursor-pointer ${
                 isActive
-                  ? 'text-epso-orange dark:text-amber-400 font-black'
-                  : 'text-stone-400 dark:text-stone-500 hover:text-stone-700 dark:hover:text-stone-300'
+                  ? 'bg-stone-900 text-white dark:bg-white dark:text-stone-950 shadow-xs'
+                  : 'text-stone-500 dark:text-stone-400 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-50 dark:hover:bg-[#252020]'
               }`}
             >
               <div className="relative">
-                <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive ? 'scale-110' : ''}`} />
+                <Icon
+                  className={`w-4 h-4 transition-transform duration-200 ${
+                    isActive ? 'scale-105' : ''
+                  }`}
+                />
                 {tab.hasBadge && notificationCount > 0 && (
-                  <span className="absolute -top-1 -right-2 min-w-[15px] h-[15px] px-0.5 rounded-full bg-epso-red text-white text-[9px] font-black flex items-center justify-center border border-white dark:border-[#181515]">
+                  <span
+                    className={`absolute -top-1.5 -right-2 min-w-[15px] h-[15px] px-0.5 rounded-full text-[9px] font-black flex items-center justify-center ${
+                      isActive
+                        ? 'bg-epso-red text-white ring-2 ring-stone-900 dark:ring-white'
+                        : 'bg-epso-red text-white'
+                    }`}
+                  >
                     {notificationCount > 9 ? '9+' : notificationCount}
                   </span>
                 )}
               </div>
-              <span className={`text-[10px] mt-1 font-semibold tracking-tight ${isActive ? 'font-bold' : ''}`}>
+              <span
+                className={`text-[10px] mt-1 tracking-tight leading-none ${
+                  isActive ? 'font-bold' : 'font-medium'
+                }`}
+              >
                 {tab.label}
               </span>
-              {isActive && (
-                <span className="w-1.5 h-1.5 rounded-full bg-epso-orange dark:bg-amber-400 mt-0.5" />
-              )}
             </button>
           );
         })}

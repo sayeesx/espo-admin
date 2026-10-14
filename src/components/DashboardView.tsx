@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Product, Ingredient, ProductionRun } from '../types';
 import {
   FiGrid,
@@ -57,12 +57,21 @@ const CircularGauge: React.FC<CircularGaugeProps> = ({
   color,
   subtext,
 }) => {
+  const [animatedPercent, setAnimatedPercent] = useState(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAnimatedPercent(percentage);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [percentage]);
+
   const size = 76;
   const strokeWidth = 7;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset =
-    circumference - (circumference * Math.min(100, Math.max(0, percentage))) / 100;
+    circumference - (circumference * Math.min(100, Math.max(0, animatedPercent))) / 100;
 
   return (
     <div className="flex flex-col items-center flex-1 min-w-0">
@@ -125,12 +134,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const { isDark } = useTheme();
   const dateScrollRef = useRef<HTMLDivElement>(null);
   const desktopDateScrollRef = useRef<HTMLDivElement>(null);
+  const mobileDateInputRef = useRef<HTMLInputElement>(null);
+  const desktopDateInputRef = useRef<HTMLInputElement>(null);
+
+  const openCalendarPicker = (isDesktop: boolean) => {
+    const ref = isDesktop ? desktopDateInputRef.current : mobileDateInputRef.current;
+    if (ref) {
+      try {
+        if ('showPicker' in HTMLInputElement.prototype) {
+          ref.showPicker();
+        } else {
+          ref.focus();
+        }
+      } catch {
+        ref.focus();
+      }
+    }
+  };
 
   // Today's Date ISO
   const todayIso = useMemo(() => new Date().toISOString().split('T')[0], []);
 
-  // Selected date filter for the interactive calendar strip - defaults to todayIso
-  const [selectedDate, setSelectedDate] = useState<string | null>(todayIso);
+  // Selected date filter: null = all days (normal trend). Selecting a day shows that day only. Clicking again resets to null.
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const activeDate = selectedDate || todayIso;
 
   // Financial & inventory calculations
@@ -161,6 +187,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     [activeDateRuns]
   );
   const dailyTargetBatches = 8;
+
+  // Single-day product breakdown when a specific date is selected
+  const singleDayProductData = useMemo(() => {
+    if (!selectedDate) return [];
+    const map = new Map<string, number>();
+    activeDateRuns.forEach((r) => {
+      const pName = r.productName || 'Product';
+      map.set(pName, (map.get(pName) || 0) + (r.actualQuantity || 0));
+    });
+    return Array.from(map.entries()).map(([name, output]) => ({
+      name,
+      output,
+    }));
+  }, [selectedDate, activeDateRuns]);
 
   // Percentage Calculations for Gauges
   const batchesProgressPercent = Math.min(100, Math.round((activeDateRuns.length / dailyTargetBatches) * 100));
@@ -264,8 +304,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* MOBILE APP PWA LAYOUT                                        */}
       {/* ============================================================ */}
       <div className="md:hidden space-y-4">
-        {/* "Your Activity" Card with 3 Circular Ring Progress Gauges */}
-        <div className="p-4 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
+        {/* "Your Activity" Card with 3 Circular Ring Progress Gauges - with entrance animation */}
+        <div className="p-4 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all animate-daily-ops">
           <div className="flex items-center justify-between mb-3 px-1">
             <div>
               <h2 className="text-sm font-black text-stone-900 dark:text-white">
@@ -323,7 +363,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <button
                 type="button"
                 onClick={() => setSelectedDate(null)}
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-lg transition-colors ${
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-lg transition-colors cursor-pointer ${
                   !selectedDate
                     ? 'bg-epso-orange text-white'
                     : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 bg-stone-100 dark:bg-[#282323]'
@@ -334,17 +374,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             <div className="flex items-center gap-1.5">
-              <input
-                type="date"
-                value={selectedDate || ''}
-                onChange={(e) => setSelectedDate(e.target.value || null)}
-                className="text-[11px] px-2 py-0.5 rounded-lg border border-stone-200 dark:border-[#332c2c] bg-stone-50 dark:bg-[#282323] text-stone-800 dark:text-white"
-                title="Choose custom date"
-              />
+              {/* Clickable Date Container: Clicking dd/mm/yy or calendar icon opens calendar */}
+              <div
+                onClick={() => openCalendarPicker(false)}
+                className="relative flex items-center gap-1 px-2 py-1 rounded-lg border border-stone-200 dark:border-[#332c2c] bg-stone-50 dark:bg-[#282323] cursor-pointer hover:border-epso-orange transition-colors select-none group"
+                title="Click date to open calendar"
+              >
+                <FiCalendar className="w-3.5 h-3.5 text-epso-orange pointer-events-none group-hover:scale-110 transition-transform" />
+                <span className="text-[11px] font-bold text-stone-700 dark:text-stone-200 pointer-events-none">
+                  {selectedDate ? selectedDate.split('-').reverse().join('/') : 'dd/mm/yy'}
+                </span>
+                <input
+                  ref={mobileDateInputRef}
+                  type="date"
+                  value={selectedDate || ''}
+                  onChange={(e) => setSelectedDate(e.target.value || null)}
+                  onClick={(e) => {
+                    try {
+                      (e.target as any).showPicker?.();
+                    } catch {}
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+              </div>
+
               <button
                 type="button"
                 onClick={() => handleScrollWeeks('left')}
-                className="p-1 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500"
+                className="p-1 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500 cursor-pointer"
                 title="Previous Week"
               >
                 <FiChevronLeft className="w-3.5 h-3.5" />
@@ -352,7 +409,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleScrollWeeks('right')}
-                className="p-1 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500"
+                className="p-1 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500 cursor-pointer"
                 title="Next Week"
               >
                 <FiChevronRight className="w-3.5 h-3.5" />
@@ -392,7 +449,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Production Output Wave Area Chart Card */}
+        {/* Production Output Card (Shows only for that day when selected, normal 7-day trend when unselected) */}
         <div className="p-4 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
           <div className="flex items-center justify-between mb-2">
             <div>
@@ -403,51 +460,99 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </h3>
               </div>
               <p className="text-[11px] text-stone-400 font-malayalam">
-                ദിവസേനയുള്ള ഉൽപ്പാദന ട്രെൻഡ് (kg)
+                {selectedDate
+                  ? `${selectedDate} ഉൽപ്പാദനം (${activeOutputKg} kg)`
+                  : 'ദിവസേനയുള്ള ഉൽപ്പാദന ട്രെൻഡ് (kg)'}
               </p>
             </div>
-            <button
-              onClick={() => onNavigateTab('insights')}
-              className="text-xs text-epso-orange dark:text-amber-400 font-black flex items-center gap-0.5"
-            >
-              <span>More</span>
-              <FiChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              {selectedDate && (
+                <button
+                  onClick={() => setSelectedDate(null)}
+                  className="text-[10px] font-bold px-2 py-0.5 rounded-lg bg-orange-100 dark:bg-orange-950/60 text-epso-orange transition-colors cursor-pointer"
+                  title="Click to reset to all days normal trend"
+                >
+                  All Days
+                </button>
+              )}
+              <button
+                onClick={() => onNavigateTab('insights')}
+                className="text-xs text-epso-orange dark:text-amber-400 font-black flex items-center gap-0.5 cursor-pointer"
+              >
+                <span>More</span>
+                <FiChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
 
           <div className="h-44 w-full my-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={waveChartData} margin={{ top: 10, right: 8, left: -25, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="mobileOrangeGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#EA580C" stopOpacity={0.45} />
-                    <stop offset="95%" stopColor="#EA580C" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#282323' : '#F1F2F4'} vertical={false} />
-                <XAxis dataKey="date" stroke={isDark ? '#78716C' : '#A8A29E'} fontSize={10} tickLine={false} />
-                <YAxis stroke={isDark ? '#78716C' : '#A8A29E'} fontSize={10} tickLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: isDark ? '#141212' : '#FFFFFF',
-                    borderColor: isDark ? '#2E2828' : '#E5E7EB',
-                    borderRadius: '12px',
-                    fontSize: '11px',
-                  }}
-                  formatter={(val: any) => [`${val} kg`, 'Output']}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="output"
-                  stroke="#EA580C"
-                  strokeWidth={3}
-                  fillOpacity={1}
-                  fill="url(#mobileOrangeGradient)"
-                  isAnimationActive={true}
-                  animationDuration={1200}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {selectedDate ? (
+              singleDayProductData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={singleDayProductData} margin={{ top: 10, right: 8, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#282323' : '#F1F2F4'} vertical={false} />
+                    <XAxis dataKey="name" stroke={isDark ? '#78716C' : '#A8A29E'} fontSize={10} tickLine={false} />
+                    <YAxis stroke={isDark ? '#78716C' : '#A8A29E'} fontSize={10} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: isDark ? '#141212' : '#FFFFFF',
+                        borderColor: isDark ? '#2E2828' : '#E5E7EB',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                      }}
+                      formatter={(val: any) => [`${val} kg`, 'Output']}
+                    />
+                    <Bar dataKey="output" fill="#EA580C" radius={[6, 6, 0, 0]} isAnimationActive={true} animationDuration={600} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-center p-3">
+                  <FiPackage className="w-7 h-7 text-stone-300 dark:text-stone-600 mb-1" />
+                  <p className="text-xs font-bold text-stone-700 dark:text-stone-300">
+                    0 kg produced on {selectedDate}
+                  </p>
+                  <button
+                    onClick={() => setSelectedDate(null)}
+                    className="mt-1 text-[11px] text-epso-orange font-bold hover:underline cursor-pointer"
+                  >
+                    Show 7-Day Trend (Normal)
+                  </button>
+                </div>
+              )
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={waveChartData} margin={{ top: 10, right: 8, left: -25, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="mobileOrangeGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#EA580C" stopOpacity={0.45} />
+                      <stop offset="95%" stopColor="#EA580C" stopOpacity={0.0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#282323' : '#F1F2F4'} vertical={false} />
+                  <XAxis dataKey="date" stroke={isDark ? '#78716C' : '#A8A29E'} fontSize={10} tickLine={false} />
+                  <YAxis stroke={isDark ? '#78716C' : '#A8A29E'} fontSize={10} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: isDark ? '#141212' : '#FFFFFF',
+                      borderColor: isDark ? '#2E2828' : '#E5E7EB',
+                      borderRadius: '12px',
+                      fontSize: '11px',
+                    }}
+                    formatter={(val: any) => [`${val} kg`, 'Output']}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="output"
+                    stroke="#EA580C"
+                    strokeWidth={3}
+                    fillOpacity={1}
+                    fill="url(#mobileOrangeGradient)"
+                    isAnimationActive={true}
+                    animationDuration={1200}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           {/* Bottom Card Summary */}
@@ -635,17 +740,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
             </div>
             <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={selectedDate || ''}
-                onChange={(e) => setSelectedDate(e.target.value || null)}
-                className="text-xs px-2.5 py-1 rounded-xl border border-stone-200 dark:border-[#332c2c] bg-stone-50 dark:bg-[#282323] text-stone-800 dark:text-white"
-                title="Select any custom calendar date"
-              />
+              {/* Clickable Date Container (Desktop): Clicking dd/mm/yyyy or calendar icon opens calendar */}
+              <div
+                onClick={() => openCalendarPicker(true)}
+                className="relative flex items-center gap-2 px-3 py-1.5 rounded-xl border border-stone-200 dark:border-[#332c2c] bg-stone-50 dark:bg-[#282323] cursor-pointer hover:border-epso-orange transition-colors select-none group"
+                title="Click date to open calendar"
+              >
+                <FiCalendar className="w-4 h-4 text-epso-orange pointer-events-none group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-bold text-stone-700 dark:text-stone-200 pointer-events-none">
+                  {selectedDate ? selectedDate.split('-').reverse().join('/') : 'dd/mm/yyyy'}
+                </span>
+                <input
+                  ref={desktopDateInputRef}
+                  type="date"
+                  value={selectedDate || ''}
+                  onChange={(e) => setSelectedDate(e.target.value || null)}
+                  onClick={(e) => {
+                    try {
+                      (e.target as any).showPicker?.();
+                    } catch {}
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+              </div>
+
               <button
                 type="button"
                 onClick={() => handleScrollWeeks('left', true)}
-                className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500 border border-stone-200 dark:border-[#332c2c] transition-colors"
+                className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500 border border-stone-200 dark:border-[#332c2c] transition-colors cursor-pointer"
                 title="Previous Week"
               >
                 <FiChevronLeft className="w-4 h-4" />
@@ -653,7 +775,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleScrollWeeks('right', true)}
-                className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500 border border-stone-200 dark:border-[#332c2c] transition-colors"
+                className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500 border border-stone-200 dark:border-[#332c2c] transition-colors cursor-pointer"
                 title="Next Week"
               >
                 <FiChevronRight className="w-4 h-4" />
@@ -690,6 +812,50 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </button>
               );
             })}
+          </div>
+        </div>
+
+        {/* Daily Operations Card (Desktop) with smooth load animation */}
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all animate-daily-ops">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-black text-stone-900 dark:text-white">
+                Daily Operations
+              </h2>
+              <p className="text-xs text-stone-400 font-malayalam">
+                ഇന്നത്തെ പ്രവർത്തനങ്ങൾ (Live Operations Status)
+              </p>
+            </div>
+            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
+              Live
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4 pt-1">
+            <CircularGauge
+              label="Batches"
+              value={String(activeDateRuns.length)}
+              subValue={`/${dailyTargetBatches}`}
+              percentage={batchesProgressPercent}
+              color="#EA580C"
+              subtext={activeDateRuns.length >= dailyTargetBatches ? 'ടാർഗെറ്റ് കഴിഞ്ഞു' : `${Math.max(0, dailyTargetBatches - activeDateRuns.length)} ബാക്കി`}
+            />
+            <CircularGauge
+              label="Stock Health"
+              value={`${stockHealthPercent}%`}
+              subValue="/100%"
+              percentage={stockHealthPercent}
+              color="#10B981"
+              subtext={lowStockIngredients.length > 0 ? `${lowStockIngredients.length} കുറവ്` : 'സുരക്ഷിതം'}
+            />
+            <CircularGauge
+              label="Recipe Capacity"
+              value={`${recipeCoveragePercent}%`}
+              subValue="/100%"
+              percentage={recipeCoveragePercent}
+              color="#F59E0B"
+              subtext={`${productsWithRecipeCount}/${products.length} റെഡി`}
+            />
           </div>
         </div>
 
@@ -850,59 +1016,109 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
 
-          {/* Chart 2: Production Volume Trends */}
+          {/* Chart 2: Production Volume Trends (Desktop - shows single-day breakdown when selected, 7-day trend when not) */}
           <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-sm font-black text-stone-900 dark:text-white">
-                  Production Output Curve
+                  {selectedDate ? `Production Output: ${selectedDate}` : 'Production Output Curve'}
                 </h2>
                 <p className="text-xs text-stone-400 font-malayalam">
-                  ദിവസേനയുള്ള ഉൽപ്പാദന അളവ് (Output in kg)
+                  {selectedDate
+                    ? `${selectedDate} തീയതിയിലെ ഉൽപ്പാദനം (${activeOutputKg} kg)`
+                    : 'ദിവസേനയുള്ള ഉൽപ്പാദന അളവ് (Output in kg)'}
                 </p>
               </div>
-              <button
-                onClick={() => onNavigateTab('insights')}
-                className="text-xs text-epso-orange dark:text-amber-400 font-black flex items-center gap-1 hover:underline"
-              >
-                <span>Insights</span>
-                <FiArrowUpRight className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedDate && (
+                  <button
+                    onClick={() => setSelectedDate(null)}
+                    className="text-xs px-2.5 py-1 rounded-lg bg-orange-100 dark:bg-orange-950/60 text-epso-orange font-bold transition-colors cursor-pointer"
+                  >
+                    Reset to All Days
+                  </button>
+                )}
+                <button
+                  onClick={() => onNavigateTab('insights')}
+                  className="text-xs text-epso-orange dark:text-amber-400 font-black flex items-center gap-1 hover:underline cursor-pointer"
+                >
+                  <span>Insights</span>
+                  <FiArrowUpRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
             <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={waveChartData} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
-                  <defs>
-                    <linearGradient id="desktopOrangeGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#EA580C" stopOpacity={0.45} />
-                      <stop offset="95%" stopColor="#EA580C" stopOpacity={0.0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#2E2828' : '#F1F2F4'} vertical={false} />
-                  <XAxis dataKey="date" stroke={isDark ? '#A39E9B' : '#6B7280'} fontSize={10} tickLine={false} />
-                  <YAxis stroke={isDark ? '#A39E9B' : '#6B7280'} fontSize={10} tickLine={false} tickFormatter={(val) => `${val}kg`} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: isDark ? '#141212' : '#FFFFFF',
-                      borderColor: isDark ? '#2E2828' : '#E5E7EB',
-                      borderRadius: '12px',
-                      fontSize: '11px',
-                    }}
-                    formatter={(val: any) => [`${val} kg`, 'Output']}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="output"
-                    stroke="#EA580C"
-                    strokeWidth={3}
-                    fillOpacity={1}
-                    fill="url(#desktopOrangeGradient)"
-                    isAnimationActive={true}
-                    animationDuration={1200}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+              {selectedDate ? (
+                singleDayProductData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={singleDayProductData} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#2E2828' : '#F1F2F4'} vertical={false} />
+                      <XAxis dataKey="name" stroke={isDark ? '#A39E9B' : '#6B7280'} fontSize={10} tickLine={false} />
+                      <YAxis stroke={isDark ? '#A39E9B' : '#6B7280'} fontSize={10} tickLine={false} tickFormatter={(val) => `${val}kg`} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: isDark ? '#141212' : '#FFFFFF',
+                          borderColor: isDark ? '#2E2828' : '#E5E7EB',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                        }}
+                        formatter={(val: any) => [`${val} kg`, 'Output']}
+                      />
+                      <Bar dataKey="output" fill="#EA580C" radius={[6, 6, 0, 0]} isAnimationActive={true} animationDuration={600} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-6">
+                    <FiPackage className="w-10 h-10 text-stone-300 dark:text-stone-600 mb-2" />
+                    <p className="text-sm font-bold text-stone-700 dark:text-stone-300">
+                      0 kg recorded on {selectedDate}
+                    </p>
+                    <p className="text-xs text-stone-400 font-malayalam mt-0.5">
+                      ഈ തീയതിയിൽ ഉൽപ്പാദന ബാച്ചുകൾ ലഭ്യമല്ല
+                    </p>
+                    <button
+                      onClick={() => setSelectedDate(null)}
+                      className="mt-3 text-xs px-3 py-1.5 rounded-xl bg-epso-orange text-white font-bold cursor-pointer"
+                    >
+                      Show All Days Trend (Normal)
+                    </button>
+                  </div>
+                )
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={waveChartData} margin={{ top: 10, right: 10, left: -20, bottom: 25 }}>
+                    <defs>
+                      <linearGradient id="desktopOrangeGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#EA580C" stopOpacity={0.45} />
+                        <stop offset="95%" stopColor="#EA580C" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#2E2828' : '#F1F2F4'} vertical={false} />
+                    <XAxis dataKey="date" stroke={isDark ? '#A39E9B' : '#6B7280'} fontSize={10} tickLine={false} />
+                    <YAxis stroke={isDark ? '#A39E9B' : '#6B7280'} fontSize={10} tickLine={false} tickFormatter={(val) => `${val}kg`} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: isDark ? '#141212' : '#FFFFFF',
+                        borderColor: isDark ? '#2E2828' : '#E5E7EB',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                      }}
+                      formatter={(val: any) => [`${val} kg`, 'Output']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="output"
+                      stroke="#EA580C"
+                      strokeWidth={3}
+                      fillOpacity={1}
+                      fill="url(#desktopOrangeGradient)"
+                      isAnimationActive={true}
+                      animationDuration={1200}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
         </div>

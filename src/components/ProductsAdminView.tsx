@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Product, UnitType } from '../types';
+import { Product, UnitType, Ingredient } from '../types';
 import {
   FiPlus,
   FiSearch,
@@ -11,21 +11,26 @@ import {
   FiXCircle,
   FiAlertCircle,
   FiLayers,
+  FiPrinter,
 } from 'react-icons/fi';
 import { saveProduct, deleteProduct } from '../services/supabase';
+import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 
 interface ProductsAdminViewProps {
   products: Product[];
+  ingredients?: Ingredient[];
   onRefresh: () => void;
 }
 
 export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   products,
+  ingredients = [],
   onRefresh,
 }) => {
   const [search, setSearch] = useState('');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [modalOpen, setModalOpen] = useState(false);
+  const [purchaseListModalOpen, setPurchaseListModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -130,13 +135,25 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
             സ്നാക്ക് ഉൽപ്പന്നങ്ങളും മൊത്തവില മാനേജ്മെന്റും
           </p>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors"
-        >
-          <FiPlus className="w-4 h-4" />
-          <span>New Product</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {ingredients.length > 0 && (
+            <button
+              onClick={() => setPurchaseListModalOpen(true)}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer"
+              title="Print purchase list for raw materials"
+            >
+              <FiPrinter className="w-3.5 h-3.5 text-epso-orange" />
+              <span>Print Purchase List</span>
+            </button>
+          )}
+          <button
+            onClick={openCreateModal}
+            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
+          >
+            <FiPlus className="w-4 h-4" />
+            <span>New Product</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -442,6 +459,14 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
             </form>
           </div>
         </div>
+      )}
+      {/* Printable Purchase List Modal */}
+      {ingredients.length > 0 && (
+        <PrintPurchaseListModal
+          isOpen={purchaseListModalOpen}
+          onClose={() => setPurchaseListModalOpen(false)}
+          ingredients={ingredients}
+        />
       )}
     </div>
   );

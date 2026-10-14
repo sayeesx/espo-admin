@@ -6,12 +6,11 @@ import {
   FiCheckSquare,
   FiSquare,
   FiAlertTriangle,
-  FiDollarSign,
   FiCopy,
   FiCheck,
   FiSearch,
   FiPackage,
-  FiFileText,
+  FiCheckCircle,
 } from 'react-icons/fi';
 
 interface PrintPurchaseListModalProps {
@@ -29,6 +28,14 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [vendorName, setVendorName] = useState('');
   const [copied, setCopied] = useState(false);
+
+  // Optional print column checkboxes (Default false as requested: only Items, Qty, Unit)
+  const [showCategory, setShowCategory] = useState(false);
+  const [showCurrentStock, setShowCurrentStock] = useState(false);
+  const [showRemarks, setShowRemarks] = useState(false);
+
+  // 14 items per page formatting for clean print layout
+  const itemsPerPage = 14;
 
   // Set of selected ingredient IDs to print
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -107,6 +114,15 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
     }, 0);
   }, [selectedIngredients, orderQuantities]);
 
+  // Chunk selected ingredients into pages of exactly 14 items
+  const printPages = useMemo(() => {
+    const chunks: Ingredient[][] = [];
+    for (let i = 0; i < selectedIngredients.length; i += itemsPerPage) {
+      chunks.push(selectedIngredients.slice(i, i + itemsPerPage));
+    }
+    return chunks.length > 0 ? chunks : [[]];
+  }, [selectedIngredients, itemsPerPage]);
+
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -148,7 +164,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
 
   const handlePrint = () => {
     if (selectedIngredients.length === 0) {
-      alert('ദയവായി പ്രിന്റ് ചെയ്യുന്നതിനായി കുറഞ്ഞത് ഒരു ചേരുവയെങ്കിലും ടിക്ക് ചെയ്യുക.');
+      alert('ദയവായി പ്രിന്റ് ചെയ്യുന്നതിനായി കുറഞ്ഞത് ഒരു ഇനമെങ്കിലും ടിക്ക് ചെയ്യുക.');
       return;
     }
     window.print();
@@ -172,7 +188,10 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
     selectedIngredients.forEach((ing, index) => {
       const qty = orderQuantities[ing.id] || ing.minStock || 1;
       const remark = remarks[ing.id] ? ` (${remarks[ing.id]})` : '';
-      text += `${index + 1}. *${ing.name}* : ${qty} ${ing.unit}${remark}\n   (Current: ${ing.currentStock} ${ing.unit})\n`;
+      text += `${index + 1}. *${ing.name}* : ${qty} ${ing.unit}${remark}\n`;
+      if (showCurrentStock) {
+        text += `   (Current Stock: ${ing.currentStock} ${ing.unit})\n`;
+      }
     });
 
     text += `------------------------------------\n`;
@@ -191,7 +210,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
 
   return (
     <>
-      {/* Print CSS block embedded cleanly */}
+      {/* Print CSS block embedded cleanly with 14 items page break */}
       <style>{`
         @media print {
           body * {
@@ -206,15 +225,31 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
             top: 0 !important;
             width: 100% !important;
             margin: 0 !important;
-            padding: 20px !important;
+            padding: 12px 16px !important;
             background: #ffffff !important;
             color: #000000 !important;
             display: block !important;
             z-index: 99999 !important;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
           }
+          .epso-print-page {
+            page-break-after: always !important;
+            break-after: page !important;
+            min-height: 98vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+          }
+          .epso-print-page:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
+          }
           .no-print-area {
             display: none !important;
+          }
+          @page {
+            size: A4 portrait;
+            margin: 10mm 12mm;
           }
         }
       `}</style>
@@ -243,7 +278,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
 
             <button
               onClick={onClose}
-              className="p-2 rounded-xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors"
+              className="p-2 rounded-xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
             >
               <FiX className="w-5 h-5" />
             </button>
@@ -257,7 +292,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setFilterMode('stock_out')}
-                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                     filterMode === 'stock_out'
                       ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
                       : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
@@ -269,13 +304,13 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setFilterMode('all')}
-                  className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
                     filterMode === 'all'
                       ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
                       : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
                   }`}
                 >
-                  All Ingredients ({ingredients.length})
+                  All Items ({ingredients.length})
                 </button>
               </div>
 
@@ -295,17 +330,61 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
                 <button
                   type="button"
                   onClick={selectAll}
-                  className="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+                  className="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
                 >
                   Select All
                 </button>
                 <button
                   type="button"
                   onClick={deselectAll}
-                  className="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
+                  className="px-2.5 py-1.5 text-xs font-bold rounded-lg border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors cursor-pointer"
                 >
                   Deselect All
                 </button>
+              </div>
+            </div>
+
+            {/* Optional Print Columns Toggle (User Request) */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-stone-50 dark:bg-[#161414] rounded-xl border border-stone-200 dark:border-[#2E2828]">
+              <div className="flex flex-wrap items-center gap-4 text-xs">
+                <span className="font-bold text-stone-700 dark:text-stone-200 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-epso-orange" />
+                  <span>പ്രിന്റ് ഓപ്ഷനുകൾ (Tick to show):</span>
+                </span>
+
+                <label className="flex items-center gap-2 cursor-pointer font-semibold text-stone-700 dark:text-stone-300 select-none">
+                  <input
+                    type="checkbox"
+                    checked={showCategory}
+                    onChange={(e) => setShowCategory(e.target.checked)}
+                    className="w-4 h-4 rounded text-epso-orange focus:ring-epso-orange border-stone-300 dark:border-stone-600 cursor-pointer"
+                  />
+                  <span>വിഭാഗം (Category)</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer font-semibold text-stone-700 dark:text-stone-300 select-none">
+                  <input
+                    type="checkbox"
+                    checked={showCurrentStock}
+                    onChange={(e) => setShowCurrentStock(e.target.checked)}
+                    className="w-4 h-4 rounded text-epso-orange focus:ring-epso-orange border-stone-300 dark:border-stone-600 cursor-pointer"
+                  />
+                  <span>നിലവിലെ stock</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer font-semibold text-stone-700 dark:text-stone-300 select-none">
+                  <input
+                    type="checkbox"
+                    checked={showRemarks}
+                    onChange={(e) => setShowRemarks(e.target.checked)}
+                    className="w-4 h-4 rounded text-epso-orange focus:ring-epso-orange border-stone-300 dark:border-stone-600 cursor-pointer"
+                  />
+                  <span>കുറിപ്പുകൾ (Notes)</span>
+                </label>
+              </div>
+
+              <div className="text-[11px] text-stone-500 dark:text-stone-400 font-medium">
+                പേജ് ഒന്നിൽ 14 ഇനങ്ങൾ വീതം ({printPages.length} പേജ്{printPages.length > 1 ? 'കൾ' : ''})
               </div>
             </div>
 
@@ -349,21 +428,21 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
             {displayedIngredients.length === 0 ? (
               <div className="text-center py-12 text-stone-400 font-malayalam text-xs space-y-1">
                 <FiPackage className="w-8 h-8 mx-auto text-stone-300 dark:text-stone-600" />
-                <p>ലിസ്റ്റിൽ കാണിക്കാൻ ചേരുവകൾ ഒന്നും കണ്ടെത്തിയില്ല</p>
+                <p>ലിസ്റ്റിൽ കാണിക്കാൻ ഇനങ്ങൾ ഒന്നും കണ്ടെത്തിയില്ല</p>
               </div>
             ) : (
               <div className="border border-stone-200 dark:border-[#2E2828] rounded-xl overflow-hidden divide-y divide-stone-200 dark:divide-[#2E2828]">
-                {/* Table Header */}
+                {/* Table Header: Items (replacing ചേരുവ) */}
                 <div className="bg-stone-50 dark:bg-[#161414] px-3 py-2 text-[11px] font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider grid grid-cols-12 gap-2 items-center">
                   <div className="col-span-1 text-center">Print</div>
-                  <div className="col-span-4">Ingredient Name (ചേരുവ)</div>
+                  <div className="col-span-4">Items</div>
                   <div className="col-span-2 text-right">Current Stock</div>
                   <div className="col-span-2 text-right">Min Stock</div>
                   <div className="col-span-3 text-center">Purchase Qty to Buy</div>
                 </div>
 
                 {/* Table Rows */}
-                {displayedIngredients.map((ing, idx) => {
+                {displayedIngredients.map((ing) => {
                   const isChecked = selectedIds.has(ing.id);
                   const isDepleted = ing.currentStock <= 0;
                   const isLow = ing.minStock > 0 && ing.currentStock <= ing.minStock;
@@ -395,7 +474,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
                         </button>
                       </div>
 
-                      {/* Ingredient Name */}
+                      {/* Items Name */}
                       <div className="col-span-4 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="font-bold text-stone-900 dark:text-white font-malayalam truncate text-xs sm:text-sm">
@@ -454,6 +533,16 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
                           />
                           <span className="text-xs font-bold text-stone-500 w-6">{ing.unit}</span>
                         </div>
+                        {showRemarks && (
+                          <input
+                            type="text"
+                            value={remark}
+                            placeholder="Note..."
+                            disabled={!isChecked}
+                            onChange={(e) => handleRemarkChange(ing.id, e.target.value)}
+                            className="w-24 px-2 py-1 text-[11px] bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-lg text-stone-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-epso-orange disabled:opacity-40"
+                          />
+                        )}
                       </div>
                     </div>
                   );
@@ -469,7 +558,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
               <strong className="text-stone-900 dark:text-white font-bold">
                 {selectedIngredients.length}
               </strong>{' '}
-              of {ingredients.length} items
+              of {ingredients.length} items ({printPages.length} print page{printPages.length > 1 ? 's' : ''})
             </div>
 
             <div className="flex items-center gap-2">
@@ -507,101 +596,139 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
         </div>
       </div>
 
-      {/* Hidden Pure Printable Sheet (Visible only when window.print() is executed) */}
+      {/* Hidden Pure Printable Sheet (Paginated at exactly 14 items per page) */}
       <div id="epso-printable-purchase-sheet" style={{ display: 'none' }}>
-        {/* Print Header */}
-        <div style={{ borderBottom: '2px solid #000000', paddingBottom: '12px', marginBottom: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <h1 style={{ fontSize: '22px', fontWeight: '900', margin: '0 0 4px 0', letterSpacing: '-0.5px' }}>
-                EPSO FOOD PRODUCTS
-              </h1>
-              <h2 style={{ fontSize: '14px', fontWeight: 'bold', margin: '0', color: '#333333' }}>
-                PANTRY RAW MATERIALS PURCHASE LIST (അസംസ്കൃത ചേരുവകളുടെ പർച്ചേസ് ലിസ്റ്റ്)
-              </h2>
+        {printPages.map((pageItems, pageIdx) => {
+          const isLastPage = pageIdx === printPages.length - 1;
+          const startIdx = pageIdx * itemsPerPage;
+
+          return (
+            <div key={pageIdx} className="epso-print-page">
+              <div>
+                {/* Print Header */}
+                <div style={{ borderBottom: '2px solid #000000', paddingBottom: '10px', marginBottom: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <h1 style={{ fontSize: '20px', fontWeight: '900', margin: '0 0 3px 0', letterSpacing: '-0.5px' }}>
+                        EPSO FOOD PRODUCTS
+                      </h1>
+                      <h2 style={{ fontSize: '13px', fontWeight: 'bold', margin: '0', color: '#222222' }}>
+                        PANTRY PURCHASE LIST (പർച്ചേസ് ലിസ്റ്റ്)
+                      </h2>
+                    </div>
+                    <div style={{ textAlign: 'right', fontSize: '11px', color: '#333333' }}>
+                      <div><strong>Date:</strong> {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                      <div><strong>Time:</strong> {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
+                      {vendorName.trim() && <div><strong>Store / Vendor:</strong> {vendorName.trim()}</div>}
+                      <div style={{ marginTop: '2px', fontWeight: 'bold' }}>
+                        Page {pageIdx + 1} of {printPages.length}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Print Table (14 rows per page) */}
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '16px' }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#f2f2f2', borderBottom: '1.5px solid #000000', textAlign: 'left' }}>
+                      <th style={{ padding: '8px 6px', border: '1px solid #cccccc', width: '32px', textAlign: 'center' }}>#</th>
+                      <th style={{ padding: '8px 10px', border: '1px solid #cccccc' }}>Items</th>
+                      {showCategory && (
+                        <th style={{ padding: '8px 8px', border: '1px solid #cccccc', width: '75px', textAlign: 'center' }}>
+                          വിഭാഗം
+                        </th>
+                      )}
+                      {showCurrentStock && (
+                        <th style={{ padding: '8px 8px', border: '1px solid #cccccc', width: '90px', textAlign: 'right' }}>
+                          നിലവിലെ stock
+                        </th>
+                      )}
+                      <th style={{ padding: '8px 10px', border: '1px solid #cccccc', width: '120px', textAlign: 'right', fontWeight: 'bold' }}>
+                        വാങ്ങേണ്ട അളവ്
+                      </th>
+                      <th style={{ padding: '8px 8px', border: '1px solid #cccccc', width: '55px', textAlign: 'center' }}>
+                        യൂണിറ്റ്
+                      </th>
+                      {showRemarks && (
+                        <th style={{ padding: '8px 10px', border: '1px solid #cccccc', width: '120px' }}>
+                          കുറിപ്പുകൾ
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pageItems.map((ing, idx) => {
+                      const overallIdx = startIdx + idx + 1;
+                      const qty = orderQuantities[ing.id] ?? ing.minStock ?? 1;
+                      const remark = remarks[ing.id] || '';
+
+                      return (
+                        <tr key={ing.id} style={{ borderBottom: '1px solid #dddddd' }}>
+                          <td style={{ padding: '7px 6px', border: '1px solid #dddddd', textAlign: 'center' }}>{overallIdx}</td>
+                          <td style={{ padding: '7px 10px', border: '1px solid #dddddd', fontWeight: 'bold' }}>
+                            {ing.name}
+                          </td>
+                          {showCategory && (
+                            <td style={{ padding: '7px 8px', border: '1px solid #dddddd', textAlign: 'center', fontSize: '10px' }}>
+                              {ing.category === 'basic' ? 'Basic' : 'Other'}
+                            </td>
+                          )}
+                          {showCurrentStock && (
+                            <td style={{ padding: '7px 8px', border: '1px solid #dddddd', textAlign: 'right' }}>
+                              {ing.currentStock} {ing.unit}
+                            </td>
+                          )}
+                          <td style={{ padding: '7px 10px', border: '1px solid #dddddd', textAlign: 'right', fontWeight: '900', fontSize: '13px' }}>
+                            {qty}
+                          </td>
+                          <td style={{ padding: '7px 8px', border: '1px solid #dddddd', textAlign: 'center', fontWeight: 'bold' }}>
+                            {ing.unit}
+                          </td>
+                          {showRemarks && (
+                            <td style={{ padding: '7px 10px', border: '1px solid #dddddd', fontStyle: 'italic', fontSize: '11px' }}>
+                              {remark}
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Print Summary & Signatures (Displayed on the last page) */}
+              {isLastPage && (
+                <div style={{ marginTop: 'auto', paddingTop: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', borderTop: '1px dashed #666666', paddingTop: '8px', marginBottom: '24px' }}>
+                    <div>
+                      <strong>Total Items to Purchase:</strong> {selectedIngredients.length}
+                    </div>
+                    {totalEstimatedCost > 0 && (
+                      <div>
+                        <strong>Estimated Total Cost:</strong> ₹{totalEstimatedCost.toLocaleString('en-IN')}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', fontSize: '11px', paddingTop: '12px', borderTop: '1px solid #dddddd' }}>
+                    <div>
+                      <div><strong>Prepared by:</strong></div>
+                      <div style={{ marginTop: '26px' }}>Admin / Kitchen Manager</div>
+                    </div>
+                    <div>
+                      <div><strong>Purchased by:</strong></div>
+                      <div style={{ marginTop: '26px' }}>___________________________</div>
+                    </div>
+                    <div>
+                      <div><strong>Received & Verified by:</strong></div>
+                      <div style={{ marginTop: '26px' }}>___________________________</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            <div style={{ textAlign: 'right', fontSize: '11px', color: '#444444' }}>
-              <div><strong>Date:</strong> {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-              <div><strong>Time:</strong> {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
-              {vendorName.trim() && <div><strong>Store / Vendor:</strong> {vendorName.trim()}</div>}
-            </div>
-          </div>
-        </div>
-
-        {/* Print Table */}
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '24px' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f2f2f2', borderBottom: '1.5px solid #000000', textAlign: 'left' }}>
-              <th style={{ padding: '8px 6px', border: '1px solid #cccccc', width: '30px', textAlign: 'center' }}>#</th>
-              <th style={{ padding: '8px 10px', border: '1px solid #cccccc' }}>ചേരുവ (Ingredient Name)</th>
-              <th style={{ padding: '8px 8px', border: '1px solid #cccccc', width: '70px', textAlign: 'center' }}>വിഭാഗം</th>
-              <th style={{ padding: '8px 8px', border: '1px solid #cccccc', width: '90px', textAlign: 'right' }}>നിലവിലെ സ്റ്റോക്ക്</th>
-              <th style={{ padding: '8px 10px', border: '1px solid #cccccc', width: '110px', textAlign: 'right', fontWeight: 'bold' }}>
-                വാങ്ങേണ്ട അളവ്
-              </th>
-              <th style={{ padding: '8px 8px', border: '1px solid #cccccc', width: '50px', textAlign: 'center' }}>യൂണിറ്റ്</th>
-              <th style={{ padding: '8px 10px', border: '1px solid #cccccc', width: '130px' }}>കുറിപ്പുകൾ / റിമാർക്കുകൾ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {selectedIngredients.map((ing, idx) => {
-              const qty = orderQuantities[ing.id] ?? ing.minStock ?? 1;
-              const remark = remarks[ing.id] || '';
-
-              return (
-                <tr key={ing.id} style={{ borderBottom: '1px solid #dddddd' }}>
-                  <td style={{ padding: '7px 6px', border: '1px solid #dddddd', textAlign: 'center' }}>{idx + 1}</td>
-                  <td style={{ padding: '7px 10px', border: '1px solid #dddddd', fontWeight: 'bold' }}>
-                    {ing.name}
-                  </td>
-                  <td style={{ padding: '7px 8px', border: '1px solid #dddddd', textAlign: 'center', fontSize: '10px' }}>
-                    {ing.category === 'basic' ? 'Basic' : 'Other'}
-                  </td>
-                  <td style={{ padding: '7px 8px', border: '1px solid #dddddd', textAlign: 'right' }}>
-                    {ing.currentStock} {ing.unit}
-                  </td>
-                  <td style={{ padding: '7px 10px', border: '1px solid #dddddd', textAlign: 'right', fontWeight: '900', fontSize: '13px' }}>
-                    {qty}
-                  </td>
-                  <td style={{ padding: '7px 8px', border: '1px solid #dddddd', textAlign: 'center', fontWeight: 'bold' }}>
-                    {ing.unit}
-                  </td>
-                  <td style={{ padding: '7px 10px', border: '1px solid #dddddd', fontStyle: 'italic', fontSize: '11px' }}>
-                    {remark}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-
-        {/* Print Summary */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', borderTop: '1px dashed #666666', paddingTop: '10px', marginBottom: '36px' }}>
-          <div>
-            <strong>Total Items to Purchase:</strong> {selectedIngredients.length}
-          </div>
-          {totalEstimatedCost > 0 && (
-            <div>
-              <strong>Estimated Total Cost:</strong> ₹{totalEstimatedCost.toLocaleString('en-IN')}
-            </div>
-          )}
-        </div>
-
-        {/* Signature & Verification Block */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', fontSize: '11px', marginTop: '40px', paddingTop: '16px', borderTop: '1px solid #dddddd' }}>
-          <div>
-            <div><strong>Prepared by:</strong></div>
-            <div style={{ marginTop: '30px' }}>Admin / Kitchen Manager</div>
-          </div>
-          <div>
-            <div><strong>Purchased by:</strong></div>
-            <div style={{ marginTop: '30px' }}>___________________________</div>
-          </div>
-          <div>
-            <div><strong>Received & Verified by:</strong></div>
-            <div style={{ marginTop: '30px' }}>___________________________</div>
-          </div>
-        </div>
+          );
+        })}
       </div>
     </>
   );

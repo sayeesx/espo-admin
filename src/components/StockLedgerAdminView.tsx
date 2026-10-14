@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { StockMovement } from '../types';
+import { StockMovement, Ingredient } from '../types';
 import {
   FiSearch,
   FiArrowDownRight,
@@ -7,19 +7,24 @@ import {
   FiRefreshCw,
   FiClock,
   FiLayers,
+  FiPrinter,
 } from 'react-icons/fi';
+import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 
 interface StockLedgerAdminViewProps {
   movements: StockMovement[];
+  ingredients?: Ingredient[];
   onRefresh: () => void;
 }
 
 export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
   movements,
+  ingredients = [],
   onRefresh,
 }) => {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'in' | 'out' | 'adjust'>('all');
+  const [purchaseListModalOpen, setPurchaseListModalOpen] = useState(false);
 
   const filteredMovements = movements.filter((m) => {
     const matchSearch =
@@ -48,13 +53,25 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
             അസംസ്കൃത വസ്തുക്കളുടെയും ഉൽപ്പന്നങ്ങളുടെയും മൂവ്‌മെന്റ് വിവരങ്ങൾ
           </p>
         </div>
-        <button
-          onClick={onRefresh}
-          className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#322c2c] text-stone-700 dark:text-stone-300 font-bold text-xs press-apple transition-colors"
-        >
-          <FiRefreshCw className="w-3.5 h-3.5" />
-          <span>Refresh</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {ingredients.length > 0 && (
+            <button
+              onClick={() => setPurchaseListModalOpen(true)}
+              className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer"
+              title="Print purchase & reorder list"
+            >
+              <FiPrinter className="w-3.5 h-3.5 text-epso-orange" />
+              <span>Print Purchase List</span>
+            </button>
+          )}
+          <button
+            onClick={onRefresh}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#322c2c] text-stone-700 dark:text-stone-300 font-bold text-xs press-apple transition-colors cursor-pointer"
+          >
+            <FiRefreshCw className="w-3.5 h-3.5" />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter and Search */}
@@ -218,6 +235,14 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
           </div>
         )}
       </div>
+      {/* Printable Purchase List Modal */}
+      {ingredients.length > 0 && (
+        <PrintPurchaseListModal
+          isOpen={purchaseListModalOpen}
+          onClose={() => setPurchaseListModalOpen(false)}
+          ingredients={ingredients}
+        />
+      )}
     </div>
   );
 };
