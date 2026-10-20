@@ -79,9 +79,9 @@ export const PinGate: React.FC = () => {
       <div className="w-full max-w-sm flex justify-between items-center py-2">
         <div className="flex items-center gap-2">
           <img
-            src="/favicon.png"
+            src="/epso-swirl-transparent.png"
             alt="Epso"
-            className="w-7 h-7 object-contain drop-shadow"
+            className="w-7 h-7 object-contain"
             onError={(e) => {
               (e.target as HTMLElement).style.display = 'none';
             }}
@@ -104,9 +104,9 @@ export const PinGate: React.FC = () => {
       <div className={`w-full max-w-sm flex flex-col items-center my-auto transition-transform ${shake ? 'animate-bounce' : ''}`}>
         <div className="w-12 h-12 rounded-2xl bg-red-50 dark:bg-amber-950/30 text-epso-red dark:text-amber-400 flex items-center justify-center mb-5 shadow-xs ring-1 ring-epso-red/20 dark:ring-amber-500/20">
           <img
-            src="/favicon.png"
+            src="/epso-swirl-transparent.png"
             alt="Epso"
-            className="w-7 h-7 object-contain drop-shadow"
+            className="w-7 h-7 object-contain"
             onError={(e) => {
               (e.target as HTMLElement).style.display = 'none';
             }}

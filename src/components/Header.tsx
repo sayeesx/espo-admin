@@ -72,9 +72,9 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="p-4 border-b border-stone-100 dark:border-[#282323]">
         <div className="flex items-center gap-2.5">
           <img
-            src="/favicon.png"
+            src="/epso-swirl-transparent.png"
             alt="Epso Logo"
-            className="w-8 h-8 object-contain rounded-xl drop-shadow"
+            className="w-8 h-8 object-contain"
             onError={(e) => {
               (e.target as HTMLElement).style.display = 'none';
             }}
