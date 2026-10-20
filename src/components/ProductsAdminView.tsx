@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Product, UnitType, Ingredient, Recipe } from '../types';
 import {
   FiPlus,
@@ -728,7 +728,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                             onChange={(e) => handleRecipeItemChange(idx, 'ingredientId', e.target.value)}
                             className="w-full p-2 rounded-lg border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white text-xs font-bold outline-none"
                           >
-                            {recipeEligibleIngredients.map((ingItem) => (
+                            {recipeEligibleIngredients.map((ingItem: Ingredient) => (
                               <option key={ingItem.id} value={ingItem.id}>
                                 {ingItem.name} ({ingItem.unit}) - ₹{ingItem.avgCostPerUnit || 0}/{ingItem.unit}
                               </option>

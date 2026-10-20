@@ -1382,6 +1382,8 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
             </form>
           </div>
         </div>
+      )}
+
       {/* Daily Production Wages Modal */}
       {isWagesModalOpen && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
