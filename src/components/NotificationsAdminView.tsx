@@ -8,6 +8,7 @@ import {
   FiCheck,
 } from 'react-icons/fi';
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
+import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 
 interface NotificationsAdminViewProps {
   ingredients: Ingredient[];
@@ -58,6 +59,8 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
   const [localDismissedIds, setLocalDismissedIds] = useState<Set<string>>(new Set());
   const [purchaseListModalOpen, setPurchaseListModalOpen] = useState(false);
   const activeDismissed = externalDismissedIds || localDismissedIds;
+
+  useLockBodyScroll(purchaseListModalOpen);
 
   // Generate dynamic real-time notifications
   const notifications = useMemo<AdminNotification[]>(() => {
@@ -203,23 +206,8 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
 
   return (
     <div className="space-y-5 max-w-4xl pb-16">
-      {/* Modern, Clean Top Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white tracking-tight">
-              Notifications
-            </h1>
-            {activeNotifications.length > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-stone-100 dark:bg-[#282323] text-stone-700 dark:text-stone-300">
-                {activeNotifications.length}
-              </span>
-            )}
-          </div>
-          <p className="text-xs text-stone-400 font-malayalam mt-0.5">
-            സ്റ്റോക്ക് മുന്നറിയിപ്പുകളും ഉൽപ്പാദന അറിയിപ്പുകളും
-          </p>
-        </div>
+      {/* Top Action Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
 
         <div className="flex items-center gap-2 flex-wrap">
           <button

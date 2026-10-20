@@ -307,6 +307,7 @@ export const App: React.FC = () => {
                 <ProductsAdminView
                   products={products}
                   ingredients={ingredients}
+                  recipes={recipes}
                   onRefresh={loadAllData}
                 />
               )}

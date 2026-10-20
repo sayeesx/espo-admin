@@ -14,6 +14,7 @@ import {
 import { Product, SaleRecord } from '../types';
 import { fetchSales, recordSale, deleteSale } from '../services/supabase';
 import { AnimatedNumber } from './AnimatedNumber';
+import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 
 interface SalesAdminViewProps {
   products: Product[];
@@ -25,6 +26,8 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>('');
+
+  useLockBodyScroll(isModalOpen);
 
   // Form State
   const [saleDate, setSaleDate] = useState<string>(
@@ -185,20 +188,8 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Header & New Sale Action */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white font-malayalam flex items-center gap-2">
-            <span className="p-2 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <FiShoppingBag className="w-5 h-5" />
-            </span>
-            <span>വിൽപ്പന (Sales)</span>
-          </h1>
-          <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mt-1">
-            പ്രൊഡക്റ്റ് വിൽപ്പനകളും വരുമാനവും രേഖപ്പെടുത്തുക
-          </p>
-        </div>
-
+      {/* New Sale Action */}
+      <div className="flex items-center justify-end">
         <button
           onClick={() => {
             setSaleDate(todayStr);
@@ -207,7 +198,7 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
             }
             setIsModalOpen(true);
           }}
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs font-malayalam shadow-apple cursor-pointer press-apple transition-all"
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-apple cursor-pointer press-apple transition-all"
         >
           <FiPlus className="w-4 h-4" />
           <span>വിൽപ്പന രേഖപ്പെടുത്തുക</span>

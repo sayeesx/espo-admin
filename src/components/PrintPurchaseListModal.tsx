@@ -12,6 +12,7 @@ import {
   FiPackage,
   FiCheckCircle,
 } from 'react-icons/fi';
+import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 
 interface PrintPurchaseListModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
   onClose,
   ingredients,
 }) => {
+  useLockBodyScroll(isOpen);
   const [filterMode, setFilterMode] = useState<'stock_out' | 'all'>('stock_out');
   const [searchTerm, setSearchTerm] = useState('');
   const [vendorName, setVendorName] = useState('');

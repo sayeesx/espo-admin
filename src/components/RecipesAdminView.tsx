@@ -10,6 +10,7 @@ import {
 } from 'react-icons/fi';
 import { saveRecipe, deleteRecipe } from '../services/supabase';
 import { ThemeSelect } from './ThemeSelect';
+import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 
 interface RecipesAdminViewProps {
   recipes: Recipe[];
@@ -26,6 +27,8 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
+
+  useLockBodyScroll(modalOpen);
 
   // Form states
   const [productId, setProductId] = useState('');
@@ -144,16 +147,8 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-stone-900 dark:text-white tracking-tight">
-            Recipes & Formulation
-          </h1>
-          <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
-            ബാച്ച് ഫോർമുലേഷനും അസംസ്കൃത വസ്തുക്കളുടെ അനുപാതവും
-          </p>
-        </div>
+      {/* Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
         <button
           onClick={openCreateModal}
           className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors"

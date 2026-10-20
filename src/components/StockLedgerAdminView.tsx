@@ -10,6 +10,7 @@ import {
   FiPrinter,
 } from 'react-icons/fi';
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
+import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 
 interface StockLedgerAdminViewProps {
   movements: StockMovement[];
@@ -25,6 +26,8 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'in' | 'out' | 'adjust'>('all');
   const [purchaseListModalOpen, setPurchaseListModalOpen] = useState(false);
+
+  useLockBodyScroll(purchaseListModalOpen);
 
   const filteredMovements = movements.filter((m) => {
     const matchSearch =
@@ -43,16 +46,8 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-stone-900 dark:text-white tracking-tight">
-            Stock Ledger
-          </h1>
-          <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
-            അസംസ്കൃത വസ്തുക്കളുടെയും ഉൽപ്പന്നങ്ങളുടെയും മൂവ്‌മെന്റ് വിവരങ്ങൾ
-          </p>
-        </div>
+      {/* Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
         <div className="flex items-center gap-2">
           {ingredients.length > 0 && (
             <button

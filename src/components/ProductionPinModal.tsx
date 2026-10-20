@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FiLock, FiX, FiCheck, FiAlertCircle } from 'react-icons/fi';
 import { supabase } from '../services/supabase';
+import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 
 interface ProductionPinModalProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ interface ProductionPinModalProps {
 }
 
 export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, onClose }) => {
+  useLockBodyScroll(isOpen);
   const [currentPin, setCurrentPin] = useState<string>('1234');
   const [newPin, setNewPin] = useState<string>('');
   const [confirmPin, setConfirmPin] = useState<string>('');

@@ -34,6 +34,7 @@ import {
 import { AnimatedNumber } from './AnimatedNumber';
 import { ThemeSelect } from './ThemeSelect';
 import { LoadingSpinner } from './LoadingSpinner';
+import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import {
   FiCalendar,
   FiDroplet,
@@ -98,6 +99,9 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   const [isAddCoverModalOpen, setIsAddCoverModalOpen] = useState<boolean>(false);
   const [isRecordPackingModalOpen, setIsRecordPackingModalOpen] = useState<boolean>(false);
   const [isAdjustOilModalOpen, setIsAdjustOilModalOpen] = useState<boolean>(false);
+  const [isWagesModalOpen, setIsWagesModalOpen] = useState<boolean>(false);
+
+  useLockBodyScroll(isAddCoverModalOpen || isRecordPackingModalOpen || isAdjustOilModalOpen || isWagesModalOpen);
 
   // Packing Form
   const [packProductId, setPackProductId] = useState<string>('');
@@ -427,21 +431,9 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
 
   return (
     <div className="space-y-6 pb-20">
-      {/* Top Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400">
-              <FiDollarSign className="w-5 h-5" />
-            </span>
-            <h1 className="text-xl font-extrabold text-stone-900 dark:text-white font-malayalam tracking-tight">
-              പ്രൊഡക്ഷൻ ചിലവ്
-            </h1>
-          </div>
-          <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mt-1">
-            ദിവസേനയുള്ള ഓയിൽ, ശമ്പളം, പാക്കിംഗ് ചിലവുകൾ
-          </p>
-        </div>
+      {/* Date Controls */}
+      <div className="flex items-center justify-end pb-1 border-b border-stone-200 dark:border-[#2E2828]">
+
 
         {/* Date Selector & Refresh */}
         <div className="flex items-center gap-2">
@@ -531,210 +523,9 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           {/* ================================================================= */}
           {subTab === 'closing' && (
             <div className="space-y-6">
-              {/* Daily Production Summary Header Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm">
-                  <p className="text-[11px] text-stone-400 dark:text-stone-500 font-malayalam">ഉൽപ്പാദിപ്പിച്ച ഇനങ്ങൾ</p>
-                  <p className="text-xl font-extrabold text-stone-900 dark:text-white font-mono mt-1">
-                    <AnimatedNumber value={dateProductsSummary.length} /> <span className="text-xs text-stone-400 font-sans">ഇനങ്ങൾ</span>
-                  </p>
-                  <p className="text-[10px] text-stone-400 font-malayalam mt-0.5">{dateRuns.length} ബാച്ചുകൾ</p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm">
-                  <p className="text-[11px] text-stone-400 dark:text-stone-500 font-malayalam">ആകെ ഉൽപ്പാദനം</p>
-                  <p className="text-xl font-extrabold text-stone-900 dark:text-white font-mono mt-1">
-                    <AnimatedNumber value={totalDayProductionKg} decimals={1} /> <span className="text-xs text-stone-400 font-sans">kg</span>
-                  </p>
-                  <p className="text-[10px] text-emerald-500 font-malayalam mt-0.5">തൂക്ക അനുപാത വിഭജനം</p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm">
-                  <p className="text-[11px] text-stone-400 dark:text-stone-500 font-malayalam">ചേരുവ ചിലവ് (ബാച്ച് തുക)</p>
-                  <p className="text-xl font-extrabold text-stone-900 dark:text-white font-mono mt-1">
-                    <AnimatedNumber value={totalDayIngredientCost} prefix="₹" decimals={2} />
-                  </p>
-                  <p className="text-[10px] text-stone-400 font-malayalam mt-0.5">ബാച്ച്-ബൈ-ബാച്ച് ചിലവ്</p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm">
-                  <p className="text-[11px] text-stone-400 dark:text-stone-500 font-malayalam">ഷെയർ ചിലവുകൾ</p>
-                  <p className="text-xl font-extrabold text-red-600 dark:text-amber-400 font-mono mt-1">
-                    <AnimatedNumber
-                      value={liveOilCalculations.oilTotalExpense + (parseFloat(productionWages) || 0)}
-                      prefix="₹"
-                      decimals={2}
-                    />
-                  </p>
-                  <p className="text-[10px] text-stone-400 font-malayalam mt-0.5">ഓയിൽ + ദിവസ വേതനം</p>
-                </div>
-              </div>
-
-              {/* Shared Expenses Input Section: Oil & Wages */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-                {/* 1. Common Oil Balance & Expense Card */}
-                <div className="p-5 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                        <FiDroplet className="w-5 h-5" />
-                      </span>
-                      <div>
-                        <h2 className="text-base font-bold text-stone-900 dark:text-white font-malayalam">
-                          1. ഫാക്ടറി ഓയിൽ ഉപഭോഗം (Oil Expense)
-                        </h2>
-                        <p className="text-[11px] text-stone-400 font-malayalam">
-                          മുഴുവൻ ഫാക്ടറിക്കും ഒരു പൊതുവായ ഓയിൽ ഇൻവെന്ററി
-                        </p>
-                      </div>
-                    </div>
-
-                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-mono">
-                      Closing = Opening + Purchases − Loss
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
-                    {/* Opening */}
-                    <div className="p-2.5 bg-stone-50 dark:bg-[#141212] rounded-xl border border-stone-200 dark:border-[#282323]">
-                      <label className="text-[10px] font-bold text-stone-500 dark:text-stone-400 font-malayalam block mb-1">
-                        ഓപ്പണിംഗ് (kg)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={oilOpeningKg}
-                        onChange={(e) => setOilOpeningKg(e.target.value)}
-                        onFocus={(e) => e.target.select()}
-                        className="w-full bg-transparent font-extrabold text-sm text-stone-900 dark:text-white font-mono outline-none"
-                      />
-                    </div>
-
-                    {/* Purchases */}
-                    <div className="p-2.5 bg-stone-50 dark:bg-[#141212] rounded-xl border border-stone-200 dark:border-[#282323]">
-                      <label className="text-[10px] font-bold text-stone-500 dark:text-stone-400 font-malayalam block mb-1">
-                        വാങ്ങിയത് (kg)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={oilPurchasesKg}
-                        onChange={(e) => setOilPurchasesKg(e.target.value)}
-                        onFocus={(e) => e.target.select()}
-                        className="w-full bg-transparent font-extrabold text-sm text-stone-900 dark:text-white font-mono outline-none"
-                      />
-                    </div>
-
-                    {/* Closing */}
-                    <div className="p-2.5 bg-stone-50 dark:bg-[#141212] rounded-xl border border-amber-300 dark:border-amber-800/80 ring-1 ring-amber-300 dark:ring-amber-800">
-                      <label className="text-[10px] font-bold text-amber-700 dark:text-amber-400 font-malayalam block mb-1">
-                        ക്ലോസിംഗ് (kg) *
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={oilClosingKg}
-                        onChange={(e) => setOilClosingKg(e.target.value)}
-                        onFocus={(e) => e.target.select()}
-                        className="w-full bg-transparent font-extrabold text-sm text-amber-700 dark:text-amber-300 font-mono outline-none"
-                      />
-                    </div>
-
-                    {/* Rate / kg */}
-                    <div className="p-2.5 bg-stone-50 dark:bg-[#141212] rounded-xl border border-stone-200 dark:border-[#282323]">
-                      <label className="text-[10px] font-bold text-stone-500 dark:text-stone-400 font-malayalam block mb-1">
-                        ശരാശരി നിരക്ക് (₹/kg)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={oilCostPerKg}
-                        onChange={(e) => setOilCostPerKg(e.target.value)}
-                        onFocus={(e) => e.target.select()}
-                        className="w-full bg-transparent font-extrabold text-sm text-stone-900 dark:text-white font-mono outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Oil Calculations Result Strip */}
-                  <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-500/20 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="text-[11px] text-amber-800 dark:text-amber-300 font-malayalam block">
-                        യഥാർത്ഥ ഓയിൽ നഷ്ടം / ഉപഭോഗം:
-                      </span>
-                      <span className="font-extrabold text-base text-stone-900 dark:text-white font-mono">
-                        {liveOilCalculations.oilConsumedKg} kg
-                      </span>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="text-[11px] text-amber-800 dark:text-amber-300 font-malayalam block">
-                        ആകെ ഓയിൽ ചിലവ്:
-                      </span>
-                      <span className="font-extrabold text-base text-amber-700 dark:text-amber-400 font-mono">
-                        ₹{liveOilCalculations.oilTotalExpense.toLocaleString('en-IN')}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. Production Team Wages Card */}
-                <div className="p-5 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                        <FiDollarSign className="w-5 h-5" />
-                      </span>
-                      <div>
-                        <h2 className="text-base font-bold text-stone-900 dark:text-white font-malayalam">
-                          2. ദിവസേനയുള്ള പ്രൊഡക്ഷൻ വേതനം (Wages)
-                        </h2>
-                        <p className="text-[11px] text-stone-400 font-malayalam">
-                          ഉടമ ദിവസാവസാനം ആകെ തുക ഒരു തവണ നൽകുന്നു
-                        </p>
-                      </div>
-                    </div>
-
-                    <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-mono">
-                      Weight Pro-Rata
-                    </span>
-                  </div>
-
-                  <div className="space-y-3 pt-2">
-                    <div>
-                      <label className="text-xs font-bold text-stone-700 dark:text-stone-300 font-malayalam block mb-1">
-                        ആകെ ദിവസ വേതനം (Total Daily Production Wages) ₹ *
-                      </label>
-                      <input
-                        type="number"
-                        step="1"
-                        value={productionWages}
-                        onChange={(e) => setProductionWages(e.target.value)}
-                        onFocus={(e) => e.target.select()}
-                        className="w-full px-4 py-3 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] font-mono text-lg font-black text-emerald-600 dark:text-emerald-400 outline-none focus:border-emerald-500"
-                        placeholder="e.g. 4000"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam block mb-1">
-                        കുറിപ്പ് (Notes)
-                      </label>
-                      <input
-                        type="text"
-                        value={closingNotes}
-                        onChange={(e) => setClosingNotes(e.target.value)}
-                        className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] text-xs font-malayalam text-stone-900 dark:text-white outline-none"
-                        placeholder="ക്ലോസിംഗ് സംബന്ധിച്ച കുറിപ്പുകൾ..."
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
               {/* Cost Allocation Table (Weight Pro-Rata) */}
               <div className="p-5 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
                     <h2 className="text-base font-bold text-stone-900 dark:text-white font-malayalam flex items-center gap-2">
                       <FiLayers className="w-4 h-4 text-red-500" />
@@ -745,18 +536,21 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {isOilReconciled && isWagesReconciled ? (
-                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 font-malayalam">
-                        <FiCheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-                        <span>100% തുക കൃത്യമായി പൊരുത്തപ്പെട്ടു</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200 font-malayalam">
-                        <FiAlertCircle className="w-3.5 h-3.5" />
-                        <span>അനുപാതം കണക്കുകൂട്ടുന്നു...</span>
-                      </span>
-                    )}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Button to add daily production wages */}
+                    <button
+                      onClick={() => setIsWagesModalOpen(true)}
+                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-xs font-bold font-malayalam transition-all press-apple cursor-pointer"
+                      title="ദിവസേനയുള്ള പ്രൊഡക്ഷൻ വേതനം ചേർക്കുക"
+                    >
+                      <FiDollarSign className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>ദിവസേനയുള്ള പ്രൊഡക്ഷൻ വേതനം (Wages)</span>
+                      {parseFloat(productionWages) > 0 && (
+                        <span className="font-mono font-bold text-emerald-800 dark:text-emerald-200 ml-1">
+                          (₹{parseFloat(productionWages).toLocaleString('en-IN')})
+                        </span>
+                      )}
+                    </button>
                   </div>
                 </div>
 
@@ -1586,6 +1380,83 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      {/* Daily Production Wages Modal */}
+      {isWagesModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white dark:bg-[#1C1818] rounded-3xl p-6 max-w-md w-full border border-stone-200 dark:border-[#2E2828] shadow-2xl space-y-4 animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-2 border-b border-stone-200 dark:border-[#2E2828]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <FiDollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-stone-900 dark:text-white font-malayalam">
+                    ദിവസേനയുള്ള പ്രൊഡക്ഷൻ വേതനം (Wages)
+                  </h3>
+                  <p className="text-xs text-stone-400 font-mono">{selectedDate}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsWagesModalOpen(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-[#282323] cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-stone-700 dark:text-stone-300 font-malayalam block mb-1">
+                  ആകെ ദിവസ വേതനം (Total Daily Wages) ₹ *
+                </label>
+                <input
+                  type="number"
+                  step="1"
+                  value={productionWages}
+                  onChange={(e) => setProductionWages(e.target.value)}
+                  onFocus={(e) => e.target.select()}
+                  className="w-full px-4 py-3 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] font-mono text-xl font-black text-emerald-600 dark:text-emerald-400 outline-none focus:border-emerald-500"
+                  placeholder="e.g. 4000"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam block mb-1">
+                  കുറിപ്പ് (Notes)
+                </label>
+                <input
+                  type="text"
+                  value={closingNotes}
+                  onChange={(e) => setClosingNotes(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] text-xs font-malayalam text-stone-900 dark:text-white outline-none"
+                  placeholder="വേതനം സംബന്ധിച്ച കുറിപ്പുകൾ..."
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-200 dark:border-[#2E2828]">
+              <button
+                type="button"
+                onClick={() => setIsWagesModalOpen(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
+              >
+                റദ്ദാക്കുക
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await handleSaveClosing();
+                  setIsWagesModalOpen(false);
+                }}
+                disabled={isSavingClosing}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white font-malayalam transition-all shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                {isSavingClosing ? 'സേവ് ചെയ്യുന്നു...' : 'വേതനം സേവ് ചെയ്യുക'}
+              </button>
+            </div>
           </div>
         </div>
       )}

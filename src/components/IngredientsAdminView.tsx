@@ -19,6 +19,7 @@ import {
   adjustIngredientStock,
 } from '../services/supabase';
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
+import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 
 interface IngredientsAdminViewProps {
   ingredients: Ingredient[];
@@ -39,6 +40,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
   const [purchaseListModalOpen, setPurchaseListModalOpen] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
+
+  useLockBodyScroll(formModalOpen || adjustModalOpen || purchaseListModalOpen);
 
   // Form states
   const [name, setName] = useState('');
@@ -176,16 +179,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header and Add Button */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-stone-900 dark:text-white tracking-tight">
-            Ingredients
-          </h1>
-          <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
-            അസംസ്കൃത ചേരുവകളും സ്റ്റോക്ക് പരിധിയും
-          </p>
-        </div>
+      {/* Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
         <div className="flex items-center gap-2">
           <button
             type="button"

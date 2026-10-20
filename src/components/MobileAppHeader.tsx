@@ -23,7 +23,7 @@ export const MobileAppHeader: React.FC<MobileAppHeaderProps> = ({
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <div className="md:hidden sticky top-0 z-30 bg-white/95 dark:bg-[#181515]/95 backdrop-blur-xl border-b border-stone-200/80 dark:border-[#2E2828] px-4 pt-safe py-3 transition-colors select-none">
+    <div className="md:hidden sticky top-0 z-30 bg-white dark:bg-[#181515] border-b border-stone-200/80 dark:border-[#2E2828] px-4 pt-safe py-3 transition-colors select-none">
       <div className="flex items-center justify-between">
         {/* User Avatar & Welcome Jabir */}
         <div className="flex items-center gap-3">

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Product, UnitType, Ingredient } from '../types';
+import { Product, UnitType, Ingredient, Recipe } from '../types';
 import {
   FiPlus,
   FiSearch,
@@ -12,21 +12,45 @@ import {
   FiAlertCircle,
   FiLayers,
   FiPrinter,
+  FiBookOpen,
+  FiX,
 } from 'react-icons/fi';
-import { saveProduct, deleteProduct } from '../services/supabase';
+import { saveProduct, deleteProduct, saveRecipe, deleteRecipe } from '../services/supabase';
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
+import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 
 interface ProductsAdminViewProps {
   products: Product[];
   ingredients?: Ingredient[];
+  recipes?: Recipe[];
   onRefresh: () => void;
 }
+
+export const isDailySharedBasic = (name: string) => {
+  const n = (name || '').trim().toLowerCase();
+  return (
+    n.includes('ഓയിൽ') ||
+    n.includes('oil') ||
+    n.includes('ഉപ്പ്') ||
+    n.includes('salt') ||
+    n.includes('അണ്ടി തോട്') ||
+    n.includes('തോട്') ||
+    n.includes('കറിവേപ്പില') ||
+    n.includes('curry leaves')
+  );
+};
 
 export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   products,
   ingredients = [],
+  recipes = [],
   onRefresh,
 }) => {
+  const recipeEligibleIngredients = useMemo(
+    () => ingredients.filter((ing) => ing.isActive && !isDailySharedBasic(ing.name)),
+    [ingredients]
+  );
+
   const [search, setSearch] = useState('');
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [modalOpen, setModalOpen] = useState(false);
@@ -42,6 +66,20 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   const [wholesalePrice, setWholesalePrice] = useState<number | string>(0);
   const [currentStock, setCurrentStock] = useState<number | string>(0);
   const [isActive, setIsActive] = useState<boolean>(true);
+
+  // Recipe Modal States
+  const [recipeModalOpen, setRecipeModalOpen] = useState(false);
+  const [recipeProduct, setRecipeProduct] = useState<Product | null>(null);
+  const [existingRecipe, setExistingRecipe] = useState<Recipe | null>(null);
+  const [recipeBaseQuantity, setRecipeBaseQuantity] = useState<number | string>(10);
+  const [recipeBaseUnit, setRecipeBaseUnit] = useState<string>('kg');
+  const [recipeInstructions, setRecipeInstructions] = useState<string>('');
+  const [recipeItems, setRecipeItems] = useState<Array<{ ingredientId: string; quantity: number; unit: string }>>([]);
+  const [isSavingRecipe, setIsSavingRecipe] = useState(false);
+  const [recipeError, setRecipeError] = useState('');
+
+  // Lock scroll whenever any modal is open
+  useLockBodyScroll(modalOpen || purchaseListModalOpen || recipeModalOpen);
 
   const openCreateModal = () => {
     setEditingProduct(null);
@@ -65,6 +103,117 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
     setIsActive(p.isActive);
     setErrorMsg('');
     setModalOpen(true);
+  };
+
+  const openRecipeModal = (p: Product) => {
+    setRecipeProduct(p);
+    setRecipeError('');
+    const rec = recipes.find((r) => r.productId === p.id);
+    if (rec) {
+      setExistingRecipe(rec);
+      setRecipeBaseQuantity(rec.baseOutputQuantity || 10);
+      setRecipeBaseUnit(rec.baseOutputUnit || p.unit || 'kg');
+      setRecipeInstructions(rec.instructions || '');
+      setRecipeItems(
+        rec.items && rec.items.length > 0
+          ? rec.items.map((it) => ({
+              ingredientId: it.ingredientId,
+              quantity: it.quantity,
+              unit: it.unit,
+            }))
+          : [{ ingredientId: recipeEligibleIngredients[0]?.id || '', quantity: 1, unit: recipeEligibleIngredients[0]?.unit || 'kg' }]
+      );
+    } else {
+      setExistingRecipe(null);
+      setRecipeBaseQuantity(10);
+      setRecipeBaseUnit(p.unit || 'kg');
+      setRecipeInstructions('');
+      setRecipeItems([
+        { ingredientId: recipeEligibleIngredients[0]?.id || '', quantity: 1, unit: recipeEligibleIngredients[0]?.unit || 'kg' },
+      ]);
+    }
+    setRecipeModalOpen(true);
+  };
+
+  const handleAddRecipeItem = () => {
+    setRecipeItems([
+      ...recipeItems,
+      { ingredientId: recipeEligibleIngredients[0]?.id || '', quantity: 1, unit: recipeEligibleIngredients[0]?.unit || 'kg' },
+    ]);
+  };
+
+  const handleRemoveRecipeItem = (index: number) => {
+    setRecipeItems(recipeItems.filter((_, i) => i !== index));
+  };
+
+  const handleRecipeItemChange = (index: number, field: string, value: any) => {
+    const updated = [...recipeItems];
+    if (field === 'ingredientId') {
+      const found = ingredients.find((i) => i.id === value);
+      updated[index] = {
+        ...updated[index],
+        ingredientId: value,
+        unit: found?.unit || updated[index].unit,
+      };
+    } else {
+      updated[index] = { ...updated[index], [field]: value };
+    }
+    setRecipeItems(updated);
+  };
+
+  const calculateTotalRecipeCost = () => {
+    return recipeItems.reduce((acc, row) => {
+      const ing = ingredients.find((i) => i.id === row.ingredientId);
+      const unitCost = ing?.avgCostPerUnit || 0;
+      return acc + (Number(row.quantity) || 0) * unitCost;
+    }, 0);
+  };
+
+  const handleSaveRecipeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!recipeProduct) return;
+    if (recipeItems.length === 0) {
+      setRecipeError('കുറഞ്ഞത് ഒരു ചേരുവയെങ്കിലും നൽകുക (At least one ingredient is required)');
+      return;
+    }
+
+    setIsSavingRecipe(true);
+    setRecipeError('');
+    try {
+      await saveRecipe(
+        {
+          id: existingRecipe?.id,
+          productId: recipeProduct.id,
+          baseOutputQuantity: Number(recipeBaseQuantity) || 1,
+          baseOutputUnit: recipeBaseUnit,
+          instructions: recipeInstructions,
+        },
+        recipeItems.map((it) => ({
+          ingredientId: it.ingredientId,
+          quantity: Number(it.quantity) || 0,
+          unit: it.unit,
+        }))
+      );
+      setRecipeModalOpen(false);
+      onRefresh();
+    } catch (err: any) {
+      setRecipeError(err?.message || 'പാചകക്കുറിപ്പ് സേവ് ചെയ്യാനായില്ല');
+    } finally {
+      setIsSavingRecipe(false);
+    }
+  };
+
+  const handleDeleteRecipe = async () => {
+    if (!existingRecipe) return;
+    if (!window.confirm(`"${recipeProduct?.name}" ന്റെ പാചകക്കുറിപ്പ് നീക്കം ചെയ്യണോ?`)) return;
+
+    try {
+      await deleteRecipe(existingRecipe.id);
+      setRecipeModalOpen(false);
+      onRefresh();
+    } catch (err: any) {
+      alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Error deleting recipe'}`);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -125,16 +274,8 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Header and Add Button */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-extrabold text-stone-900 dark:text-white tracking-tight">
-            Products
-          </h1>
-          <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
-            സ്നാക്ക് ഉൽപ്പന്നങ്ങളും മൊത്തവില മാനേജ്മെന്റും
-          </p>
-        </div>
+      {/* Top Action Toolbar (Tab Title Removed) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
         <div className="flex items-center gap-2">
           {ingredients.length > 0 && (
             <button
@@ -165,7 +306,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search product, SKU..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-epso-red/30 dark:focus:ring-amber-500/30 transition-all font-malayalam"
+            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-epso-red/30 dark:focus:ring-amber-500/30 transition-all"
           />
         </div>
 
@@ -208,6 +349,8 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredProducts.map((p) => {
           const totalValuation = p.currentStock * p.wholesalePrice;
+          const productRecipe = recipes.find((r) => r.productId === p.id);
+
           return (
             <div
               key={p.id}
@@ -217,11 +360,11 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                 {/* Header: Title and Status */}
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div>
-                    <h3 className="text-base font-bold text-stone-900 dark:text-white font-malayalam">
+                    <h3 className="text-base font-bold text-stone-900 dark:text-white">
                       {p.name}
                     </h3>
                     {p.sku && (
-                      <span className="text-[11px] font-mono text-stone-400 dark:text-stone-500 block">
+                      <span className="text-[11px] text-stone-400 dark:text-stone-500 block">
                         SKU: {p.sku}
                       </span>
                     )}
@@ -251,7 +394,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                 <div className="p-3 bg-stone-50 dark:bg-[#141212] rounded-xl border border-stone-100 dark:border-[#282323] space-y-2 my-3 text-xs">
                   {/* Wholesale Price Highlight */}
                   <div className="flex items-center justify-between">
-                    <span className="text-stone-500 dark:text-stone-400 font-malayalam">
+                    <span className="text-stone-500 dark:text-stone-400">
                       മൊത്തവില (Wholesale):
                     </span>
                     <span className="font-extrabold text-sm text-epso-red dark:text-amber-400">
@@ -262,7 +405,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
 
                   {/* Current Finished Stock */}
                   <div className="flex items-center justify-between">
-                    <span className="text-stone-500 dark:text-stone-400 font-malayalam">
+                    <span className="text-stone-500 dark:text-stone-400">
                       സ്റ്റോക്ക് (Current Stock):
                     </span>
                     <span className="font-bold text-stone-900 dark:text-white">
@@ -270,9 +413,25 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                     </span>
                   </div>
 
+                  {/* Recipe / Ingredients Config Status */}
+                  <div className="flex items-center justify-between pt-1 border-t border-stone-200/60 dark:border-[#282323]">
+                    <span className="text-stone-500 dark:text-stone-400">
+                      ചേരുവകൾ (Recipe):
+                    </span>
+                    {productRecipe && productRecipe.items && productRecipe.items.length > 0 ? (
+                      <span className="font-bold text-[11px] text-amber-600 dark:text-amber-400">
+                        {productRecipe.items.length} ചേരുവകൾ ({productRecipe.baseOutputQuantity} {productRecipe.baseOutputUnit || p.unit})
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-stone-400 italic">
+                        നൽകിയിട്ടില്ല
+                      </span>
+                    )}
+                  </div>
+
                   {/* Stock Valuation */}
                   <div className="flex items-center justify-between pt-1 border-t border-stone-200/60 dark:border-[#282323]">
-                    <span className="text-stone-500 dark:text-stone-400 font-malayalam">
+                    <span className="text-stone-500 dark:text-stone-400">
                       സ്റ്റോക്ക് മൂല്യം (Valuation):
                     </span>
                     <span className="font-bold text-emerald-600 dark:text-emerald-400">
@@ -282,18 +441,28 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                 </div>
               </div>
 
-              {/* Action Buttons */}
+              {/* Action Buttons: Set Ingredients (Recipe), Edit, Delete */}
               <div className="flex items-center gap-2 pt-2 border-t border-stone-100 dark:border-[#282323]">
                 <button
+                  onClick={() => openRecipeModal(p)}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-950/60 text-amber-900 dark:text-amber-300 text-xs font-bold press-apple transition-colors cursor-pointer"
+                  title="ചേരുവകൾ നൽകുക (Set Ingredients / Recipe)"
+                >
+                  <FiBookOpen className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>ചേരുവകൾ</span>
+                </button>
+
+                <button
                   onClick={() => openEditModal(p)}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#322c2c] text-stone-800 dark:text-stone-200 text-xs font-bold press-apple transition-colors"
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#322c2c] text-stone-800 dark:text-stone-200 text-xs font-bold press-apple transition-colors cursor-pointer"
                 >
                   <FiEdit2 className="w-3.5 h-3.5" />
-                  <span className="font-malayalam">തിരുത്തുക (Edit)</span>
+                  <span>തിരുത്തുക</span>
                 </button>
+
                 <button
                   onClick={() => handleDelete(p)}
-                  className="p-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border border-transparent hover:border-red-200 dark:hover:border-red-900 press-apple transition-colors"
+                  className="p-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border border-transparent hover:border-red-200 dark:hover:border-red-900 press-apple transition-colors cursor-pointer"
                   title="ഡിലീറ്റ് ചെയ്യുക"
                 >
                   <FiTrash2 className="w-4 h-4" />
@@ -305,24 +474,26 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
       </div>
 
       {filteredProducts.length === 0 && (
-        <div className="py-12 text-center text-xs text-stone-400 dark:text-stone-500 font-malayalam">
+        <div className="py-12 text-center text-xs text-stone-400 dark:text-stone-500">
           ഉൽപ്പന്നങ്ങൾ ഒന്നും കണ്ടെത്താനായില്ല (No products found)
         </div>
       )}
 
-      {/* Modal: Add / Edit Product */}
+      {/* ===================================================================== */}
+      {/* MODAL 1: Add / Edit Product                                           */}
+      {/* ===================================================================== */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
           <div className="w-full max-w-md bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal">
-            <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
+            <h2 className="text-lg font-bold text-stone-900 dark:text-white mb-1">
               {editingProduct ? 'ഉൽപ്പന്നം തിരുത്തുക (Edit)' : 'പുതിയ ഉൽപ്പന്നം (New Product)'}
             </h2>
-            <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4">
+            <p className="text-xs text-stone-500 dark:text-stone-400 mb-4">
               വിലയും സ്റ്റോക്ക് വിവരങ്ങളും രേഖപ്പെടുത്തുക
             </p>
 
             {errorMsg && (
-              <div className="p-3 mb-4 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-xs flex items-center gap-2 border border-red-200 dark:border-red-900/60 font-malayalam">
+              <div className="p-3 mb-4 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-xs flex items-center gap-2 border border-red-200 dark:border-red-900/60">
                 <FiAlertCircle className="w-4 h-4 shrink-0" />
                 <span>{errorMsg}</span>
               </div>
@@ -330,7 +501,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
 
             <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
+                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
                   പേര് (Product Name) *
                 </label>
                 <input
@@ -338,70 +509,60 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="ഉദാ: പെരി പെരി മിക്സ്ചർ"
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-epso-red/30 font-malayalam"
+                  placeholder="e.g. മിക്സ്ചർ (Mixture)"
+                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                    SKU Code
+                    SKU കോഡ്
                   </label>
                   <input
                     type="text"
                     value={sku}
                     onChange={(e) => setSku(e.target.value)}
-                    placeholder="EPSO-PRD-101"
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono focus:outline-none"
+                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                    യൂണിറ്റ് (Unit)
+                  <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                    അളവ് യൂണിറ്റ് (Unit)
                   </label>
                   <select
                     value={unit}
                     onChange={(e) => setUnit(e.target.value as UnitType)}
                     className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
                   >
-                    <option value="kg">Kilogram (kg)</option>
-                    <option value="packs">Packs (പാക്കറ്റ്)</option>
-                    <option value="pcs">Pieces (എണ്ണം)</option>
-                    <option value="g">Gram (g)</option>
+                    <option value="kg">kg (കിലോഗ്രാം)</option>
+                    <option value="g">g (ഗ്രാം)</option>
+                    <option value="pkt">pkt (പാക്കറ്റ്)</option>
+                    <option value="pcs">pcs (എണ്ണം)</option>
+                    <option value="box">box (ബോക്സ്)</option>
                   </select>
                 </div>
               </div>
 
-              {/* Wholesale Selling Price - Admin Special Field */}
-              <div className="p-3.5 rounded-2xl bg-red-50/70 dark:bg-amber-950/20 border border-epso-red/30 dark:border-amber-500/30">
-                <label className="block font-extrabold text-epso-red dark:text-amber-400 font-malayalam mb-1 flex items-center justify-between">
-                  <span>മൊത്ത വിൽപ്പന വില (Wholesale Price ₹) *</span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-epso-red/10 text-epso-red dark:bg-amber-400/20 dark:text-amber-300">
-                    Admin Only
-                  </span>
+              <div>
+                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  മൊത്ത വിൽപ്പന വില (Wholesale Price ₹) *
                 </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 font-bold">₹</span>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    required
-                    value={wholesalePrice === 0 ? '' : wholesalePrice}
-                    onChange={(e) => setWholesalePrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    onFocus={(e) => e.target.select()}
-                    className="w-full pl-8 pr-3 py-2 rounded-xl border border-stone-300 dark:border-[#3E3434] bg-white dark:bg-[#141212] text-sm font-extrabold text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-epso-red/40"
-                  />
-                </div>
-                <p className="text-[10px] text-stone-500 dark:text-stone-400 mt-1 font-malayalam">
-                  ഈ വില മാത്രമേ മൊത്തം സെയിൽസ് കണക്കുകൂട്ടലിൽ ഉപയോഗിക്കൂ.
-                </p>
+                <input
+                  type="number"
+                  step="any"
+                  min="0"
+                  required
+                  value={wholesalePrice === 0 ? '' : wholesalePrice}
+                  onChange={(e) => setWholesalePrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  onFocus={(e) => e.target.select()}
+                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                />
               </div>
 
               <div>
-                <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
+                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
                   നിലവിലെ ഫിനിഷ്ഡ് സ്റ്റോക്ക് (Current Stock)
                 </label>
                 <input
@@ -417,10 +578,10 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828]">
                 <div>
-                  <span className="font-bold text-stone-900 dark:text-white font-malayalam">
+                  <span className="font-bold text-stone-900 dark:text-white">
                     ഉൽപ്പാദനത്തിൽ സജീവം (Active)
                   </span>
-                  <p className="text-[10px] text-stone-400 font-malayalam">
+                  <p className="text-[10px] text-stone-400">
                     അടുക്കളയിൽ തിരഞ്ഞെടുക്കാൻ അനുവദിക്കുക
                   </p>
                 </div>
@@ -446,14 +607,14 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold font-malayalam"
+                  className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold"
                 >
                   റദ്ദാക്കുക (Cancel)
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple font-malayalam"
+                  className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple"
                 >
                   {isSubmitting ? 'സൂക്ഷിക്കുന്നു...' : 'സൂക്ഷിക്കുക (Save)'}
                 </button>
@@ -462,6 +623,229 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* ===================================================================== */}
+      {/* MODAL 2: Set Ingredients / Recipe for Product                          */}
+      {/* ===================================================================== */}
+      {recipeModalOpen && recipeProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 overflow-y-auto">
+          <div className="w-full max-w-2xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal my-8">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-[#2E2828]">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                    <FiBookOpen className="w-5 h-5" />
+                  </span>
+                  <h2 className="text-lg font-bold text-stone-900 dark:text-white">
+                    {recipeProduct.name} - ചേരുവകൾ (Recipe Ingredients)
+                  </h2>
+                </div>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+                  ഈ ഉൽപ്പന്നത്തിനുള്ള അസംസ്കൃത ചേരുവകളുടെ അനുപാതം നൽകുക
+                </p>
+              </div>
+
+              <button
+                onClick={() => setRecipeModalOpen(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
+              >
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+
+            {recipeError && (
+              <div className="p-3 my-3 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-xs flex items-center gap-2 border border-red-200 dark:border-red-900/60">
+                <FiAlertCircle className="w-4 h-4 shrink-0" />
+                <span>{recipeError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveRecipeSubmit} className="space-y-4 pt-3 text-xs">
+              {/* Base Batch Output */}
+              <div className="p-4 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                    ഒരു ബാച്ചിലെ ഉൽപ്പാദനം (Base Output Quantity) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    required
+                    value={recipeBaseQuantity}
+                    onChange={(e) => setRecipeBaseQuantity(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white font-bold outline-none"
+                    placeholder="e.g. 10"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                    യൂണിറ്റ് (Unit)
+                  </label>
+                  <select
+                    value={recipeBaseUnit}
+                    onChange={(e) => setRecipeBaseUnit(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white font-bold outline-none"
+                  >
+                    <option value="kg">kg (കിലോഗ്രാം)</option>
+                    <option value="pkt">pkt (പാക്കറ്റ്)</option>
+                    <option value="pcs">pcs (എണ്ണം)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Recipe Ingredients Rows */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-stone-700 dark:text-stone-300">
+                    ചേരുവകൾ (Ingredients List) *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleAddRecipeItem}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                  >
+                    <FiPlus className="w-3.5 h-3.5" />
+                    <span>ചേരുവ ചേർക്കുക</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {recipeItems.map((item, idx) => {
+                    const ing = ingredients.find((i) => i.id === item.ingredientId);
+                    const lineCost = (Number(item.quantity) || 0) * (ing?.avgCostPerUnit || 0);
+
+                    return (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-2 p-2.5 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323]"
+                      >
+                        {/* Ingredient Select */}
+                        <div className="flex-1 min-w-[140px]">
+                          <select
+                            value={item.ingredientId}
+                            onChange={(e) => handleRecipeItemChange(idx, 'ingredientId', e.target.value)}
+                            className="w-full p-2 rounded-lg border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white text-xs font-bold outline-none"
+                          >
+                            {recipeEligibleIngredients.map((ingItem) => (
+                              <option key={ingItem.id} value={ingItem.id}>
+                                {ingItem.name} ({ingItem.unit}) - ₹{ingItem.avgCostPerUnit || 0}/{ingItem.unit}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Quantity */}
+                        <div className="w-24">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            required
+                            value={item.quantity}
+                            onChange={(e) => handleRecipeItemChange(idx, 'quantity', e.target.value)}
+                            className="w-full p-2 rounded-lg border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white text-xs font-bold outline-none text-right"
+                            placeholder="Qty"
+                          />
+                        </div>
+
+                        {/* Unit Badge */}
+                        <div className="w-12 text-center text-xs font-bold text-stone-500">
+                          {item.unit}
+                        </div>
+
+                        {/* Line Cost */}
+                        <div className="w-20 text-right font-bold text-xs text-stone-700 dark:text-stone-300">
+                          ₹{lineCost.toFixed(1)}
+                        </div>
+
+                        {/* Delete Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveRecipeItem(idx)}
+                          disabled={recipeItems.length <= 1}
+                          className="p-1.5 text-stone-400 hover:text-red-600 disabled:opacity-30 transition-colors cursor-pointer"
+                        >
+                          <FiTrash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Recipe Costing Estimation Strip */}
+              <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-500/20 flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-amber-800 dark:text-amber-300 block">
+                    ഏകദേശ ബാച്ച് ചെലവ് (Est. Batch Raw Material Cost):
+                  </span>
+                  <span className="font-extrabold text-base text-stone-900 dark:text-white">
+                    ₹{calculateTotalRecipeCost().toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-amber-800 dark:text-amber-300 block">
+                    കിലോഗ്രാമിന് ചിലവ് (Cost / {recipeBaseUnit}):
+                  </span>
+                  <span className="font-extrabold text-base text-amber-700 dark:text-amber-400">
+                    ₹{(calculateTotalRecipeCost() / (Number(recipeBaseQuantity) || 1)).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Instructions / Formulation Notes */}
+              <div>
+                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  പാചകക്കുറിപ്പ് നിർദ്ദേശങ്ങൾ / ഫോർമുലേഷൻ (Instructions / Method)
+                </label>
+                <textarea
+                  rows={2}
+                  value={recipeInstructions}
+                  onChange={(e) => setRecipeInstructions(e.target.value)}
+                  placeholder="ഉദാ: വറുത്ത ചേരുവകൾ തണുത്ത ശേഷം മസാല ചേർക്കുക..."
+                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white text-xs focus:outline-none"
+                />
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-between pt-3 border-t border-stone-100 dark:border-[#2E2828]">
+                {existingRecipe ? (
+                  <button
+                    type="button"
+                    onClick={handleDeleteRecipe}
+                    className="px-3 py-2 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    പാചകക്കുറിപ്പ് ഒഴിവാക്കുക
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRecipeModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold cursor-pointer"
+                  >
+                    റദ്ദാക്കുക (Cancel)
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingRecipe}
+                    className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple cursor-pointer"
+                  >
+                    {isSavingRecipe ? 'സൂക്ഷിക്കുന്നു...' : 'പാചകക്കുറിപ്പ് സേവ് ചെയ്യുക'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Printable Purchase List Modal */}
       {ingredients.length > 0 && (
         <PrintPurchaseListModal

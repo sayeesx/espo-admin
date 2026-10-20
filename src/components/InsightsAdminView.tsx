@@ -217,21 +217,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
     <div className="space-y-6 pb-20 max-w-6xl">
       {/* Top Header & Date Range Toolbar */}
       <div className="flex flex-col gap-4 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-950/40 text-epso-orange flex items-center justify-center font-bold">
-                <FiActivity className="w-4 h-4" />
-              </div>
-              <h1 className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white">
-                Production Insights
-              </h1>
-            </div>
-            <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
-              ഉൽപ്പാദന ട്രെൻഡുകളും അസംസ്കൃത വസ്തുക്കളുടെ ഉപഭോഗവും
-            </p>
-          </div>
-
+        <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3">
           {/* Preset Buttons */}
           <div className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 dark:bg-[#1E1B1B] rounded-xl border border-stone-200 dark:border-[#2E2828]">
             <button
