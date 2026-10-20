@@ -119,15 +119,7 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
           </button>
         </div>
 
-        {/* Current Active PIN badge */}
-        <div className="p-3 bg-stone-50 dark:bg-[#141212] rounded-2xl border border-stone-200/80 dark:border-[#282323] mb-4 flex items-center justify-between">
-          <span className="text-xs text-stone-500 dark:text-stone-400 font-malayalam">
-            നിലവിലെ പിൻ (Current PIN):
-          </span>
-          <span className="font-mono font-black text-sm text-epso-red dark:text-amber-400 tracking-widest bg-white dark:bg-[#1E1B1B] px-2.5 py-0.5 rounded-lg border border-stone-200 dark:border-[#2E2828]">
-            {currentPin}
-          </span>
-        </div>
+        {/* Removed current PIN badge */}
 
         {errorMsg && (
           <div className="p-3 mb-3 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-xs flex items-center gap-2 border border-red-200 dark:border-red-900/60 font-malayalam">

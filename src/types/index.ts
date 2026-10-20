@@ -207,3 +207,19 @@ export interface FinalProductCosting {
   unpackedKg: number;
   unpackedValuation: number;
 }
+
+export interface SaleRecord {
+  id: string;
+  sale_date: string;
+  product_id?: string;
+  product_name: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  total_amount: number;
+  customer_name?: string;
+  payment_method?: 'cash' | 'upi' | 'bank' | 'credit' | string;
+  payment_status?: 'paid' | 'pending' | 'partial' | string;
+  notes?: string;
+  created_at?: string;
+}

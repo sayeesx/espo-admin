@@ -102,12 +102,20 @@ export const PinGate: React.FC = () => {
 
       {/* Main PIN Prompt Box */}
       <div className={`w-full max-w-sm flex flex-col items-center my-auto transition-transform ${shake ? 'animate-bounce' : ''}`}>
-        <p className="text-sm font-semibold text-stone-600 dark:text-stone-400 mb-6 font-malayalam text-center">
-          അഡ്മിൻ 5 അക്ക പിൻ നൽകുക
-          <span className="block text-xs font-normal text-stone-400 dark:text-stone-500 font-sans mt-0.5">
-            Enter your 5 digit PIN
-          </span>
-        </p>
+        <div className="w-12 h-12 rounded-2xl bg-red-50 dark:bg-amber-950/30 text-epso-red dark:text-amber-400 flex items-center justify-center mb-5 shadow-xs ring-1 ring-epso-red/20 dark:ring-amber-500/20">
+          <img
+            src="/favicon.png"
+            alt="Epso"
+            className="w-7 h-7 object-contain drop-shadow"
+            onError={(e) => {
+              (e.target as HTMLElement).style.display = 'none';
+            }}
+          />
+        </div>
+
+        <h1 className="text-base font-bold text-stone-900 dark:text-white font-malayalam text-center mb-6">
+          പിൻ നൽകുക
+        </h1>
 
         {/* 5 Individual OTP Boxes */}
         <div className="flex justify-center gap-3 w-full my-2">
@@ -138,7 +146,7 @@ export const PinGate: React.FC = () => {
         {isLoading && (
           <div className="flex items-center gap-2 mt-4 text-xs font-medium text-stone-500 dark:text-stone-400">
             <div className="w-4 h-4 border-2 border-epso-red border-t-transparent rounded-full animate-spin" />
-            <span>പരിശോധിക്കുന്നു... (Verifying)</span>
+            <span className="font-malayalam">പരിശോധിക്കുന്നു...</span>
           </div>
         )}
 
@@ -151,12 +159,8 @@ export const PinGate: React.FC = () => {
         )}
       </div>
 
-      {/* Footer Info */}
-      <div className="w-full max-w-sm text-center py-4">
-        <p className="text-[11px] text-stone-400 dark:text-stone-500">
-          Epso Production & Inventory Management • Admin Portal
-        </p>
-      </div>
+      {/* Empty footer for balance */}
+      <div className="py-2" />
     </div>
   );
 };

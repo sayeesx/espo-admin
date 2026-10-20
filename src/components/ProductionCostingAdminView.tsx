@@ -435,11 +435,11 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
               <FiDollarSign className="w-5 h-5" />
             </span>
             <h1 className="text-xl font-extrabold text-stone-900 dark:text-white font-malayalam tracking-tight">
-              പ്രൊഡക്ഷൻ & കോസ്റ്റിംഗ് (Production Costing)
+              പ്രൊഡക്ഷൻ ചിലവ്
             </h1>
           </div>
           <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mt-1">
-            ബാച്ച് ചേരുവകൾ, ഷെയർ ചെയ്ത ഓയിൽ, വേതനം, പാക്കേജിംഗ് & ഫൈനൽ കോസ്റ്റിംഗ്
+            ദിവസേനയുള്ള ഓയിൽ, ശമ്പളം, പാക്കിംഗ് ചിലവുകൾ
           </p>
         </div>
 
@@ -480,7 +480,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           }`}
         >
           <FiDollarSign className="w-3.5 h-3.5 text-red-500" />
-          <span>ദിവസേനയുള്ള ക്ലോസിംഗ്</span>
+          <span>ദിവസ ക്ലോസിംഗ്</span>
         </button>
 
         <button
@@ -492,7 +492,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           }`}
         >
           <FiPieChart className="w-3.5 h-3.5 text-emerald-500" />
-          <span>ഫൈനൽ കോസ്റ്റിംഗ്</span>
+          <span>ഉൽപ്പന്ന ചിലവ്</span>
         </button>
 
         <button
@@ -504,7 +504,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           }`}
         >
           <FiDroplet className="w-3.5 h-3.5 text-amber-500" />
-          <span>ഓയിൽ ഇൻവെന്ററി</span>
+          <span>ഓയിൽ കണക്ക്</span>
         </button>
 
         <button
@@ -516,7 +516,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           }`}
         >
           <FiPackage className="w-3.5 h-3.5 text-indigo-500" />
-          <span>പാക്കേജിംഗ് & പാക്കിംഗ്</span>
+          <span>പാക്കിംഗ്</span>
         </button>
       </div>
 

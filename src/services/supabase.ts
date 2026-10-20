@@ -608,6 +608,59 @@ export async function fetchOilPurchasesForDate(date: string): Promise<number> {
   return movements.reduce((sum, m) => sum + Math.max(0, Number(m.quantity) || 0), 0);
 }
 
+// -------------------------------------------------------------
+// Sales Management
+// -------------------------------------------------------------
+
+export async function fetchSales(): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('sales')
+    .select('*')
+    .order('sale_date', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching sales:', error);
+    return [];
+  }
+  return data || [];
+}
+
+export async function recordSale(sale: {
+  sale_date: string;
+  product_id?: string;
+  product_name: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  total_amount: number;
+  customer_name?: string;
+  payment_method?: string;
+  payment_status?: string;
+  notes?: string;
+}): Promise<any> {
+  const { data, error } = await supabase
+    .from('sales')
+    .insert([sale])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error recording sale:', error);
+    throw error;
+  }
+  return data;
+}
+
+export async function deleteSale(id: string): Promise<void> {
+  const { error } = await supabase.from('sales').delete().eq('id', id);
+  if (error) {
+    console.error('Error deleting sale:', error);
+    throw error;
+  }
+}
+
+
 export async function saveDailyClosing(params: {
   productionDate: string;
   oilOpeningBalance: number;

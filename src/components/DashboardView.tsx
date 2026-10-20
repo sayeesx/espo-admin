@@ -16,8 +16,9 @@ import {
   FiChevronLeft,
   FiCheckCircle,
   FiTrash2,
+  FiShoppingBag,
 } from 'react-icons/fi';
-import { deleteProductionRun } from '../services/supabase';
+import { deleteProductionRun, fetchSales } from '../services/supabase';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -159,6 +160,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   // Selected date filter: null = all days (normal trend). Selecting a day shows that day only. Clicking again resets to null.
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const activeDate = selectedDate || todayIso;
+
+  // Sales state & totals
+  const [salesList, setSalesList] = useState<any[]>([]);
+
+  useEffect(() => {
+    fetchSales().then((data) => setSalesList(data)).catch(() => {});
+  }, []);
+
+  const todaySalesTotal = useMemo(() => {
+    return salesList
+      .filter((s) => s.sale_date === todayIso)
+      .reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
+  }, [salesList, todayIso]);
+
+  const monthSalesTotal = useMemo(() => {
+    const currentMonth = todayIso.substring(0, 7);
+    return salesList
+      .filter((s) => s.sale_date && s.sale_date.startsWith(currentMonth))
+      .reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
+  }, [salesList, todayIso]);
 
   // Financial & inventory calculations
   const totalFinishedGoodsValuation = products.reduce((acc, p) => {
@@ -605,6 +626,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
+        {/* Mobile Sales Summary Banner */}
+        <div
+          onClick={() => onNavigateTab('sales')}
+          className="p-4 rounded-3xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-[#1E1B1B] border border-emerald-200/80 dark:border-emerald-900/50 shadow-apple-card flex items-center justify-between cursor-pointer press-apple transition-all"
+        >
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-emerald-500 text-white shadow-sm">
+              <FiShoppingBag className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 font-malayalam">
+                ഇന്നത്തെ വിൽപ്പന (Today's Sales)
+              </p>
+              <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono leading-tight">
+                <AnimatedNumber value={todaySalesTotal} prefix="₹" decimals={2} />
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className="text-[10px] text-stone-400 block font-malayalam">ഈ മാസം</span>
+            <span className="text-xs font-bold text-stone-700 dark:text-stone-300 font-mono">
+              ₹{monthSalesTotal.toFixed(0)}
+            </span>
+          </div>
+        </div>
+
         {/* Recent Batches List */}
         <div className="space-y-2.5">
           <div className="flex items-center justify-between px-1">
@@ -885,9 +932,33 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         )}
 
-        {/* 4 Primary KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 1: Total Finished Goods Valuation */}
+        {/* 5 Primary KPI Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Card 1: Today's Sales */}
+          <div
+            onClick={() => onNavigateTab('sales')}
+            className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] hover:border-emerald-500/50 shadow-apple-card dark:shadow-apple-card-dark transition-all cursor-pointer group"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
+                ഇന്നത്തെ വിൽപ്പന
+              </span>
+              <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform">
+                <FiShoppingBag className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+              <AnimatedNumber value={todaySalesTotal} prefix="₹" decimals={2} />
+            </div>
+            <div className="flex items-center justify-between mt-1 text-[11px] text-stone-400 font-malayalam">
+              <span>മാസം: ₹{monthSalesTotal.toFixed(0)}</span>
+              <span className="text-emerald-500 font-bold flex items-center gap-0.5">
+                വിൽപ്പന <FiChevronRight className="w-3 h-3" />
+              </span>
+            </div>
+          </div>
+
+          {/* Card 2: Total Finished Goods Valuation */}
           <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">

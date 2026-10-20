@@ -14,6 +14,8 @@ import { StockLedgerAdminView } from './components/StockLedgerAdminView';
 import { ProductionPinModal } from './components/ProductionPinModal';
 import { ProductionCostingAdminView } from './components/ProductionCostingAdminView';
 import { LoadingSpinner } from './components/LoadingSpinner';
+import { OfflineScreen } from './components/OfflineScreen';
+import { SalesAdminView } from './components/SalesAdminView';
 import {
   fetchProducts,
   fetchIngredients,
@@ -38,6 +40,8 @@ export const App: React.FC = () => {
       const validTabs: AdminTab[] = [
         'dashboard',
         'insights',
+        'sales',
+        'costing',
         'notifications',
         'products',
         'ingredients',
@@ -196,6 +200,23 @@ export const App: React.FC = () => {
     return count;
   }, [ingredients, products, productionRuns, dismissedNotificationIds]);
 
+  const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  if (isOffline) {
+    return <OfflineScreen onRetry={() => window.location.reload()} />;
+  }
+
   if (!isAuthenticated) {
     return <PinGate />;
   }
@@ -248,6 +269,12 @@ export const App: React.FC = () => {
                   productionRuns={productionRuns}
                   stockMovements={stockMovements}
                   onNavigateTab={handleTabChange}
+                />
+              )}
+
+              {activeTab === 'sales' && (
+                <SalesAdminView
+                  products={products}
                 />
               )}
 
