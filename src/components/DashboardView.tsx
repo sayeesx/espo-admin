@@ -31,6 +31,7 @@ import {
   Cell,
 } from 'recharts';
 import { useTheme } from '../context/ThemeContext';
+import { AnimatedNumber } from './AnimatedNumber';
 
 interface DashboardViewProps {
   products: Product[];
@@ -559,7 +560,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="flex items-center justify-between pt-2 border-t border-stone-100 dark:border-[#282323] text-xs">
             <div>
               <span className="text-base font-black text-stone-900 dark:text-white">
-                {activeOutputKg} kg
+                <AnimatedNumber value={activeOutputKg} suffix=" kg" decimals={1} />
               </span>
               <p className="text-[10px] text-stone-400 font-semibold font-malayalam">
                 {selectedDate ? `${selectedDate} ഉൽപ്പാദനം` : 'ഇന്ന് ഉൽപ്പാദിപ്പിച്ചത്'}
@@ -581,7 +582,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               ആകെ പാൻട്രി മൂലധനം (Working Capital)
             </span>
             <span className="text-xs font-black text-epso-orange">
-              ₹{totalWorkingCapital.toLocaleString('en-IN')}
+              <AnimatedNumber value={totalWorkingCapital} prefix="₹" />
             </span>
           </div>
 
@@ -599,8 +600,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="flex items-center justify-between text-[11px] font-bold text-stone-500">
-            <span>Finished: ₹{totalFinishedGoodsValuation.toLocaleString('en-IN')}</span>
-            <span>Raw: ₹{totalRawValuation.toLocaleString('en-IN')}</span>
+            <span>Finished: <AnimatedNumber value={totalFinishedGoodsValuation} prefix="₹" /></span>
+            <span>Raw: <AnimatedNumber value={totalRawValuation} prefix="₹" /></span>
           </div>
         </div>
 
@@ -897,7 +898,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
             <div className="text-2xl font-black text-stone-900 dark:text-white">
-              ₹{totalFinishedGoodsValuation.toLocaleString('en-IN')}
+              <AnimatedNumber value={totalFinishedGoodsValuation} prefix="₹" />
             </div>
             <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
               മൊത്തവില അടിസ്ഥാനത്തിൽ (Wholesale)
@@ -915,7 +916,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
             <div className="text-2xl font-black text-stone-900 dark:text-white">
-              ₹{totalRawValuation.toLocaleString('en-IN')}
+              <AnimatedNumber value={totalRawValuation} prefix="₹" />
             </div>
             <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
               {ingredients.length} രജിസ്റ്റർ ചെയ്ത ചേരുവകൾ
@@ -933,7 +934,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
             <div className="text-2xl font-black text-stone-900 dark:text-white">
-              {completedBatchesCount}
+              <AnimatedNumber value={completedBatchesCount} />
               <span className="text-sm font-normal text-stone-400 ml-1.5 font-malayalam">ബാച്ചുകൾ</span>
             </div>
             <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
@@ -952,7 +953,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             </div>
             <div className="text-2xl font-black text-stone-900 dark:text-white">
-              {products.length}
+              <AnimatedNumber value={products.length} />
               <span className="text-sm font-normal text-stone-400 ml-1.5 font-malayalam">ഇനങ്ങൾ</span>
             </div>
             <p className="text-[11px] text-stone-400 mt-1 font-malayalam">

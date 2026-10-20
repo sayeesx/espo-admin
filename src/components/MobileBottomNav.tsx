@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiGrid, FiActivity, FiPackage, FiBell, FiClock } from 'react-icons/fi';
+import { FiGrid, FiActivity, FiPackage, FiBell, FiClock, FiDollarSign } from 'react-icons/fi';
 import { AdminTab } from './Header';
 
 interface MobileBottomNavProps {
@@ -19,11 +19,12 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
     icon: React.ElementType;
     hasBadge?: boolean;
   }[] = [
-    { id: 'dashboard', label: 'Home', icon: FiGrid },
-    { id: 'insights', label: 'Insights', icon: FiActivity },
-    { id: 'products', label: 'Products', icon: FiPackage },
-    { id: 'movements', label: 'Ledger', icon: FiClock },
-    { id: 'notifications', label: 'Alerts', icon: FiBell, hasBadge: true },
+    { id: 'dashboard', label: 'ഡാഷ്‌ബോർഡ്', icon: FiGrid },
+    { id: 'insights', label: 'അനലിറ്റിക്സ്', icon: FiActivity },
+    { id: 'costing', label: 'കോസ്റ്റിംഗ്', icon: FiDollarSign },
+    { id: 'products', label: 'ഉൽപ്പന്നങ്ങൾ', icon: FiPackage },
+    { id: 'movements', label: 'ലെഡ്ജർ', icon: FiClock },
+    { id: 'notifications', label: 'അറിയിപ്പുകൾ', icon: FiBell, hasBadge: true },
   ];
 
   return (
@@ -64,7 +65,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
                 )}
               </div>
               <span
-                className={`text-[10px] mt-1 tracking-tight leading-none ${
+                className={`text-[10px] mt-1 font-malayalam tracking-tight leading-none ${
                   isActive ? 'font-bold' : 'font-medium'
                 }`}
               >

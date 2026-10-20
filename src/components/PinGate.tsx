@@ -34,8 +34,13 @@ export const PinGate: React.FC = () => {
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !digits[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
+    if (e.key === 'Backspace') {
+      if (!digits[index] && index > 0) {
+        const newDigits = [...digits];
+        newDigits[index - 1] = '';
+        setDigits(newDigits);
+        inputRefs.current[index - 1]?.focus();
+      }
     }
   };
 
@@ -118,6 +123,7 @@ export const PinGate: React.FC = () => {
               autoComplete="one-time-code"
               onChange={(e) => handleDigitChange(idx, e.target.value)}
               onKeyDown={(e) => handleKeyDown(idx, e)}
+              onFocus={(e) => e.target.select()}
               onPaste={handlePaste}
               className={`w-12 h-14 sm:w-14 sm:h-16 text-center text-2xl font-bold rounded-2xl border transition-all duration-150 outline-none
                 ${digit

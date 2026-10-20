@@ -1,6 +1,6 @@
 import React from 'react';
 import { useTheme } from '../context/ThemeContext';
-import { FiBell, FiSun, FiMoon, FiRefreshCw } from 'react-icons/fi';
+import { FiBell, FiSun, FiMoon, FiRefreshCw, FiLock } from 'react-icons/fi';
 import { AdminTab } from './Header';
 
 interface MobileAppHeaderProps {
@@ -9,6 +9,7 @@ interface MobileAppHeaderProps {
   onRefresh: () => void;
   isRefreshing?: boolean;
   notificationCount: number;
+  onOpenPinModal?: () => void;
 }
 
 export const MobileAppHeader: React.FC<MobileAppHeaderProps> = ({
@@ -17,6 +18,7 @@ export const MobileAppHeader: React.FC<MobileAppHeaderProps> = ({
   onRefresh,
   isRefreshing,
   notificationCount,
+  onOpenPinModal,
 }) => {
   const { theme, toggleTheme } = useTheme();
 
@@ -43,8 +45,20 @@ export const MobileAppHeader: React.FC<MobileAppHeaderProps> = ({
           </div>
         </div>
 
-        {/* Right Controls: Refresh, Theme Toggle, Notification Bell */}
-        <div className="flex items-center gap-2">
+        {/* Right Controls: PIN Settings, Refresh, Theme Toggle, Notification Bell */}
+        <div className="flex items-center gap-1.5">
+          {/* Production PIN Settings button */}
+          {onOpenPinModal && (
+            <button
+              type="button"
+              onClick={onOpenPinModal}
+              className="w-9 h-9 rounded-full flex items-center justify-center bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#342D2D] text-stone-700 dark:text-stone-300 transition-colors press-apple cursor-pointer"
+              title="Set Production PWA PIN"
+            >
+              <FiLock className="w-4 h-4 text-epso-orange dark:text-amber-400" />
+            </button>
+          )}
+
           {/* Refresh button */}
           <button
             type="button"

@@ -9,6 +9,7 @@ import {
   FiLayers,
 } from 'react-icons/fi';
 import { saveRecipe, deleteRecipe } from '../services/supabase';
+import { ThemeSelect } from './ThemeSelect';
 
 interface RecipesAdminViewProps {
   recipes: Recipe[];
@@ -28,7 +29,7 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
 
   // Form states
   const [productId, setProductId] = useState('');
-  const [baseOutputQuantity, setBaseOutputQuantity] = useState<number>(10);
+  const [baseOutputQuantity, setBaseOutputQuantity] = useState<number | string>(10);
   const [baseOutputUnit, setBaseOutputUnit] = useState<string>('kg');
   const [instructions, setInstructions] = useState('');
   const [recipeItems, setRecipeItems] = useState<Array<{ ingredientId: string; quantity: number; unit: string }>>([]);
@@ -113,11 +114,14 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
         {
           id: editingRecipe?.id,
           productId,
-          baseOutputQuantity,
+          baseOutputQuantity: Number(baseOutputQuantity) || 1,
           baseOutputUnit,
           instructions,
         },
-        recipeItems
+        recipeItems.map((item) => ({
+          ...item,
+          quantity: Number(item.quantity) || 0,
+        }))
       );
       setModalOpen(false);
       onRefresh();
@@ -284,7 +288,8 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                     min="0.1"
                     required
                     value={baseOutputQuantity}
-                    onChange={(e) => setBaseOutputQuantity(parseFloat(e.target.value) || 1)}
+                    onChange={(e) => setBaseOutputQuantity(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    onFocus={(e) => e.target.select()}
                     className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
                   />
                 </div>
@@ -293,12 +298,16 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                   <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
                     ഔട്ട്പുട്ട് യൂണിറ്റ് (Unit)
                   </label>
-                  <input
-                    type="text"
+                  <ThemeSelect
                     value={baseOutputUnit}
-                    onChange={(e) => setBaseOutputUnit(e.target.value)}
-                    placeholder="kg"
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                    onChange={(val) => setBaseOutputUnit(val)}
+                    options={[
+                      { value: 'kg', label: 'kg (കിലോഗ്രാം)' },
+                      { value: 'packs', label: 'packs (പാക്കറ്റുകൾ)' },
+                      { value: 'pcs', label: 'pcs (എണ്ണം)' },
+                      { value: 'g', label: 'g (ഗ്രാം)' },
+                      { value: 'L', label: 'L (ലിറ്റർ)' },
+                    ]}
                   />
                 </div>
               </div>
@@ -312,7 +321,7 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                   <button
                     type="button"
                     onClick={handleAddItemRow}
-                    className="flex items-center gap-1 text-[11px] text-epso-red dark:text-amber-400 font-bold hover:underline"
+                    className="flex items-center gap-1 text-[11px] text-epso-red dark:text-amber-400 font-bold hover:underline cursor-pointer"
                   >
                     <FiPlus className="w-3.5 h-3.5" />
                     <span>ചേരുവ ചേർക്കുക</span>
@@ -339,8 +348,9 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                         step="any"
                         min="0.001"
                         placeholder="അളവ്"
-                        value={item.quantity}
-                        onChange={(e) => handleItemChange(idx, 'quantity', parseFloat(e.target.value) || 0)}
+                        value={item.quantity === 0 ? '' : item.quantity}
+                        onChange={(e) => handleItemChange(idx, 'quantity', e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                        onFocus={(e) => e.target.select()}
                         className="w-20 p-2 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white text-xs font-mono focus:outline-none"
                       />
 

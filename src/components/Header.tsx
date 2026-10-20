@@ -14,11 +14,13 @@ import {
   FiRefreshCw,
   FiLogOut,
   FiUser,
+  FiDollarSign,
 } from 'react-icons/fi';
 
 export type AdminTab =
   | 'dashboard'
   | 'insights'
+  | 'costing'
   | 'products'
   | 'ingredients'
   | 'recipes'
@@ -31,6 +33,7 @@ interface HeaderProps {
   onRefresh: () => void;
   isRefreshing?: boolean;
   notificationCount?: number;
+  onOpenPinModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -39,59 +42,60 @@ export const Header: React.FC<HeaderProps> = ({
   onRefresh,
   isRefreshing,
   notificationCount = 0,
+  onOpenPinModal,
 }) => {
   const { logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   const navItems: {
     id: AdminTab;
-    labelEn: string;
     labelMl: string;
     icon: React.ElementType;
     badge?: number;
   }[] = [
-    { id: 'dashboard', labelEn: 'Dashboard', labelMl: 'ഡാഷ്‌ബോർഡ്', icon: FiGrid },
-    { id: 'insights', labelEn: 'Insights', labelMl: 'അനലിറ്റിക്സ്', icon: FiActivity },
-    { id: 'products', labelEn: 'Products', labelMl: 'ഉൽപ്പന്നങ്ങൾ', icon: FiPackage },
-    { id: 'ingredients', labelEn: 'Ingredients', labelMl: 'ചേരുവകൾ', icon: FiBox },
-    { id: 'recipes', labelEn: 'Recipes', labelMl: 'പാചകക്കുറിപ്പ്', icon: FiBookOpen },
-    { id: 'movements', labelEn: 'Stock Ledger', labelMl: 'ലെഡ്ജർ', icon: FiClock },
-    { id: 'notifications', labelEn: 'Alerts', labelMl: 'അറിയിപ്പുകൾ', icon: FiBell, badge: notificationCount },
+    { id: 'dashboard', labelMl: 'ഡാഷ്‌ബോർഡ്', icon: FiGrid },
+    { id: 'insights', labelMl: 'അനലിറ്റിക്സ്', icon: FiActivity },
+    { id: 'costing', labelMl: 'കോസ്റ്റിംഗ്', icon: FiDollarSign },
+    { id: 'products', labelMl: 'ഉൽപ്പന്നങ്ങൾ', icon: FiPackage },
+    { id: 'ingredients', labelMl: 'ചേരുവകൾ', icon: FiBox },
+    { id: 'recipes', labelMl: 'പാചകക്കുറിപ്പ്', icon: FiBookOpen },
+    { id: 'movements', labelMl: 'ലെഡ്ജർ', icon: FiClock },
+    { id: 'notifications', labelMl: 'അറിയിപ്പുകൾ', icon: FiBell, badge: notificationCount },
   ];
 
   return (
-    <aside className="hidden md:flex md:w-64 lg:w-72 md:fixed md:inset-y-0 md:left-0 z-40 flex-col bg-white dark:bg-[#181515] border-r border-stone-200 dark:border-[#2E2828] transition-colors select-none">
+    <aside className="hidden md:flex md:w-56 lg:w-60 md:fixed md:inset-y-0 md:left-0 z-40 flex-col bg-white dark:bg-[#181515] border-r border-stone-200 dark:border-[#2E2828] transition-colors select-none">
       {/* Brand Header */}
-      <div className="p-5 border-b border-stone-100 dark:border-[#282323]">
-        <div className="flex items-center gap-3">
+      <div className="p-4 border-b border-stone-100 dark:border-[#282323]">
+        <div className="flex items-center gap-2.5">
           <img
             src="/favicon.png"
             alt="Epso Logo"
-            className="w-9 h-9 object-contain rounded-xl drop-shadow"
+            className="w-8 h-8 object-contain rounded-xl drop-shadow"
             onError={(e) => {
               (e.target as HTMLElement).style.display = 'none';
             }}
           />
           <div>
-            <div className="flex items-center gap-2">
-              <span className="font-black text-lg tracking-tight text-stone-900 dark:text-white">
+            <div className="flex items-center gap-1.5">
+              <span className="font-black text-base tracking-tight text-stone-900 dark:text-white">
                 EPSO
               </span>
-              <span className="px-2 py-0.5 text-[10px] font-black rounded-md bg-epso-red/10 text-epso-red dark:bg-amber-400/20 dark:text-amber-400 uppercase tracking-wider">
+              <span className="px-1.5 py-0.5 text-[9px] font-black rounded-md bg-epso-red/10 text-epso-red dark:bg-amber-400/20 dark:text-amber-400 uppercase tracking-wider">
                 Admin
               </span>
             </div>
-            <p className="text-[11px] font-semibold text-stone-400 dark:text-stone-500 font-malayalam leading-tight mt-0.5">
-              പ്രൊഡക്ഷൻ & പാൻട്രി കൺസോൾ
+            <p className="text-[10px] font-semibold text-stone-400 dark:text-stone-500 font-malayalam leading-tight mt-0.5">
+              അഡ്മിൻ കൺസോൾ
             </p>
           </div>
         </div>
       </div>
 
       {/* Vertical Navigation Menu */}
-      <div className="flex-1 py-4 px-3 overflow-y-auto no-scrollbar space-y-1">
-        <span className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-stone-400 dark:text-stone-500 block mb-2">
-          Main Menu
+      <div className="flex-1 py-3 px-2.5 overflow-y-auto no-scrollbar space-y-1.5">
+        <span className="px-2.5 text-[10px] font-extrabold uppercase tracking-wider text-stone-400 dark:text-stone-500 block mb-1">
+          മെനു
         </span>
 
         {navItems.map((item) => {
@@ -102,33 +106,26 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center justify-between px-3.5 py-3 rounded-2xl text-xs font-bold transition-all press-apple group cursor-pointer ${
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold transition-all press-apple group cursor-pointer ${
                 isActive
                   ? 'bg-epso-red text-white shadow-md dark:bg-amber-500 dark:text-stone-950 font-black'
-                  : 'text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#242020]'
+                  : 'text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#242020]'
               }`}
             >
-              <div className="flex items-center gap-3 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <Icon
                   className={`w-4 h-4 shrink-0 transition-transform duration-200 group-hover:scale-110 ${
                     isActive ? 'text-white dark:text-stone-950' : 'text-stone-400 dark:text-stone-400'
                   }`}
                 />
-                <div className="text-left min-w-0">
-                  <span className="block leading-tight truncate">{item.labelEn}</span>
-                  <span
-                    className={`text-[10px] font-normal font-malayalam block leading-none mt-0.5 ${
-                      isActive ? 'opacity-85' : 'text-stone-400 dark:text-stone-500'
-                    }`}
-                  >
-                    {item.labelMl}
-                  </span>
-                </div>
+                <span className="block font-bold text-sm lg:text-[15px] font-malayalam leading-tight truncate">
+                  {item.labelMl}
+                </span>
               </div>
 
               {item.badge && item.badge > 0 ? (
                 <span
-                  className={`px-2 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
                     isActive
                       ? 'bg-white text-epso-red dark:bg-stone-950 dark:text-amber-400'
                       : 'bg-epso-red text-white animate-pulse'
@@ -140,6 +137,22 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           );
         })}
+
+        {/* Production PIN Settings Trigger */}
+        {onOpenPinModal && (
+          <div className="pt-2 mt-2 border-t border-stone-100 dark:border-[#282323]">
+            <button
+              onClick={onOpenPinModal}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-[#242020] hover:text-epso-orange dark:hover:text-amber-400 transition-all press-apple group cursor-pointer"
+              title="Set Production PWA PIN"
+            >
+              <FiUser className="w-4 h-4 shrink-0 text-stone-400 group-hover:text-epso-orange" />
+              <span className="block font-bold text-xs lg:text-sm font-malayalam leading-tight truncate">
+                പ്രൊഡക്ഷൻ പിൻ (PIN)
+              </span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* User Card & Utility Footer */}

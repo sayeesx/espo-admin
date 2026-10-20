@@ -39,8 +39,8 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
   const [unit, setUnit] = useState<UnitType>('kg');
-  const [wholesalePrice, setWholesalePrice] = useState<number>(0);
-  const [currentStock, setCurrentStock] = useState<number>(0);
+  const [wholesalePrice, setWholesalePrice] = useState<number | string>(0);
+  const [currentStock, setCurrentStock] = useState<number | string>(0);
   const [isActive, setIsActive] = useState<boolean>(true);
 
   const openCreateModal = () => {
@@ -389,8 +389,9 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                     step="any"
                     min="0"
                     required
-                    value={wholesalePrice}
-                    onChange={(e) => setWholesalePrice(parseFloat(e.target.value) || 0)}
+                    value={wholesalePrice === 0 ? '' : wholesalePrice}
+                    onChange={(e) => setWholesalePrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    onFocus={(e) => e.target.select()}
                     className="w-full pl-8 pr-3 py-2 rounded-xl border border-stone-300 dark:border-[#3E3434] bg-white dark:bg-[#141212] text-sm font-extrabold text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-epso-red/40"
                   />
                 </div>
@@ -407,8 +408,9 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                   type="number"
                   step="any"
                   min="0"
-                  value={currentStock}
-                  onChange={(e) => setCurrentStock(parseFloat(e.target.value) || 0)}
+                  value={currentStock === 0 ? '' : currentStock}
+                  onChange={(e) => setCurrentStock(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  onFocus={(e) => e.target.select()}
                   className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
                 />
               </div>

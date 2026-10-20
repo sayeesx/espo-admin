@@ -27,6 +27,7 @@ import {
   Legend,
 } from 'recharts';
 import { useTheme } from '../context/ThemeContext';
+import { AnimatedNumber } from './AnimatedNumber';
 
 interface InsightsAdminViewProps {
   products: Product[];
@@ -351,30 +352,38 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
         )}
       </div>
 
-      {/* Range Summary Indicators */}
+      {/* Range Summary Indicators (Malayalam) */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="p-3 bg-stone-50 dark:bg-[#1A1818] rounded-xl border border-stone-200 dark:border-[#2E2828]">
-          <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Filtered Batches</div>
-          <div className="text-lg font-black text-stone-900 dark:text-white mt-0.5">
-            {completedRunsInRange.length}
+          <div className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam tracking-tight">
+            തിരഞ്ഞെടുത്ത ബാച്ചുകൾ
+          </div>
+          <div className="text-xl font-black text-stone-900 dark:text-white mt-0.5">
+            <AnimatedNumber value={completedRunsInRange.length} />
           </div>
         </div>
         <div className="p-3 bg-stone-50 dark:bg-[#1A1818] rounded-xl border border-stone-200 dark:border-[#2E2828]">
-          <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Output in Range</div>
-          <div className="text-lg font-black text-epso-orange mt-0.5">
-            {totalOutputInRangeKg.toFixed(1)} kg
+          <div className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam tracking-tight">
+            ആകെ ഉൽപ്പാദനം
+          </div>
+          <div className="text-xl font-black text-epso-orange mt-0.5">
+            <AnimatedNumber value={totalOutputInRangeKg} suffix=" kg" decimals={1} />
           </div>
         </div>
         <div className="p-3 bg-stone-50 dark:bg-[#1A1818] rounded-xl border border-stone-200 dark:border-[#2E2828]">
-          <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Pantry Capital</div>
-          <div className="text-lg font-black text-stone-900 dark:text-white mt-0.5">
-            ₹{totalWorkingCapital.toLocaleString('en-IN')}
+          <div className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam tracking-tight">
+            പാൻട്രി മൂലധനം
+          </div>
+          <div className="text-xl font-black text-stone-900 dark:text-white mt-0.5">
+            <AnimatedNumber value={totalWorkingCapital} prefix="₹" />
           </div>
         </div>
         <div className="p-3 bg-stone-50 dark:bg-[#1A1818] rounded-xl border border-stone-200 dark:border-[#2E2828]">
-          <div className="text-[10px] font-bold text-stone-400 uppercase tracking-wider">Ingredients Monitored</div>
-          <div className="text-lg font-black text-stone-900 dark:text-white mt-0.5">
-            {ingredients.length} items
+          <div className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam tracking-tight">
+            ആകെ ചേരുവകൾ
+          </div>
+          <div className="text-xl font-black text-stone-900 dark:text-white mt-0.5">
+            <AnimatedNumber value={ingredients.length} suffix=" ഇനങ്ങൾ" />
           </div>
         </div>
       </div>
@@ -392,7 +401,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
             </div>
           </div>
           <div className="text-2xl sm:text-3xl font-black text-stone-900 dark:text-white">
-            ₹{totalWorkingCapital.toLocaleString('en-IN')}
+            <AnimatedNumber value={totalWorkingCapital} prefix="₹" />
           </div>
           <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
             ഫിനിഷ്ഡ് ഗുഡ്സ് + ചേരുവകളുടെ ആകെ മൂല്യം
@@ -410,7 +419,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
             </div>
           </div>
           <div className="text-2xl sm:text-3xl font-black text-stone-900 dark:text-white">
-            ₹{totalFinishedGoodsValuation.toLocaleString('en-IN')}
+            <AnimatedNumber value={totalFinishedGoodsValuation} prefix="₹" />
           </div>
           <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
             {products.length} സ്നാക്കുകൾ സ്റ്റോക്കുള്ളത്
@@ -428,7 +437,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
             </div>
           </div>
           <div className="text-2xl sm:text-3xl font-black text-stone-900 dark:text-white">
-            ₹{totalRawValuation.toLocaleString('en-IN')}
+            <AnimatedNumber value={totalRawValuation} prefix="₹" />
           </div>
           <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
             {ingredients.length} രജിസ്റ്റർ ചെയ്ത ചേരുവകൾ

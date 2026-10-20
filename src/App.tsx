@@ -11,6 +11,9 @@ import { ProductsAdminView } from './components/ProductsAdminView';
 import { IngredientsAdminView } from './components/IngredientsAdminView';
 import { RecipesAdminView } from './components/RecipesAdminView';
 import { StockLedgerAdminView } from './components/StockLedgerAdminView';
+import { ProductionPinModal } from './components/ProductionPinModal';
+import { ProductionCostingAdminView } from './components/ProductionCostingAdminView';
+import { LoadingSpinner } from './components/LoadingSpinner';
 import {
   fetchProducts,
   fetchIngredients,
@@ -74,6 +77,7 @@ export const App: React.FC = () => {
 
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [isPinModalOpen, setIsPinModalOpen] = useState<boolean>(false);
 
   // Persistent dismissed notification IDs
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(() => {
@@ -205,6 +209,7 @@ export const App: React.FC = () => {
         onRefresh={loadAllData}
         isRefreshing={isRefreshing}
         notificationCount={notificationCount}
+        onOpenPinModal={() => setIsPinModalOpen(true)}
       />
 
       {/* Desktop Vertical Sidebar */}
@@ -214,18 +219,15 @@ export const App: React.FC = () => {
         onRefresh={loadAllData}
         isRefreshing={isRefreshing}
         notificationCount={notificationCount}
+        onOpenPinModal={() => setIsPinModalOpen(true)}
       />
 
       {/* Main Content Area with Desktop Sidebar Offset */}
-      <div className="md:pl-64 lg:pl-72 transition-all">
+      <div className="md:pl-56 lg:pl-60 transition-all">
         <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 md:pt-6">
           {isInitialLoading ? (
-            <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
-              {/* Clean, Simple Modern Circular Loading Spinner */}
-              <div className="w-10 h-10 rounded-full border-3 border-stone-200 dark:border-stone-800 border-t-epso-red dark:border-t-amber-500 animate-spin" />
-              <p className="text-xs font-semibold text-stone-500 dark:text-stone-400 font-malayalam">
-                ഡാറ്റാബേസിൽ നിന്ന് വിവരങ്ങൾ ശേഖരിക്കുന്നു...
-              </p>
+            <div className="min-h-[60vh] flex flex-col items-center justify-center">
+              <LoadingSpinner size="lg" label="ഡാറ്റാബേസിൽ നിന്ന് വിവരങ്ങൾ ശേഖരിക്കുന്നു..." />
             </div>
           ) : (
             <>
@@ -246,6 +248,16 @@ export const App: React.FC = () => {
                   productionRuns={productionRuns}
                   stockMovements={stockMovements}
                   onNavigateTab={handleTabChange}
+                />
+              )}
+
+              {activeTab === 'costing' && (
+                <ProductionCostingAdminView
+                  products={products}
+                  ingredients={ingredients}
+                  productionRuns={productionRuns}
+                  stockMovements={stockMovements}
+                  onRefresh={loadAllData}
                 />
               )}
 
@@ -275,6 +287,7 @@ export const App: React.FC = () => {
               {activeTab === 'ingredients' && (
                 <IngredientsAdminView
                   ingredients={ingredients}
+                  stockMovements={stockMovements}
                   onRefresh={loadAllData}
                 />
               )}
@@ -305,6 +318,12 @@ export const App: React.FC = () => {
         activeTab={activeTab}
         onTabChange={handleTabChange}
         notificationCount={notificationCount}
+      />
+
+      {/* Production PIN Configuration Modal */}
+      <ProductionPinModal
+        isOpen={isPinModalOpen}
+        onClose={() => setIsPinModalOpen(false)}
       />
     </div>
   );

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Ingredient, IngredientCategory, UnitType } from '../types';
+import React, { useState, useMemo } from 'react';
+import { Ingredient, IngredientCategory, UnitType, StockMovement } from '../types';
 import {
   FiPlus,
   FiSearch,
@@ -22,11 +22,13 @@ import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 
 interface IngredientsAdminViewProps {
   ingredients: Ingredient[];
+  stockMovements?: StockMovement[];
   onRefresh: () => void;
 }
 
 export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   ingredients,
+  stockMovements = [],
   onRefresh,
 }) => {
   const [search, setSearch] = useState('');
@@ -43,14 +45,14 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   const [category, setCategory] = useState<IngredientCategory>('basic');
   const [unit, setUnit] = useState<UnitType>('kg');
   const [currentStock, setCurrentStock] = useState<number>(0);
-  const [minStock, setMinStock] = useState<number>(0);
-  const [avgCostPerUnit, setAvgCostPerUnit] = useState<number>(0);
+  const [minStock, setMinStock] = useState<number | string>(0);
+  const [avgCostPerUnit, setAvgCostPerUnit] = useState<number | string>(0);
   const [notes, setNotes] = useState('');
   const [isActive, setIsActive] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Stock Adjust states
-  const [adjustDelta, setAdjustDelta] = useState<number>(0);
+  const [adjustDelta, setAdjustDelta] = useState<number | string>(0);
   const [adjustReason, setAdjustReason] = useState<string>('പുതിയ പർച്ചേസ് (Purchase Inward)');
   const [adjustIsAdd, setAdjustIsAdd] = useState<boolean>(true);
 
@@ -116,21 +118,22 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
   const handleAdjustSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedIngredient || adjustDelta <= 0) return;
+    const deltaAmount = Number(adjustDelta) || 0;
+    if (!selectedIngredient || deltaAmount <= 0) return;
 
     if (!adjustIsAdd && selectedIngredient.currentStock <= 0) {
       alert('മുന്നറിയിപ്പ്: സ്റ്റോക്ക് 0 ആണ്! നെഗറ്റീവ് ആകാൻ കഴിയില്ല.');
       return;
     }
 
-    if (!adjustIsAdd && adjustDelta > selectedIngredient.currentStock) {
+    if (!adjustIsAdd && deltaAmount > selectedIngredient.currentStock) {
       alert(`മുന്നറിയിപ്പ്: ലഭ്യമായ സ്റ്റോക്കിൽ (${selectedIngredient.currentStock} ${selectedIngredient.unit}) കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല!`);
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const delta = adjustIsAdd ? adjustDelta : -adjustDelta;
+      const delta = adjustIsAdd ? deltaAmount : -deltaAmount;
       await adjustIngredientStock(selectedIngredient.id, delta, adjustReason, 'Admin');
       setAdjustModalOpen(false);
       onRefresh();
@@ -368,6 +371,55 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       ₹{ing.avgCostPerUnit.toLocaleString('en-IN')} / {ing.unit}
                     </span>
                   </div>
+
+                  {/* Progress Bar: Quantity Pending from Last Stock */}
+                  {(() => {
+                    const lastInward = stockMovements.find(
+                      (m) =>
+                        (m.itemId === ing.id || m.itemName.toLowerCase() === ing.name.toLowerCase()) &&
+                        (m.movementType === 'in' || m.movementType === 'purchase' || m.movementType === 'opening' || m.quantity > 0)
+                    );
+                    const lastStockTotal = lastInward
+                      ? Math.max(Number(lastInward.newBalance) || 0, Number(lastInward.previousBalance) || 0, ing.currentStock)
+                      : Math.max(ing.currentStock, (ing.minStock || 5) * 2, 10);
+                    const percentRemaining =
+                      lastStockTotal > 0
+                        ? Math.min(100, Math.max(0, Math.round((ing.currentStock / lastStockTotal) * 100)))
+                        : 0;
+
+                    return (
+                      <div className="pt-2 border-t border-stone-200/60 dark:border-[#282323] space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px] font-malayalam">
+                          <span className="text-stone-500 dark:text-stone-400">
+                            കഴിഞ്ഞ സ്റ്റോക്കിൽ ബാക്കി:
+                          </span>
+                          <span
+                            className={`font-bold ${
+                              percentRemaining > 50
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : percentRemaining > 20
+                                ? 'text-amber-600 dark:text-amber-400'
+                                : 'text-red-500'
+                            }`}
+                          >
+                            {ing.currentStock} {ing.unit} ({percentRemaining}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-2 rounded-full bg-stone-200/70 dark:bg-stone-800 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-700 ${
+                              percentRemaining > 50
+                                ? 'bg-gradient-to-r from-emerald-500 to-teal-400'
+                                : percentRemaining > 20
+                                ? 'bg-gradient-to-r from-amber-500 to-orange-400'
+                                : 'bg-gradient-to-r from-red-600 to-rose-400'
+                            }`}
+                            style={{ width: `${percentRemaining}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {ing.notes && (
@@ -452,8 +504,9 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   step="any"
                   min="0.01"
                   required
-                  value={adjustDelta || ''}
-                  onChange={(e) => setAdjustDelta(parseFloat(e.target.value) || 0)}
+                  value={adjustDelta === 0 ? '' : adjustDelta}
+                  onChange={(e) => setAdjustDelta(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  onFocus={(e) => e.target.select()}
                   placeholder={`0.00 ${selectedIngredient.unit}`}
                   className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-sm font-bold text-stone-900 dark:text-white focus:outline-none"
                 />
@@ -485,8 +538,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
               <div className="p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] text-xs">
                 <span className="text-stone-400 font-malayalam block">പുതിയ സ്റ്റോക്ക് ബാലൻസ്:</span>
-                <span className={`text-base font-extrabold ${!adjustIsAdd && adjustDelta > selectedIngredient.currentStock ? 'text-red-600' : 'text-stone-900 dark:text-white'}`}>
-                  {Math.max(0, selectedIngredient.currentStock + (adjustIsAdd ? adjustDelta : -adjustDelta))}{' '}
+                <span className={`text-base font-extrabold ${!adjustIsAdd && Number(adjustDelta) > selectedIngredient.currentStock ? 'text-red-600' : 'text-stone-900 dark:text-white'}`}>
+                  {Math.max(0, selectedIngredient.currentStock + (adjustIsAdd ? (Number(adjustDelta) || 0) : -(Number(adjustDelta) || 0)))}{' '}
                   {selectedIngredient.unit}
                 </span>
               </div>
@@ -495,14 +548,14 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setAdjustModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold font-malayalam"
+                  className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold font-malayalam cursor-pointer"
                 >
                   റദ്ദാക്കുക (Cancel)
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || adjustDelta <= 0}
-                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm press-apple font-malayalam"
+                  disabled={isSubmitting || Number(adjustDelta) <= 0}
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm press-apple font-malayalam cursor-pointer"
                 >
                   {isSubmitting ? 'സൂക്ഷിക്കുന്നു...' : 'അപ്ഡേറ്റ് ചെയ്യുക (Update)'}
                 </button>
@@ -581,8 +634,9 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                     type="number"
                     step="any"
                     min="0"
-                    value={minStock}
-                    onChange={(e) => setMinStock(parseFloat(e.target.value) || 0)}
+                    value={minStock === 0 ? '' : minStock}
+                    onChange={(e) => setMinStock(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    onFocus={(e) => e.target.select()}
                     className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
                   />
                 </div>
@@ -595,8 +649,9 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                     type="number"
                     step="any"
                     min="0"
-                    value={avgCostPerUnit}
-                    onChange={(e) => setAvgCostPerUnit(parseFloat(e.target.value) || 0)}
+                    value={avgCostPerUnit === 0 ? '' : avgCostPerUnit}
+                    onChange={(e) => setAvgCostPerUnit(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    onFocus={(e) => e.target.select()}
                     className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
                   />
                 </div>
