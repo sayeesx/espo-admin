@@ -257,8 +257,8 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
       `}</style>
 
       {/* Screen Interactive Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto no-print-area animate-in fade-in duration-150">
-        <div className="relative w-full max-w-5xl bg-white dark:bg-[#1E1B1B] rounded-2xl border border-stone-200 dark:border-[#2E2828] shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md overflow-y-auto no-print-area animate-apple-backdrop">
+        <div className="relative w-full max-w-5xl bg-white dark:bg-[#1E1B1B] rounded-2xl border border-stone-200 dark:border-[#2E2828] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-apple-modal">
           {/* Modal Header */}
           <div className="p-4 sm:p-5 border-b border-stone-200 dark:border-[#2E2828] flex items-center justify-between gap-3 bg-stone-50/50 dark:bg-[#181515]">
             <div className="flex items-center gap-2.5">

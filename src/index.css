@@ -143,3 +143,43 @@
 .animate-daily-ops {
   animation: dailyOpsEntrance 0.75s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+
+/* Apple Fluid Modal Animations */
+@keyframes appleModalIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92) translateY(24px);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.01) translateY(-2px);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0px);
+  }
+}
+
+@keyframes appleBackdropIn {
+  0% {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    backdrop-filter: blur(8px);
+  }
+}
+
+.animate-apple-modal {
+  animation: appleModalIn 0.38s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity, filter;
+}
+
+.animate-apple-backdrop {
+  animation: appleBackdropIn 0.28s ease-out both;
+}
+

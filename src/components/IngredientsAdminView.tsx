@@ -164,7 +164,23 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     }
   };
 
-  const filteredIngredients = ingredients.filter((ing) => {
+  const isWagesItem = (itemName: string) => {
+    const n = (itemName || '').trim().toLowerCase();
+    return (
+      n === 'കൂലി' ||
+      n === 'കൂലി പാക്കിങ്' ||
+      n === 'കൂലി പാക്കിംഗ്' ||
+      n.startsWith('കൂലി') ||
+      n === 'wages' ||
+      n === 'packing wages'
+    );
+  };
+
+  const visibleIngredients = useMemo(() => {
+    return ingredients.filter((ing) => !isWagesItem(ing.name));
+  }, [ingredients]);
+
+  const filteredIngredients = visibleIngredients.filter((ing) => {
     const matchSearch = ing.name.toLowerCase().includes(search.toLowerCase());
     if (!matchSearch) return false;
 
@@ -176,9 +192,9 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     return true;
   });
 
-  const lowStockCount = ingredients.filter((i) => i.isActive && i.minStock > 0 && i.currentStock <= i.minStock).length;
-  const basicCount = ingredients.filter((i) => i.category === 'basic').length;
-  const otherCount = ingredients.filter((i) => i.category === 'other').length;
+  const lowStockCount = visibleIngredients.filter((i) => i.isActive && i.minStock > 0 && i.currentStock <= i.minStock).length;
+  const basicCount = visibleIngredients.filter((i) => i.category === 'basic').length;
+  const otherCount = visibleIngredients.filter((i) => i.category === 'other').length;
 
   return (
     <div className="space-y-6">
@@ -458,8 +474,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
       {/* Modal: Adjust Stock */}
       {adjustModalOpen && selectedIngredient && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-apple-backdrop">
+          <div className="w-full max-w-md bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal">
             <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
               സ്റ്റോക്ക് ക്രമീകരിക്കുക (Adjust Stock)
             </h2>
@@ -565,8 +581,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
       {/* Modal: Add / Edit Ingredient */}
       {formModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-apple-backdrop">
+          <div className="w-full max-w-md bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal">
             <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
               {selectedIngredient ? 'ചേരുവ തിരുത്തുക (Edit)' : 'പുതിയ ചേരുവ (New Ingredient)'}
             </h2>
@@ -725,14 +741,14 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
       <PrintPurchaseListModal
         isOpen={purchaseListModalOpen}
         onClose={() => setPurchaseListModalOpen(false)}
-        ingredients={ingredients}
+        ingredients={visibleIngredients}
       />
 
       {/* Bulk Add Purchase Modal */}
       <AddPurchaseModal
         isOpen={addPurchaseModalOpen}
         onClose={() => setAddPurchaseModalOpen(false)}
-        ingredients={ingredients}
+        ingredients={visibleIngredients}
         onRefresh={onRefresh}
       />
     </div>

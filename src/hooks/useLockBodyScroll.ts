@@ -1,17 +1,16 @@
 import { useEffect } from 'react';
 
 /**
- * Custom hook to lock body and html scrolling when a modal is open.
- * Also applies .modal-open to body and html so blur/sticky artifacts are suppressed.
+ * Global lock counter to ensure nested or overlapping modals
+ * correctly restore scrolling once all active modals are closed.
  */
+let activeLockCount = 0;
+
 export function useLockBodyScroll(isLocked: boolean) {
   useEffect(() => {
     if (!isLocked) return;
 
-    const originalOverflow = document.body.style.overflow;
-    const originalHtmlOverflow = document.documentElement.style.overflow;
-    const originalTouchAction = document.body.style.touchAction;
-
+    activeLockCount++;
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
     document.body.style.touchAction = 'none';
@@ -19,11 +18,14 @@ export function useLockBodyScroll(isLocked: boolean) {
     document.documentElement.classList.add('modal-open');
 
     return () => {
-      document.body.style.overflow = originalOverflow;
-      document.documentElement.style.overflow = originalHtmlOverflow;
-      document.body.style.touchAction = originalTouchAction;
-      document.body.classList.remove('modal-open');
-      document.documentElement.classList.remove('modal-open');
+      activeLockCount = Math.max(0, activeLockCount - 1);
+      if (activeLockCount === 0) {
+        document.body.style.overflow = '';
+        document.documentElement.style.overflow = '';
+        document.body.style.touchAction = '';
+        document.body.classList.remove('modal-open');
+        document.documentElement.classList.remove('modal-open');
+      }
     };
   }, [isLocked]);
 }
