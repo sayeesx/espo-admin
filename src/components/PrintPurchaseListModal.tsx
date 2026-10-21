@@ -346,49 +346,6 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
               </div>
             </div>
 
-            {/* Optional Print Columns Toggle (User Request) */}
-            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-stone-50 dark:bg-[#161414] rounded-xl border border-stone-200 dark:border-[#2E2828]">
-              <div className="flex flex-wrap items-center gap-4 text-xs">
-                <span className="font-bold text-stone-700 dark:text-stone-200 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-epso-orange" />
-                  <span>പ്രിന്റ് ഓപ്ഷനുകൾ (Tick to show):</span>
-                </span>
-
-                <label className="flex items-center gap-2 cursor-pointer font-semibold text-stone-700 dark:text-stone-300 select-none">
-                  <input
-                    type="checkbox"
-                    checked={showCategory}
-                    onChange={(e) => setShowCategory(e.target.checked)}
-                    className="w-4 h-4 rounded text-epso-orange focus:ring-epso-orange border-stone-300 dark:border-stone-600 cursor-pointer"
-                  />
-                  <span>വിഭാഗം (Category)</span>
-                </label>
-
-                <label className="flex items-center gap-2 cursor-pointer font-semibold text-stone-700 dark:text-stone-300 select-none">
-                  <input
-                    type="checkbox"
-                    checked={showCurrentStock}
-                    onChange={(e) => setShowCurrentStock(e.target.checked)}
-                    className="w-4 h-4 rounded text-epso-orange focus:ring-epso-orange border-stone-300 dark:border-stone-600 cursor-pointer"
-                  />
-                  <span>നിലവിലെ stock</span>
-                </label>
-
-                <label className="flex items-center gap-2 cursor-pointer font-semibold text-stone-700 dark:text-stone-300 select-none">
-                  <input
-                    type="checkbox"
-                    checked={showRemarks}
-                    onChange={(e) => setShowRemarks(e.target.checked)}
-                    className="w-4 h-4 rounded text-epso-orange focus:ring-epso-orange border-stone-300 dark:border-stone-600 cursor-pointer"
-                  />
-                  <span>കുറിപ്പുകൾ (Notes)</span>
-                </label>
-              </div>
-
-              <div className="text-[11px] text-stone-500 dark:text-stone-400 font-medium">
-                പേജ് ഒന്നിൽ 14 ഇനങ്ങൾ വീതം ({printPages.length} പേജ്{printPages.length > 1 ? 'കൾ' : ''})
-              </div>
-            </div>
 
             {/* Optional Supplier Name & Summary */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1">

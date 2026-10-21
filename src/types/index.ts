@@ -223,3 +223,28 @@ export interface SaleRecord {
   notes?: string;
   created_at?: string;
 }
+
+export interface DailyWage {
+  id: string;
+  productionDate: string;
+  totalWageBudget: number;
+  numCooks: number;
+  numPackers: number;
+  totalPacketsProduced: number;
+  totalProductionKg: number;
+  productionWageAmount: number;
+  packingWageAmount: number;
+  wagePerCook: number;
+  wagePerPacker: number;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ProductSellingPrice {
+  id: string;
+  productId: string;
+  wholesalePricePerKg: number;
+  updatedAt?: string;
+  createdAt?: string;
+}

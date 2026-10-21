@@ -53,8 +53,8 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['"Helvetica Neue"', 'Helvetica', 'Arial', 'sans-serif'],
-        malayalam: ['"Helvetica Neue"', 'Helvetica', 'Arial', 'sans-serif'],
+        sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        malayalam: ['"Anek Malayalam"', '"Manjari"', '"Noto Sans Malayalam"', '"Plus Jakarta Sans"', 'sans-serif'],
       },
       boxShadow: {
         'apple-card': '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',

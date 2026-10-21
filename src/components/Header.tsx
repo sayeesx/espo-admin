@@ -14,6 +14,7 @@ import {
   FiRefreshCw,
   FiLogOut,
   FiUser,
+  FiUsers,
   FiDollarSign,
   FiShoppingBag,
 } from 'react-icons/fi';
@@ -22,6 +23,7 @@ export type AdminTab =
   | 'dashboard'
   | 'insights'
   | 'sales'
+  | 'wages'
   | 'costing'
   | 'products'
   | 'ingredients'
@@ -58,6 +60,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'dashboard', labelMl: 'ഡാഷ്‌ബോർഡ്', icon: FiGrid },
     { id: 'insights', labelMl: 'അനലിറ്റിക്സ്', icon: FiActivity },
     { id: 'sales', labelMl: 'വിൽപ്പന', icon: FiShoppingBag },
+    { id: 'wages', labelMl: 'കൂലി', icon: FiUsers },
     { id: 'costing', labelMl: 'കോസ്റ്റിംഗ്', icon: FiDollarSign },
     { id: 'products', labelMl: 'ഉൽപ്പന്നങ്ങൾ', icon: FiPackage },
     { id: 'ingredients', labelMl: 'ചേരുവകൾ', icon: FiBox },

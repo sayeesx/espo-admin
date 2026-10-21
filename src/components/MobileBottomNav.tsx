@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiGrid, FiActivity, FiPackage, FiBell, FiClock, FiDollarSign, FiShoppingBag } from 'react-icons/fi';
+import { FiGrid, FiActivity, FiPackage, FiBell, FiClock, FiDollarSign, FiShoppingBag, FiUsers } from 'react-icons/fi';
 import { AdminTab } from './Header';
 
 interface MobileBottomNavProps {
@@ -21,9 +21,9 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   }[] = [
     { id: 'dashboard', label: 'ഡാഷ്‌ബോർഡ്', icon: FiGrid },
     { id: 'sales', label: 'വിൽപ്പന', icon: FiShoppingBag },
+    { id: 'wages', label: 'കൂലി', icon: FiUsers },
     { id: 'costing', label: 'കോസ്റ്റിംഗ്', icon: FiDollarSign },
     { id: 'products', label: 'ഉൽപ്പന്നങ്ങൾ', icon: FiPackage },
-    { id: 'movements', label: 'ലെഡ്ജർ', icon: FiClock },
     { id: 'notifications', label: 'അറിയിപ്പുകൾ', icon: FiBell, hasBadge: true },
   ];
 

@@ -42,10 +42,14 @@
   body {
     background-color: var(--color-bg);
     color: var(--color-text);
-    font-family: 'Helvetica Neue', Helvetica, Arial, -apple-system, BlinkMacSystemFont, sans-serif !important;
+    font-family: 'Plus Jakarta Sans', Inter, system-ui, -apple-system, sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  .font-malayalam {
+    font-family: 'Anek Malayalam', 'Manjari', 'Noto Sans Malayalam', 'Plus Jakarta Sans', sans-serif !important;
   }
 
   body.modal-open,

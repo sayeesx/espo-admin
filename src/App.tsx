@@ -16,6 +16,7 @@ import { ProductionCostingAdminView } from './components/ProductionCostingAdminV
 import { LoadingSpinner } from './components/LoadingSpinner';
 import { OfflineScreen } from './components/OfflineScreen';
 import { SalesAdminView } from './components/SalesAdminView';
+import { WagesAdminView } from './components/WagesAdminView';
 import {
   fetchProducts,
   fetchIngredients,
@@ -41,6 +42,7 @@ export const App: React.FC = () => {
         'dashboard',
         'insights',
         'sales',
+        'wages',
         'costing',
         'notifications',
         'products',
@@ -275,6 +277,12 @@ export const App: React.FC = () => {
               {activeTab === 'sales' && (
                 <SalesAdminView
                   products={products}
+                />
+              )}
+
+              {activeTab === 'wages' && (
+                <WagesAdminView
+                  onRefresh={loadAllData}
                 />
               )}
 

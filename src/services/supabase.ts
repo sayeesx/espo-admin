@@ -1135,3 +1135,211 @@ export async function fetchPackingRecords(options?: { productId?: string; date?:
   }));
 }
 
+// ============================================================================
+// DAILY WAGES
+// ============================================================================
+
+export async function fetchDailyWages(limit = 60): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('daily_wages')
+    .select('*')
+    .order('production_date', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    productionDate: row.production_date,
+    totalWageBudget: Number(row.total_wage_budget) || 0,
+    numCooks: Number(row.num_cooks) || 0,
+    numPackers: Number(row.num_packers) || 0,
+    totalPacketsProduced: Number(row.total_packets_produced) || 0,
+    totalProductionKg: Number(row.total_production_kg) || 0,
+    productionWageAmount: Number(row.production_wage_amount) || 0,
+    packingWageAmount: Number(row.packing_wage_amount) || 0,
+    wagePerCook: Number(row.wage_per_cook) || 0,
+    wagePerPacker: Number(row.wage_per_packer) || 0,
+    notes: row.notes || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
+export async function fetchDailyWage(date: string): Promise<any | null> {
+  const { data, error } = await supabase
+    .from('daily_wages')
+    .select('*')
+    .eq('production_date', date)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    productionDate: data.production_date,
+    totalWageBudget: Number(data.total_wage_budget) || 0,
+    numCooks: Number(data.num_cooks) || 0,
+    numPackers: Number(data.num_packers) || 0,
+    totalPacketsProduced: Number(data.total_packets_produced) || 0,
+    totalProductionKg: Number(data.total_production_kg) || 0,
+    productionWageAmount: Number(data.production_wage_amount) || 0,
+    packingWageAmount: Number(data.packing_wage_amount) || 0,
+    wagePerCook: Number(data.wage_per_cook) || 0,
+    wagePerPacker: Number(data.wage_per_packer) || 0,
+    notes: data.notes || '',
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+}
+
+export async function saveDailyWage(params: {
+  productionDate: string;
+  totalWageBudget: number;
+  numCooks: number;
+  numPackers: number;
+  totalPacketsProduced: number;
+  totalProductionKg: number;
+  productionWageAmount: number;
+  packingWageAmount: number;
+  wagePerCook: number;
+  wagePerPacker: number;
+  notes?: string;
+}): Promise<any> {
+  const payload = {
+    production_date: params.productionDate,
+    total_wage_budget: params.totalWageBudget,
+    num_cooks: params.numCooks,
+    num_packers: params.numPackers,
+    total_packets_produced: params.totalPacketsProduced,
+    total_production_kg: params.totalProductionKg,
+    production_wage_amount: params.productionWageAmount,
+    packing_wage_amount: params.packingWageAmount,
+    wage_per_cook: params.wagePerCook,
+    wage_per_packer: params.wagePerPacker,
+    notes: params.notes || null,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase
+    .from('daily_wages')
+    .upsert(payload, { onConflict: 'production_date' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchTotalPacketsForDate(date: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('packing_records')
+    .select('packets_packed')
+    .eq('packing_date', date);
+
+  if (error) return 0;
+  return (data || []).reduce((sum: number, r: any) => sum + (Number(r.packets_packed) || 0), 0);
+}
+
+export async function fetchTotalProductionKgForDate(date: string): Promise<number> {
+  const { data, error } = await supabase
+    .from('production_runs')
+    .select('actual_quantity')
+    .eq('production_date', date)
+    .eq('status', 'completed');
+
+  if (error) return 0;
+  return (data || []).reduce((sum: number, r: any) => sum + (Number(r.actual_quantity) || 0), 0);
+}
+
+// ============================================================================
+// PRODUCT SELLING PRICES
+// ============================================================================
+
+export async function fetchProductSellingPrices(): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('product_selling_prices')
+    .select('*');
+
+  if (error) throw error;
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    productId: row.product_id,
+    wholesalePricePerKg: Number(row.wholesale_price_per_kg) || 0,
+    updatedAt: row.updated_at,
+    createdAt: row.created_at,
+  }));
+}
+
+export async function saveProductSellingPrice(productId: string, pricePerKg: number): Promise<any> {
+  const { data, error } = await supabase
+    .from('product_selling_prices')
+    .upsert({
+      product_id: productId,
+      wholesale_price_per_kg: pricePerKg,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'product_id' })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+// ============================================================================
+// BULK PURCHASE (Add all ingredients)
+// ============================================================================
+
+export async function bulkPurchaseIngredients(
+  purchases: Array<{ ingredientId: string; amount: number; costPerUnit: number }>
+): Promise<void> {
+  for (const purchase of purchases) {
+    if (purchase.amount <= 0) continue;
+
+    const { data: ing, error: fetchErr } = await supabase
+      .from('ingredients')
+      .select('id, name, unit, current_stock, avg_cost_per_unit')
+      .eq('id', purchase.ingredientId)
+      .single();
+
+    if (fetchErr || !ing) continue;
+
+    const prevStock = Number(ing.current_stock) || 0;
+    const newStock = roundStock(prevStock + purchase.amount);
+
+    // Weighted average cost calculation
+    const prevCost = Number(ing.avg_cost_per_unit) || 0;
+    const totalOldValue = prevStock * prevCost;
+    const totalNewValue = purchase.amount * purchase.costPerUnit;
+    const newAvgCost = newStock > 0
+      ? roundCurrency((totalOldValue + totalNewValue) / newStock)
+      : purchase.costPerUnit;
+
+    const { error: updateErr } = await supabase
+      .from('ingredients')
+      .update({
+        current_stock: newStock,
+        avg_cost_per_unit: newAvgCost,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', purchase.ingredientId);
+
+    if (updateErr) continue;
+
+    await supabase.from('stock_movements').insert({
+      item_id: purchase.ingredientId,
+      item_type: 'ingredient',
+      item_name: ing.name,
+      movement_type: 'purchase',
+      quantity: purchase.amount,
+      unit: ing.unit,
+      previous_balance: prevStock,
+      new_balance: newStock,
+      cost_per_unit: purchase.costPerUnit,
+      reference: `BULK-PURCHASE-${Date.now().toString().slice(-6)}`,
+      operator_name: 'Admin',
+      reason: 'Bulk purchase entry',
+      created_at: new Date().toISOString(),
+    });
+  }
+}

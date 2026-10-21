@@ -12,6 +12,7 @@ import {
   FiDollarSign,
   FiLayers,
   FiPrinter,
+  FiShoppingBag,
 } from 'react-icons/fi';
 import {
   saveIngredient,
@@ -19,6 +20,7 @@ import {
   adjustIngredientStock,
 } from '../services/supabase';
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
+import { AddPurchaseModal } from './AddPurchaseModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 
 interface IngredientsAdminViewProps {
@@ -39,9 +41,10 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
   const [purchaseListModalOpen, setPurchaseListModalOpen] = useState(false);
+  const [addPurchaseModalOpen, setAddPurchaseModalOpen] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
 
-  useLockBodyScroll(formModalOpen || adjustModalOpen || purchaseListModalOpen);
+  useLockBodyScroll(formModalOpen || adjustModalOpen || purchaseListModalOpen || addPurchaseModalOpen);
 
   // Form states
   const [name, setName] = useState('');
@@ -179,9 +182,27 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
-        <div className="flex items-center gap-2">
+      {/* Actions & Low Stock Notice Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
+        {lowStockCount > 0 ? (
+          <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs font-bold font-malayalam">
+            <FiAlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+            <span>{lowStockCount} ചേരുവകൾ കുറഞ്ഞ സ്റ്റോക്കിലാണ് / തീർന്നുപോയി (About to Stock Out)</span>
+          </div>
+        ) : (
+          <div />
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setAddPurchaseModalOpen(true)}
+            className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
+            title="Add purchases for ingredients in bulk"
+          >
+            <FiShoppingBag className="w-4 h-4" />
+            <span>Add Purchase</span>
+          </button>
           <button
             type="button"
             onClick={() => setPurchaseListModalOpen(true)}
@@ -205,24 +226,6 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
           </button>
         </div>
       </div>
-
-      {/* Low Stock Requisition Alert Strip */}
-      {lowStockCount > 0 && (
-        <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs">
-          <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300 font-bold font-malayalam">
-            <FiAlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-            <span>{lowStockCount} ചേരുവകൾ കുറഞ്ഞ സ്റ്റോക്കിലാണ് / തീർന്നുപോയി (About to Stock Out)</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setPurchaseListModalOpen(true)}
-            className="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs flex items-center gap-1.5 cursor-pointer shadow-2xs transition-colors"
-          >
-            <FiPrinter className="w-3.5 h-3.5" />
-            <span>പർച്ചേസ് ലിസ്റ്റ് തയ്യാറാക്കുക (Print List)</span>
-          </button>
-        </div>
-      )}
 
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -723,6 +726,14 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
         isOpen={purchaseListModalOpen}
         onClose={() => setPurchaseListModalOpen(false)}
         ingredients={ingredients}
+      />
+
+      {/* Bulk Add Purchase Modal */}
+      <AddPurchaseModal
+        isOpen={addPurchaseModalOpen}
+        onClose={() => setAddPurchaseModalOpen(false)}
+        ingredients={ingredients}
+        onRefresh={onRefresh}
       />
     </div>
   );
