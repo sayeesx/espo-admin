@@ -515,7 +515,7 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
       {/* Record Sale Modal with Apple Fluid Animation */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-apple-backdrop">
-          <div className="w-full max-w-lg bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal overflow-hidden">
+          <div className="w-full md:w-[70vw] md:max-w-4xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal overflow-hidden">
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-stone-100 dark:border-[#282323]">
               <div className="flex items-center gap-2.5">
                 <div className="p-2.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">

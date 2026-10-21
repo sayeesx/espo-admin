@@ -245,8 +245,8 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
 
       {/* Modal: Create/Edit Recipe */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-          <div className="w-full max-w-lg bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md overflow-y-auto animate-apple-backdrop">
+          <div className="w-full md:w-[70vw] md:max-w-4xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal my-8 animate-apple-modal">
             <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
               {editingRecipe ? 'പാചകക്കുറിപ്പ് തിരുത്തുക (Edit)' : 'പുതിയ പാചകക്കുറിപ്പ് (New Recipe)'}
             </h2>

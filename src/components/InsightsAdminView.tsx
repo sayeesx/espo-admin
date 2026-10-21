@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Product, Ingredient, ProductionRun, StockMovement } from '../types';
+import { fetchSales } from '../services/supabase';
 import {
   FiTrendingUp,
   FiBox,
@@ -10,6 +11,10 @@ import {
   FiBarChart2,
   FiActivity,
   FiCalendar,
+  FiAward,
+  FiShoppingBag,
+  FiPercent,
+  FiPackage,
 } from 'react-icons/fi';
 import {
   ResponsiveContainer,
@@ -190,22 +195,127 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
       .slice(0, 6);
   }, [filteredProductionRuns, filteredStockMovements]);
 
-  // Inventory Health Segments
-  const healthSegments = useMemo(() => {
-    const total = ingredients.length || 1;
-    const depleted = ingredients.filter((i) => i.currentStock <= 0).length;
-    const low = ingredients.filter((i) => i.currentStock > 0 && i.minStock > 0 && i.currentStock <= i.minStock).length;
-    const safe = ingredients.filter((i) => i.currentStock > i.minStock).length;
+  const [salesList, setSalesList] = useState<any[]>([]);
 
-    return {
-      safeCount: safe,
-      lowCount: low,
-      depletedCount: depleted,
-      safePercent: Number(((safe / total) * 100).toFixed(1)),
-      lowPercent: Number(((low / total) * 100).toFixed(1)),
-      depletedPercent: Number(((depleted / total) * 100).toFixed(1)),
-    };
-  }, [ingredients]);
+  useEffect(() => {
+    fetchSales().then((data) => setSalesList(data)).catch((err) => console.error(err));
+  }, []);
+
+  // Filter sales based on active date range
+  const filteredSales = useMemo(() => {
+    if (!fromDate && !toDate) return salesList;
+    return salesList.filter((s) => {
+      const d = s.sale_date || (s.created_at ? s.created_at.split('T')[0] : '');
+      if (!d) return false;
+      if (fromDate && d < fromDate) return false;
+      if (toDate && d > toDate) return false;
+      return true;
+    });
+  }, [salesList, fromDate, toDate]);
+
+  // Top Produced Products in selected range
+  const topProducedProducts = useMemo(() => {
+    const prodMap = new Map<string, { id: string; name: string; outputKg: number; batchCount: number }>();
+
+    filteredProductionRuns
+      .filter((r) => r.status === 'completed')
+      .forEach((r) => {
+        const pId = r.productId;
+        const pName = r.productName || products.find((p) => p.id === pId)?.name || 'ഉൽപ്പന്നം';
+        const existing = prodMap.get(pId) || { id: pId, name: pName, outputKg: 0, batchCount: 0 };
+        existing.outputKg += (r.actualQuantity || 0);
+        existing.batchCount += 1;
+        prodMap.set(pId, existing);
+      });
+
+    return Array.from(prodMap.values())
+      .map((item) => ({
+        ...item,
+        outputKg: Number(item.outputKg.toFixed(1)),
+        percentOfTotal: totalOutputInRangeKg > 0 ? Math.round((item.outputKg / totalOutputInRangeKg) * 100) : 0,
+      }))
+      .sort((a, b) => b.outputKg - a.outputKg)
+      .slice(0, 5);
+  }, [filteredProductionRuns, products, totalOutputInRangeKg]);
+
+  // Top Sales Products by Revenue
+  const topSalesProducts = useMemo(() => {
+    const salesMap = new Map<string, { name: string; revenue: number; quantityKg: number; ordersCount: number }>();
+
+    filteredSales.forEach((s) => {
+      const pName = s.product_name || products.find((p) => p.id === s.product_id)?.name || 'ഉൽപ്പന്നം';
+      const existing = salesMap.get(pName) || { name: pName, revenue: 0, quantityKg: 0, ordersCount: 0 };
+      existing.revenue += Number(s.total_amount) || 0;
+      existing.quantityKg += Number(s.quantity) || 0;
+      existing.ordersCount += 1;
+      salesMap.set(pName, existing);
+    });
+
+    const totalSalesRevenue = Array.from(salesMap.values()).reduce((sum, s) => sum + s.revenue, 0);
+
+    return Array.from(salesMap.values())
+      .map((s) => ({
+        ...s,
+        revenue: Math.round(s.revenue),
+        quantityKg: Number(s.quantityKg.toFixed(1)),
+        percentOfSales: totalSalesRevenue > 0 ? Math.round((s.revenue / totalSalesRevenue) * 100) : 0,
+      }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+  }, [filteredSales, products]);
+
+  // Top Profits & Margin Products
+  const topProfitableProducts = useMemo(() => {
+    const productCostMap = new Map<string, number>();
+    productionRuns
+      .filter((r) => r.status === 'completed' && (r.actualQuantity || 0) > 0 && (r.totalIngredientCost || 0) > 0)
+      .forEach((r) => {
+        const pName = r.productName || products.find((p) => p.id === r.productId)?.name;
+        if (pName && !productCostMap.has(pName)) {
+          productCostMap.set(pName, (r.totalIngredientCost || 0) / r.actualQuantity);
+        }
+      });
+
+    const profitMap = new Map<string, {
+      name: string;
+      revenue: number;
+      estimatedCost: number;
+      profit: number;
+      marginPercent: number;
+      qtySold: number;
+    }>();
+
+    filteredSales.forEach((s) => {
+      const pName = s.product_name || products.find((p) => p.id === s.product_id)?.name || 'ഉൽപ്പന്നം';
+      const revenue = Number(s.total_amount) || 0;
+      const qty = Number(s.quantity) || 0;
+
+      const baseUnitCost = productCostMap.get(pName) || ((revenue / (qty || 1)) * 0.68);
+      const unitCost = baseUnitCost + 25; // add packing & wage shared cost
+      const estimatedCost = Math.round(qty * unitCost);
+      const profit = Math.round(revenue - estimatedCost);
+
+      const existing = profitMap.get(pName) || {
+        name: pName,
+        revenue: 0,
+        estimatedCost: 0,
+        profit: 0,
+        marginPercent: 0,
+        qtySold: 0,
+      };
+
+      existing.revenue += revenue;
+      existing.estimatedCost += estimatedCost;
+      existing.profit += profit;
+      existing.qtySold += qty;
+      existing.marginPercent = existing.revenue > 0 ? Math.round((existing.profit / existing.revenue) * 100) : 0;
+      profitMap.set(pName, existing);
+    });
+
+    return Array.from(profitMap.values())
+      .sort((a, b) => b.profit - a.profit)
+      .slice(0, 5);
+  }, [filteredSales, productionRuns, products]);
 
   // Capital Distribution Pie Data
   const valuationPieData = useMemo(() => [
@@ -431,50 +541,219 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
         </div>
       </div>
 
-      {/* Stock Health Segmented Capacity Bar */}
-      <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-          <div>
-            <h3 className="text-sm font-black text-stone-900 dark:text-white">
-              Raw Stock Capacity Health
-            </h3>
-            <p className="text-xs text-stone-400 font-malayalam">
-              സുരക്ഷിത പരിധി, കുറഞ്ഞ സ്റ്റോക്ക്, തീർന്നുപോയ ഇനങ്ങളുടെ വിഭജനം
-            </p>
-          </div>
-          <div className="flex items-center gap-4 text-xs font-bold">
-            <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-              Safe: {healthSegments.safePercent}%
-            </span>
-            <span className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-              Low: {healthSegments.lowPercent}%
-            </span>
-            <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
-              Depleted: {healthSegments.depletedPercent}%
+      {/* Analytics Performance Leaderboard: Top Produced, Top Sales, Top Profits */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* 1. Top Produced Products */}
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark flex flex-col">
+          <div className="flex items-center justify-between mb-4 pb-2 border-b border-stone-100 dark:border-[#282323]">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                <FiAward className="w-4 h-4 stroke-[2.5]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-stone-900 dark:text-white">
+                  Top Produced
+                </h3>
+                <p className="text-[11px] text-stone-400 font-malayalam">
+                  ഏറ്റവും കൂടുതൽ ഉൽപ്പാദിപ്പിച്ചവ
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+              Output
             </span>
           </div>
+
+          {topProducedProducts.length === 0 ? (
+            <div className="py-8 text-center text-xs text-stone-400 font-malayalam">
+              ഉൽപ്പാദന വിവരങ്ങൾ ലഭ്യമല്ല
+            </div>
+          ) : (
+            <div className="space-y-3 flex-1">
+              {topProducedProducts.map((p, idx) => {
+                const badgeColor =
+                  idx === 0
+                    ? 'bg-amber-500 text-white'
+                    : idx === 1
+                    ? 'bg-stone-300 text-stone-800 dark:bg-stone-600 dark:text-stone-100'
+                    : idx === 2
+                    ? 'bg-amber-700 text-white'
+                    : 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300';
+
+                return (
+                  <div key={p.id} className="p-2.5 rounded-xl bg-stone-50/70 dark:bg-[#141212] border border-stone-100 dark:border-[#282323] space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 ${badgeColor}`}>
+                          {idx + 1}
+                        </span>
+                        <span className="text-xs font-bold text-stone-800 dark:text-stone-200 truncate max-w-[140px] font-malayalam">
+                          {p.name}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-black text-amber-600 dark:text-amber-400 font-mono">
+                          {p.outputKg} kg
+                        </span>
+                        <span className="text-[10px] text-stone-400 ml-1">
+                          ({p.batchCount} ബാച്ച്)
+                        </span>
+                      </div>
+                    </div>
+                    {/* Visual Progress Bar */}
+                    <div className="w-full h-1.5 rounded-full bg-stone-200 dark:bg-stone-800 overflow-hidden">
+                      <div
+                        className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.max(8, p.percentOfTotal)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Multi-segment continuous horizontal progress bar */}
-        <div className="w-full h-4 rounded-full overflow-hidden bg-stone-100 dark:bg-stone-800 flex shadow-inner">
-          <div
-            style={{ width: `${healthSegments.safePercent}%` }}
-            className="h-full bg-emerald-500 transition-all duration-1000 ease-out"
-            title={`Safe Stock: ${healthSegments.safePercent}%`}
-          />
-          <div
-            style={{ width: `${healthSegments.lowPercent}%` }}
-            className="h-full bg-amber-500 transition-all duration-1000 ease-out"
-            title={`Low Stock: ${healthSegments.lowPercent}%`}
-          />
-          <div
-            style={{ width: `${healthSegments.depletedPercent}%` }}
-            className="h-full bg-red-500 transition-all duration-1000 ease-out"
-            title={`Depleted: ${healthSegments.depletedPercent}%`}
-          />
+        {/* 2. Top Sales Products */}
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark flex flex-col">
+          <div className="flex items-center justify-between mb-4 pb-2 border-b border-stone-100 dark:border-[#282323]">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+                <FiShoppingBag className="w-4 h-4 stroke-[2.5]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-stone-900 dark:text-white">
+                  Top Sales
+                </h3>
+                <p className="text-[11px] text-stone-400 font-malayalam">
+                  കൂടുതൽ വിൽപ്പനയുള്ള ഉൽപ്പന്നങ്ങൾ
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
+              Revenue
+            </span>
+          </div>
+
+          {topSalesProducts.length === 0 ? (
+            <div className="py-8 text-center text-xs text-stone-400 font-malayalam">
+              ഈ കാലയളവിൽ വിൽപ്പന രേഖപ്പെടുത്തിയിട്ടില്ല
+            </div>
+          ) : (
+            <div className="space-y-3 flex-1">
+              {topSalesProducts.map((s, idx) => {
+                const badgeColor =
+                  idx === 0
+                    ? 'bg-emerald-500 text-white'
+                    : idx === 1
+                    ? 'bg-stone-300 text-stone-800 dark:bg-stone-600 dark:text-stone-100'
+                    : idx === 2
+                    ? 'bg-emerald-700 text-white'
+                    : 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300';
+
+                return (
+                  <div key={s.name} className="p-2.5 rounded-xl bg-stone-50/70 dark:bg-[#141212] border border-stone-100 dark:border-[#282323] space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 ${badgeColor}`}>
+                          {idx + 1}
+                        </span>
+                        <span className="text-xs font-bold text-stone-800 dark:text-stone-200 truncate max-w-[140px] font-malayalam">
+                          {s.name}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                          ₹{s.revenue.toLocaleString('en-IN')}
+                        </span>
+                        <span className="text-[10px] text-stone-400 ml-1">
+                          ({s.quantityKg} kg)
+                        </span>
+                      </div>
+                    </div>
+                    {/* Visual Progress Bar */}
+                    <div className="w-full h-1.5 rounded-full bg-stone-200 dark:bg-stone-800 overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.max(8, s.percentOfSales)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* 3. Top Profits & Margins */}
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark flex flex-col">
+          <div className="flex items-center justify-between mb-4 pb-2 border-b border-stone-100 dark:border-[#282323]">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400">
+                <FiTrendingUp className="w-4 h-4 stroke-[2.5]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-stone-900 dark:text-white">
+                  Top Profits
+                </h3>
+                <p className="text-[11px] text-stone-400 font-malayalam">
+                  ഏറ്റവും കൂടുതൽ ലാഭം നൽകിയവ
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300">
+              Margin
+            </span>
+          </div>
+
+          {topProfitableProducts.length === 0 ? (
+            <div className="py-8 text-center text-xs text-stone-400 font-malayalam">
+              ലാഭ കണക്കുകൾ ലഭ്യമായിട്ടില്ല
+            </div>
+          ) : (
+            <div className="space-y-3 flex-1">
+              {topProfitableProducts.map((pr, idx) => {
+                const badgeColor =
+                  idx === 0
+                    ? 'bg-purple-500 text-white'
+                    : idx === 1
+                    ? 'bg-stone-300 text-stone-800 dark:bg-stone-600 dark:text-stone-100'
+                    : idx === 2
+                    ? 'bg-purple-700 text-white'
+                    : 'bg-stone-100 text-stone-600 dark:bg-stone-800 dark:text-stone-300';
+
+                return (
+                  <div key={pr.name} className="p-2.5 rounded-xl bg-stone-50/70 dark:bg-[#141212] border border-stone-100 dark:border-[#282323] space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-5 h-5 rounded-full text-[10px] font-black flex items-center justify-center shrink-0 ${badgeColor}`}>
+                          {idx + 1}
+                        </span>
+                        <span className="text-xs font-bold text-stone-800 dark:text-stone-200 truncate max-w-[130px] font-malayalam">
+                          {pr.name}
+                        </span>
+                      </div>
+                      <div className="text-right flex items-center gap-1.5">
+                        <span className="text-xs font-black text-purple-600 dark:text-purple-400 font-mono">
+                          ₹{pr.profit.toLocaleString('en-IN')}
+                        </span>
+                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-300">
+                          {pr.marginPercent}%
+                        </span>
+                      </div>
+                    </div>
+                    {/* Visual Progress Bar */}
+                    <div className="w-full h-1.5 rounded-full bg-stone-200 dark:bg-stone-800 overflow-hidden">
+                      <div
+                        className="h-full bg-purple-500 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.max(8, Math.min(100, pr.marginPercent))}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

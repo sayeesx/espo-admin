@@ -475,7 +475,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
       {/* Modal: Adjust Stock */}
       {adjustModalOpen && selectedIngredient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-apple-backdrop">
-          <div className="w-full max-w-md bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal">
+          <div className="w-full md:w-[70vw] md:max-w-2xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal">
             <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
               സ്റ്റോക്ക് ക്രമീകരിക്കുക (Adjust Stock)
             </h2>
@@ -582,7 +582,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
       {/* Modal: Add / Edit Ingredient */}
       {formModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-apple-backdrop">
-          <div className="w-full max-w-md bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal">
+          <div className="w-full md:w-[70vw] md:max-w-3xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal">
             <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
               {selectedIngredient ? 'ചേരുവ തിരുത്തുക (Edit)' : 'പുതിയ ചേരുവ (New Ingredient)'}
             </h2>

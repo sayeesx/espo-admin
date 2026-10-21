@@ -483,8 +483,8 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
       {/* MODAL 1: Add / Edit Product                                           */}
       {/* ===================================================================== */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
-          <div className="w-full max-w-md bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-apple-backdrop">
+          <div className="w-full md:w-[70vw] md:max-w-3xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal">
             <h2 className="text-lg font-bold text-stone-900 dark:text-white mb-1">
               {editingProduct ? 'ഉൽപ്പന്നം തിരുത്തുക (Edit)' : 'പുതിയ ഉൽപ്പന്നം (New Product)'}
             </h2>
@@ -628,8 +628,8 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
       {/* MODAL 2: Set Ingredients / Recipe for Product                          */}
       {/* ===================================================================== */}
       {recipeModalOpen && recipeProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 overflow-y-auto">
-          <div className="w-full max-w-2xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal my-8">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md overflow-y-auto animate-apple-backdrop">
+          <div className="w-full md:w-[70vw] md:max-w-5xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal my-8 animate-apple-modal">
             <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-[#2E2828]">
               <div>
                 <div className="flex items-center gap-2">

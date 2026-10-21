@@ -18,7 +18,13 @@ import {
   FiTrash2,
   FiShoppingBag,
 } from 'react-icons/fi';
-import { deleteProductionRun, fetchSales } from '../services/supabase';
+import {
+  deleteProductionRun,
+  fetchSales,
+  fetchDailyClosing,
+  fetchTotalPacketsForDate,
+  fetchDailyWage,
+} from '../services/supabase';
 import {
   ResponsiveContainer,
   AreaChart,
@@ -163,10 +169,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Sales state & totals
   const [salesList, setSalesList] = useState<any[]>([]);
+  const [dailyClosing, setDailyClosing] = useState<any>(null);
+  const [todayWage, setTodayWage] = useState<any>(null);
+  const [todayPacketsCount, setTodayPacketsCount] = useState<number>(0);
 
   useEffect(() => {
     fetchSales().then((data) => setSalesList(data)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetchDailyClosing(activeDate).then(setDailyClosing).catch(() => setDailyClosing(null));
+    fetchDailyWage(activeDate).then(setTodayWage).catch(() => setTodayWage(null));
+    fetchTotalPacketsForDate(activeDate).then(setTodayPacketsCount).catch(() => setTodayPacketsCount(0));
+  }, [activeDate]);
 
   const todaySalesTotal = useMemo(() => {
     return salesList
@@ -181,10 +196,38 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       .reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
   }, [salesList, todayIso]);
 
-  // Financial & inventory calculations
-  const totalFinishedGoodsValuation = products.reduce((acc, p) => {
-    return acc + p.currentStock * p.wholesalePrice;
-  }, 0);
+  // Map of total produced kg per product from completed production runs
+  const productProducedKgMap = useMemo(() => {
+    const map = new Map<string, number>();
+    productionRuns
+      .filter((r) => r.status === 'completed')
+      .forEach((r) => {
+        map.set(r.productId, (map.get(r.productId) || 0) + (r.actualQuantity || 0));
+      });
+    return map;
+  }, [productionRuns]);
+
+  // Map of total sold kg per product from sales
+  const productSoldKgMap = useMemo(() => {
+    const map = new Map<string, number>();
+    salesList.forEach((s) => {
+      if (s.product_id) {
+        map.set(s.product_id, (map.get(s.product_id) || 0) + (Number(s.quantity) || 0));
+      }
+    });
+    return map;
+  }, [salesList]);
+
+  // Financial & inventory calculations - dynamic valuation based on actual finished inventory
+  const totalFinishedGoodsValuation = useMemo(() => {
+    return products.reduce((acc, p) => {
+      const produced = productProducedKgMap.get(p.id) || 0;
+      const sold = productSoldKgMap.get(p.id) || 0;
+      const netStock = p.currentStock > 0 ? p.currentStock : Math.max(0, produced - sold);
+      const effectivePrice = p.wholesalePrice > 0 ? p.wholesalePrice : 160;
+      return acc + Math.round(netStock * effectivePrice);
+    }, 0);
+  }, [products, productProducedKgMap, productSoldKgMap]);
 
   const totalRawValuation = ingredients.reduce((acc, ing) => {
     return acc + ing.currentStock * ing.avgCostPerUnit;
@@ -308,17 +351,45 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   };
 
   // Chart data: Top products by estimated wholesale value
-  const productValuationData = products
-    .map((p) => ({
-      name: p.name,
-      value: Math.round(p.currentStock * p.wholesalePrice),
-      stock: p.currentStock,
-      price: p.wholesalePrice,
-      unit: p.unit,
-    }))
-    .filter((p) => p.stock > 0 || p.price > 0)
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 8);
+  const productValuationData = useMemo(() => {
+    const items = products.map((p) => {
+      const produced = productProducedKgMap.get(p.id) || 0;
+      const sold = productSoldKgMap.get(p.id) || 0;
+      const netStock = p.currentStock > 0 ? p.currentStock : Math.max(0, produced - sold);
+      const effectivePrice = p.wholesalePrice > 0 ? p.wholesalePrice : 160;
+      const valuation = Math.round(netStock * effectivePrice);
+
+      return {
+        name: p.name,
+        value: valuation,
+        stock: Number(netStock.toFixed(1)),
+        price: effectivePrice,
+        unit: p.unit || 'kg',
+      };
+    });
+
+    const withValue = items.filter((p) => p.value > 0);
+    if (withValue.length > 0) {
+      return withValue.sort((a, b) => b.value - a.value).slice(0, 8);
+    }
+    // If no net stock, rank by total produced volume with benchmark price
+    const fromRuns = Array.from(productProducedKgMap.entries()).map(([pId, qty]) => {
+      const p = products.find((prod) => prod.id === pId);
+      const name = p?.name || 'Product';
+      const price = p?.wholesalePrice && p.wholesalePrice > 0 ? p.wholesalePrice : 160;
+      return {
+        name,
+        value: Math.round(qty * price),
+        stock: Number(qty.toFixed(1)),
+        price,
+        unit: p?.unit || 'kg',
+      };
+    });
+    if (fromRuns.length > 0) {
+      return fromRuns.sort((a, b) => b.value - a.value).slice(0, 8);
+    }
+    return items.slice(0, 8);
+  }, [products, productProducedKgMap, productSoldKgMap]);
 
   return (
     <div className="space-y-6 pb-20">
@@ -342,7 +413,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center justify-between gap-2 pt-1">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
             {/* Ring 1: Batches (Orange) */}
             <CircularGauge
               label="Batches"
@@ -353,7 +424,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               subtext={activeDateRuns.length >= dailyTargetBatches ? 'ടാർഗെറ്റ് കഴിഞ്ഞു' : `${Math.max(0, dailyTargetBatches - activeDateRuns.length)} ബാക്കി`}
             />
 
-            {/* Ring 2: Stock Health (Green) */}
+            {/* Ring 2: Output (Amber) */}
+            <CircularGauge
+              label="Output"
+              value={`${activeOutputKg}`}
+              subValue="kg"
+              percentage={Math.min(100, Math.round((activeOutputKg / 150) * 100))}
+              color="#F59E0B"
+              subtext="ഉൽപ്പാദനം"
+            />
+
+            {/* Ring 3: Packets (Purple) */}
+            <CircularGauge
+              label="Packets"
+              value={String(todayPacketsCount)}
+              subValue="pkts"
+              percentage={Math.min(100, Math.round((todayPacketsCount / 200) * 100))}
+              color="#8B5CF6"
+              subtext="പാക്കിങ്"
+            />
+
+            {/* Ring 4: Stock Health (Green) */}
             <CircularGauge
               label="Stock Health"
               value={`${stockHealthPercent}%`}
@@ -362,16 +453,39 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               color="#10B981"
               subtext={lowStockIngredients.length > 0 ? `${lowStockIngredients.length} കുറവ്` : 'സുരക്ഷിതം'}
             />
+          </div>
 
-            {/* Ring 3: Capacity / Coverage (Amber) */}
-            <CircularGauge
-              label="Capacity"
-              value={`${recipeCoveragePercent}%`}
-              subValue="/100%"
-              percentage={recipeCoveragePercent}
-              color="#F59E0B"
-              subtext={`${productsWithRecipeCount}/${products.length} റെഡി`}
-            />
+          {/* Mobile Quick Action Buttons */}
+          <div className="mt-3 pt-2.5 border-t border-stone-100 dark:border-[#282323] grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => onNavigateTab('ingredients')}
+              className="py-1.5 px-2 rounded-xl text-[11px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 flex items-center justify-center gap-1 press-apple font-malayalam"
+            >
+              <span>➕ പർച്ചേസ്</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('wages')}
+              className="py-1.5 px-2 rounded-xl text-[11px] font-bold bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50 flex items-center justify-center gap-1 press-apple font-malayalam"
+            >
+              <span>🍳 കൂലി</span>
+              <span className="text-[9px] font-mono opacity-80">{todayWage ? '✓' : 'Pending'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('sales')}
+              className="py-1.5 px-2 rounded-xl text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-center gap-1 press-apple font-malayalam"
+            >
+              <span>💰 വിൽപ്പന</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('costing')}
+              className="py-1.5 px-2 rounded-xl text-[11px] font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-900/50 flex items-center justify-center gap-1 press-apple font-malayalam"
+            >
+              <span>📊 കോസ്റ്റിംഗ്</span>
+            </button>
           </div>
         </div>
 
@@ -879,7 +993,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-4 pt-1">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 pt-1">
             <CircularGauge
               label="Batches"
               value={String(activeDateRuns.length)}
@@ -889,6 +1003,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               subtext={activeDateRuns.length >= dailyTargetBatches ? 'ടാർഗെറ്റ് കഴിഞ്ഞു' : `${Math.max(0, dailyTargetBatches - activeDateRuns.length)} ബാക്കി`}
             />
             <CircularGauge
+              label="Production Output"
+              value={`${activeOutputKg}`}
+              subValue="kg"
+              percentage={Math.min(100, Math.round((activeOutputKg / 150) * 100))}
+              color="#F59E0B"
+              subtext="ഉൽപ്പാദനം"
+            />
+            <CircularGauge
+              label="Packets Packed"
+              value={String(todayPacketsCount)}
+              subValue="pkts"
+              percentage={Math.min(100, Math.round((todayPacketsCount / 200) * 100))}
+              color="#8B5CF6"
+              subtext="പാക്കിങ് ചെയ്തവ"
+            />
+            <CircularGauge
+              label="Oil Usage"
+              value={dailyClosing ? `${dailyClosing.oilConsumed}` : '0'}
+              subValue="kg"
+              percentage={dailyClosing && dailyClosing.oilConsumed > 0 ? 100 : 0}
+              color="#0284C7"
+              subtext={dailyClosing ? 'രേഖപ്പെടുത്തി' : 'ബാക്കി'}
+            />
+            <CircularGauge
               label="Stock Health"
               value={`${stockHealthPercent}%`}
               subValue="/100%"
@@ -896,14 +1034,46 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               color="#10B981"
               subtext={lowStockIngredients.length > 0 ? `${lowStockIngredients.length} കുറവ്` : 'സുരക്ഷിതം'}
             />
-            <CircularGauge
-              label="Recipe Capacity"
-              value={`${recipeCoveragePercent}%`}
-              subValue="/100%"
-              percentage={recipeCoveragePercent}
-              color="#F59E0B"
-              subtext={`${productsWithRecipeCount}/${products.length} റെഡി`}
-            />
+          </div>
+
+          {/* Quick Operations Action Bar */}
+          <div className="mt-4 pt-3 border-t border-stone-100 dark:border-[#282323] flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] font-bold text-stone-400 font-malayalam">
+              പ്രധാന പ്രവർത്തനങ്ങൾ (Quick Operations):
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => onNavigateTab('ingredients')}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all"
+              >
+                <span>➕ പർച്ചേസ് ചേർക്കുക</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('wages')}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-900/60 border border-orange-200 dark:border-orange-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all"
+              >
+                <span>🍳 കൂലി കണക്ക്</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-orange-200/60 dark:bg-orange-900/80">
+                  {todayWage ? `₹${todayWage.totalWageBudget}` : 'Pending'}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('sales')}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all"
+              >
+                <span>💰 വിൽപ്പന രേഖപ്പെടുത്തുക</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('costing')}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all"
+              >
+                <span>📊 കോസ്റ്റിംഗ് വിശകലനം</span>
+              </button>
+            </div>
           </div>
         </div>
 
