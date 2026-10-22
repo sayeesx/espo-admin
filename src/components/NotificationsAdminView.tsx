@@ -58,6 +58,7 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [localDismissedIds, setLocalDismissedIds] = useState<Set<string>>(new Set());
   const [purchaseListModalOpen, setPurchaseListModalOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const activeDismissed = externalDismissedIds || localDismissedIds;
 
   useLockBodyScroll(purchaseListModalOpen);
@@ -238,11 +239,19 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
           )}
 
           <button
-            onClick={onRefresh}
-            className="p-2 rounded-xl text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
+            onClick={async () => {
+              setIsRefreshing(true);
+              try {
+                await onRefresh();
+              } finally {
+                setTimeout(() => setIsRefreshing(false), 400);
+              }
+            }}
+            disabled={isRefreshing}
+            className="p-2 rounded-xl text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer disabled:opacity-50"
             title="Refresh alerts"
           >
-            <FiRefreshCw className="w-3.5 h-3.5" />
+            <FiRefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>

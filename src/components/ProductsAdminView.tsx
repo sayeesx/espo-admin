@@ -26,19 +26,38 @@ interface ProductsAdminViewProps {
   onRefresh: () => void;
 }
 
-export const isDailySharedBasic = (name: string) => {
-  const n = (name || '').trim().toLowerCase();
+export const isExcludedRecipeIngredient = (ing: { name?: string; category?: string }) => {
+  const n = (ing.name || '').trim().toLowerCase();
+  const c = (ing.category || '').trim().toLowerCase();
+
+  // Basic categories and operational wages
+  if (c === 'basic' || c === 'packaging' || c === 'wages') return true;
+
+  // Basic ingredient names and operational costs
   return (
+    n.includes('കൂലി') ||
+    n.includes('wage') ||
+    n.includes('salary') ||
     n.includes('ഓയിൽ') ||
     n.includes('oil') ||
+    n.includes('സൺഫ്ലവർ') ||
+    n.includes('വെളിച്ചെണ്ണ') ||
     n.includes('ഉപ്പ്') ||
     n.includes('salt') ||
     n.includes('അണ്ടി തോട്') ||
     n.includes('തോട്') ||
+    n.includes('കവർ') ||
+    n.includes('cover') ||
+    n.includes('പാക്കിങ്') ||
+    n.includes('packing') ||
     n.includes('കറിവേപ്പില') ||
-    n.includes('curry leaves')
+    n.includes('curry leaves') ||
+    n.includes('വിറക്') ||
+    n.includes('firewood')
   );
 };
+
+export const isDailySharedBasic = (name: string) => isExcludedRecipeIngredient({ name });
 
 export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   products,
@@ -47,7 +66,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   onRefresh,
 }) => {
   const recipeEligibleIngredients = useMemo(
-    () => ingredients.filter((ing) => ing.isActive && !isDailySharedBasic(ing.name)),
+    () => ingredients.filter((ing) => ing.isActive && !isExcludedRecipeIngredient(ing)),
     [ingredients]
   );
 
@@ -57,6 +76,8 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   const [purchaseListModalOpen, setPurchaseListModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeletingProductId, setIsDeletingProductId] = useState<string | null>(null);
+  const [isDeletingRecipe, setIsDeletingRecipe] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   // Form states
@@ -207,12 +228,15 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
     if (!existingRecipe) return;
     if (!window.confirm(`"${recipeProduct?.name}" ന്റെ പാചകക്കുറിപ്പ് നീക്കം ചെയ്യണോ?`)) return;
 
+    setIsDeletingRecipe(true);
     try {
       await deleteRecipe(existingRecipe.id);
       setRecipeModalOpen(false);
       onRefresh();
     } catch (err: any) {
       alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Error deleting recipe'}`);
+    } finally {
+      setIsDeletingRecipe(false);
     }
   };
 
@@ -250,11 +274,14 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
     );
     if (!confirmDelete) return;
 
+    setIsDeletingProductId(p.id);
     try {
       await deleteProduct(p.id);
       onRefresh();
     } catch (err: any) {
       alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Error deleting product'}`);
+    } finally {
+      setIsDeletingProductId(null);
     }
   };
 
@@ -462,10 +489,15 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
 
                 <button
                   onClick={() => handleDelete(p)}
-                  className="p-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border border-transparent hover:border-red-200 dark:hover:border-red-900 press-apple transition-colors cursor-pointer"
+                  disabled={isDeletingProductId === p.id}
+                  className="p-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border border-transparent hover:border-red-200 dark:hover:border-red-900 press-apple transition-colors cursor-pointer disabled:opacity-50"
                   title="ഡിലീറ്റ് ചെയ്യുക"
                 >
-                  <FiTrash2 className="w-4 h-4" />
+                  {isDeletingProductId === p.id ? (
+                    <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <FiTrash2 className="w-4 h-4" />
+                  )}
                 </button>
               </div>
             </div>
@@ -614,9 +646,16 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple"
+                  className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
-                  {isSubmitting ? 'സൂക്ഷിക്കുന്നു...' : 'സൂക്ഷിക്കുക (Save)'}
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
+                      <span>സൂക്ഷിക്കുന്നു...</span>
+                    </>
+                  ) : (
+                    <span>സൂക്ഷിക്കുക (Save)</span>
+                  )}
                 </button>
               </div>
             </form>
@@ -816,9 +855,17 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                   <button
                     type="button"
                     onClick={handleDeleteRecipe}
-                    className="px-3 py-2 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold transition-colors cursor-pointer"
+                    disabled={isDeletingRecipe}
+                    className="px-3 py-2 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                   >
-                    പാചകക്കുറിപ്പ് ഒഴിവാക്കുക
+                    {isDeletingRecipe ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-red-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                        <span>ഒഴിവാക്കുന്നു...</span>
+                      </>
+                    ) : (
+                      <span>പാചകക്കുറിപ്പ് ഒഴിവാക്കുക</span>
+                    )}
                   </button>
                 ) : (
                   <div />
@@ -828,6 +875,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                   <button
                     type="button"
                     onClick={() => setRecipeModalOpen(false)}
+                    disabled={isSavingRecipe}
                     className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold cursor-pointer"
                   >
                     റദ്ദാക്കുക (Cancel)
@@ -835,9 +883,16 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                   <button
                     type="submit"
                     disabled={isSavingRecipe}
-                    className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple cursor-pointer"
+                    className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                   >
-                    {isSavingRecipe ? 'സൂക്ഷിക്കുന്നു...' : 'പാചകക്കുറിപ്പ് സേവ് ചെയ്യുക'}
+                    {isSavingRecipe ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
+                        <span>സൂക്ഷിക്കുന്നു...</span>
+                      </>
+                    ) : (
+                      <span>പാചകക്കുറിപ്പ് സേവ് ചെയ്യുക</span>
+                    )}
                   </button>
                 </div>
               </div>

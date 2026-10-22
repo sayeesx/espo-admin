@@ -17,6 +17,7 @@ import {
   FiCheckCircle,
   FiTrash2,
   FiShoppingBag,
+  FiRefreshCw,
 } from 'react-icons/fi';
 import {
   deleteProductionRun,
@@ -335,6 +336,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return productionRuns;
   }, [productionRuns, selectedDate]);
 
+  const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
+
   const handleDeleteBatch = async (run: ProductionRun) => {
     const confirm = window.confirm(
       `ബാച്ച് #${run.runNumber} (${run.productName}) ഡാറ്റാബേസിൽ നിന്നും പൂർണ്ണമായി ഒഴിവാക്കണോ?\nAre you sure you want to permanently delete this production batch?`
@@ -342,11 +345,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     if (!confirm) return;
 
     try {
+      setDeletingBatchId(run.id);
       await deleteProductionRun(run.id);
-      alert(`ബാച്ച് #${run.runNumber} പൂർണ്ണമായി ഒഴിവാക്കി.`);
       onRefresh?.();
     } catch (err: any) {
       alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Failed to delete batch'}`);
+    } finally {
+      setDeletingBatchId(null);
     }
   };
 
@@ -829,10 +834,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </span>
                       <button
                         onClick={() => handleDeleteBatch(run)}
-                        className="p-1 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                        disabled={deletingBatchId === run.id}
+                        className="p-1 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50"
                         title="Delete Batch Permanently"
                       >
-                        <FiTrash2 className="w-3.5 h-3.5" />
+                        {deletingBatchId === run.id ? (
+                          <FiRefreshCw className="w-3.5 h-3.5 animate-spin text-red-500" />
+                        ) : (
+                          <FiTrash2 className="w-3.5 h-3.5" />
+                        )}
                       </button>
                     </div>
                     <p className="text-[10px] text-stone-400 font-semibold">{run.operatorName}</p>
@@ -1447,10 +1457,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <td className="py-2.5 px-3 text-right">
                         <button
                           onClick={() => handleDeleteBatch(run)}
-                          className="p-1 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                          disabled={deletingBatchId === run.id}
+                          className="p-1 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50"
                           title="Delete Batch Permanently"
                         >
-                          <FiTrash2 className="w-3.5 h-3.5" />
+                          {deletingBatchId === run.id ? (
+                            <FiRefreshCw className="w-3.5 h-3.5 animate-spin text-red-500" />
+                          ) : (
+                            <FiTrash2 className="w-3.5 h-3.5" />
+                          )}
                         </button>
                       </td>
                     </tr>

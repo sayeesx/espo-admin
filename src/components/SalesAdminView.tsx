@@ -39,6 +39,7 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
   // Bill print modal state
   const [activeBillSale, setActiveBillSale] = useState<SaleRecord | null>(null);
   const [isBillModalOpen, setIsBillModalOpen] = useState<boolean>(false);
+  const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null);
 
   // Buyers management state
   const [buyersList, setBuyersList] = useState<BuyerInfo[]>(() => {
@@ -239,10 +240,13 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
   const handleDelete = async (id: string) => {
     if (!window.confirm('ഈ വിൽപ്പന റെക്കോർഡ് നീക്കം ചെയ്യണോ?')) return;
     try {
+      setDeletingSaleId(id);
       await deleteSale(id);
       setSales((prev) => prev.filter((s) => s.id !== id));
     } catch (err) {
       alert('ഡിലീറ്റ് ചെയ്യാനായില്ല');
+    } finally {
+      setDeletingSaleId(null);
     }
   };
 
@@ -498,10 +502,15 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
                     <td className="py-3 px-4 text-center">
                       <button
                         onClick={() => handleDelete(sale.id)}
-                        className="p-1.5 text-stone-400 hover:text-red-500 transition-colors cursor-pointer"
+                        disabled={deletingSaleId === sale.id}
+                        className="p-1.5 text-stone-400 hover:text-red-500 transition-colors cursor-pointer disabled:opacity-50"
                         title="വിൽപ്പന ഒഴിവാക്കുക"
                       >
-                        <FiTrash2 className="w-3.5 h-3.5" />
+                        {deletingSaleId === sale.id ? (
+                          <FiRefreshCw className="w-3.5 h-3.5 animate-spin text-red-500" />
+                        ) : (
+                          <FiTrash2 className="w-3.5 h-3.5" />
+                        )}
                       </button>
                     </td>
                   </tr>

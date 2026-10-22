@@ -10,6 +10,7 @@ interface MobileAppHeaderProps {
   isRefreshing?: boolean;
   notificationCount: number;
   onOpenPinModal?: () => void;
+  changingTab?: AdminTab | null;
 }
 
 export const MobileAppHeader: React.FC<MobileAppHeaderProps> = ({
@@ -19,6 +20,7 @@ export const MobileAppHeader: React.FC<MobileAppHeaderProps> = ({
   isRefreshing,
   notificationCount,
   onOpenPinModal,
+  changingTab = null,
 }) => {
   const { theme, toggleTheme } = useTheme();
 

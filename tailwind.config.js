@@ -53,8 +53,10 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
-        malayalam: ['"Anek Malayalam"', '"Manjari"', '"Noto Sans Malayalam"', '"Plus Jakarta Sans"', 'sans-serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['Inter', 'ui-monospace', 'monospace'],
+        numbers: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        malayalam: ['"Anek Malayalam"', '"Manjari"', '"Noto Sans Malayalam"', 'sans-serif'],
       },
       boxShadow: {
         'apple-card': '0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02)',

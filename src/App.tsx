@@ -9,7 +9,6 @@ import { InsightsAdminView } from './components/InsightsAdminView';
 import { NotificationsAdminView } from './components/NotificationsAdminView';
 import { ProductsAdminView } from './components/ProductsAdminView';
 import { IngredientsAdminView } from './components/IngredientsAdminView';
-import { RecipesAdminView } from './components/RecipesAdminView';
 import { StockLedgerAdminView } from './components/StockLedgerAdminView';
 import { ProductionPinModal } from './components/ProductionPinModal';
 import { ProductionCostingAdminView } from './components/ProductionCostingAdminView';
@@ -47,13 +46,14 @@ export const App: React.FC = () => {
         'notifications',
         'products',
         'ingredients',
-        'recipes',
         'movements',
       ];
       if (tabParam && validTabs.includes(tabParam)) return tabParam;
+      if (tabParam === ('recipes' as any)) return 'products';
 
       const savedTab = localStorage.getItem(ACTIVE_TAB_KEY) as AdminTab;
       if (savedTab && validTabs.includes(savedTab)) return savedTab;
+      if (savedTab === ('recipes' as any)) return 'products';
     } catch {
       // fallback
     }
@@ -61,9 +61,15 @@ export const App: React.FC = () => {
   };
 
   const [activeTab, setActiveTab] = useState<AdminTab>(getInitialTab);
+  const [changingTab, setChangingTab] = useState<AdminTab | null>(null);
 
   const handleTabChange = useCallback((newTab: AdminTab) => {
-    setActiveTab(newTab);
+    setChangingTab(newTab);
+    setTimeout(() => {
+      setActiveTab(newTab);
+      setChangingTab(null);
+    }, 150);
+
     try {
       localStorage.setItem(ACTIVE_TAB_KEY, newTab);
       const url = new URL(window.location.href);
@@ -225,6 +231,13 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#141212] text-[#141212] dark:text-[#FFFFFF] transition-colors pb-16 md:pb-12">
+      {/* Google Theme Linear Progress Loader across all navigation and data refreshes */}
+      {(isRefreshing || changingTab !== null) && (
+        <div className="fixed top-0 inset-x-0 z-50 h-[3px] bg-stone-200/50 dark:bg-stone-800/50 overflow-hidden pointer-events-none">
+          <div className="google-linear-progress w-full h-full" />
+        </div>
+      )}
+
       {/* Mobile Top App Header */}
       <MobileAppHeader
         activeTab={activeTab}
@@ -233,6 +246,7 @@ export const App: React.FC = () => {
         isRefreshing={isRefreshing}
         notificationCount={notificationCount}
         onOpenPinModal={() => setIsPinModalOpen(true)}
+        changingTab={changingTab}
       />
 
       {/* Desktop Vertical Sidebar */}
@@ -243,6 +257,7 @@ export const App: React.FC = () => {
         isRefreshing={isRefreshing}
         notificationCount={notificationCount}
         onOpenPinModal={() => setIsPinModalOpen(true)}
+        changingTab={changingTab}
       />
 
       {/* Main Content Area with Desktop Sidebar Offset */}
@@ -328,15 +343,6 @@ export const App: React.FC = () => {
                 />
               )}
 
-              {activeTab === 'recipes' && (
-                <RecipesAdminView
-                  recipes={recipes}
-                  products={products}
-                  ingredients={ingredients}
-                  onRefresh={loadAllData}
-                />
-              )}
-
               {activeTab === 'movements' && (
                 <StockLedgerAdminView
                   movements={stockMovements}
@@ -354,6 +360,7 @@ export const App: React.FC = () => {
         activeTab={activeTab}
         onTabChange={handleTabChange}
         notificationCount={notificationCount}
+        changingTab={changingTab}
       />
 
       {/* Production PIN Configuration Modal */}

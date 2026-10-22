@@ -6,12 +6,14 @@ interface MobileBottomNavProps {
   activeTab: AdminTab;
   onTabChange: (tab: AdminTab) => void;
   notificationCount: number;
+  changingTab?: AdminTab | null;
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   activeTab,
   onTabChange,
   notificationCount,
+  changingTab = null,
 }) => {
   const tabs: {
     id: AdminTab;
@@ -29,12 +31,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
   return (
     <nav className="md:hidden fixed bottom-3 inset-x-3 z-40 max-w-md mx-auto select-none pointer-events-none">
-      <div className="bg-white/90 dark:bg-[#1A1616]/90 backdrop-blur-2xl rounded-2xl border border-stone-200/80 dark:border-[#2E2828] shadow-[0_10px_35px_rgba(0,0,0,0.12)] dark:shadow-[0_10px_35px_rgba(0,0,0,0.5)] p-1.5 flex items-center justify-between gap-1 pointer-events-auto">
+      <div className="bg-white/95 dark:bg-[#1A1616]/95 backdrop-blur-2xl rounded-2xl border border-stone-200/90 dark:border-[#2E2828] shadow-[0_10px_35px_rgba(0,0,0,0.12)] dark:shadow-[0_10px_35px_rgba(0,0,0,0.5)] p-1.5 flex items-center justify-between gap-1 pointer-events-auto">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive =
             activeTab === tab.id ||
-            (tab.id === 'products' && (activeTab === 'ingredients' || activeTab === 'recipes'));
+            (tab.id === 'products' && (activeTab === 'ingredients' || activeTab === 'movements'));
+          const isChanging = changingTab === tab.id;
 
           return (
             <button
@@ -47,14 +50,18 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
               }`}
             >
               <div className="relative">
-                <Icon
-                  className={`w-4 h-4 transition-transform duration-200 ${
-                    isActive ? 'scale-105' : ''
-                  }`}
-                />
+                {isChanging ? (
+                  <div className={`w-4 h-4 border-2 ${isActive ? 'border-white dark:border-stone-950' : 'border-epso-red dark:border-amber-400'} border-t-transparent rounded-full animate-spin`} />
+                ) : (
+                  <Icon
+                    className={`w-4 h-4 transition-transform duration-200 ${
+                      isActive ? 'scale-105' : ''
+                    }`}
+                  />
+                )}
                 {tab.hasBadge && notificationCount > 0 && (
                   <span
-                    className={`absolute -top-1.5 -right-2 min-w-[15px] h-[15px] px-0.5 rounded-full text-[9px] font-black flex items-center justify-center ${
+                    className={`absolute -top-1.5 -right-2 min-w-[15px] h-[15px] px-0.5 rounded-full text-[9px] font-black flex items-center justify-center font-sans tabular-nums ${
                       isActive
                         ? 'bg-epso-red text-white ring-2 ring-stone-900 dark:ring-white'
                         : 'bg-epso-red text-white'

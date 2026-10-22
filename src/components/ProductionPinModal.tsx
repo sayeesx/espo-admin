@@ -66,15 +66,21 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
 
     setIsLoading(true);
     try {
-      // 1. Save to audit_logs so PWA and Admin sync across network
-      await supabase.from('audit_logs').insert([
+      // 1. Save to Supabase audit_logs with correct schema (actor column)
+      const { error: insertErr } = await supabase.from('audit_logs').insert([
         {
-          operator_name: 'Super Admin',
+          actor: 'Super Admin',
           action: 'PRODUCTION_PIN_CHANGED',
           entity_type: 'SECURITY',
+          entity_id: 'PIN',
           details: { pin: newPin, updated_at: new Date().toISOString() },
         },
       ]);
+
+      if (insertErr) {
+        console.error('Supabase PIN update error:', insertErr);
+        throw new Error(insertErr.message || 'Failed to update PIN in database');
+      }
 
       // 2. Cache in localStorage
       localStorage.setItem('epso_production_pin', newPin);
@@ -82,15 +88,16 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
       setSuccessMsg('പ്രൊഡക്ഷൻ പിൻ വിജയകരമായി മാറ്റി! (Production PIN updated successfully)');
       setTimeout(() => {
         onClose();
-      }, 1500);
+      }, 1200);
     } catch (err: any) {
+      console.warn('Falling back to local storage PIN cache:', err);
       // Offline fallback: still update localStorage
       localStorage.setItem('epso_production_pin', newPin);
       setCurrentPin(newPin);
       setSuccessMsg('പ്രൊഡക്ഷൻ പിൻ സേവ് ചെയ്തു! (PIN saved locally)');
       setTimeout(() => {
         onClose();
-      }, 1500);
+      }, 1200);
     } finally {
       setIsLoading(false);
     }
@@ -102,14 +109,14 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-red-50 dark:bg-amber-950/40 text-epso-red dark:text-amber-400">
+            <div className="p-2.5 rounded-2xl bg-red-50 dark:bg-amber-950/40 text-epso-red dark:text-amber-400">
               <FiLock className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-base font-black text-stone-900 dark:text-white font-malayalam">
                 പ്രൊഡക്ഷൻ പാസ്‌കോഡ്
               </h3>
-              <p className="text-[11px] text-stone-400">Set Kitchen PWA PIN (4 Digits)</p>
+              <p className="text-[11px] text-stone-500 dark:text-stone-400 font-sans">Set Kitchen PWA PIN (4 Digits)</p>
             </div>
           </div>
           <button
@@ -120,8 +127,6 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
             <FiX className="w-4 h-4" />
           </button>
         </div>
-
-        {/* Removed current PIN badge */}
 
         {errorMsg && (
           <div className="p-3 mb-3 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-xs flex items-center gap-2 border border-red-200 dark:border-red-900/60 font-malayalam">
@@ -153,7 +158,7 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
               value={newPin}
               onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
               onFocus={(e) => e.target.select()}
-              className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-epso-red/30"
+              className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-epso-red/30 tabular-nums"
             />
           </div>
 
@@ -171,7 +176,7 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
               value={confirmPin}
               onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
               onFocus={(e) => e.target.select()}
-              className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-epso-red/30"
+              className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-epso-red/30 tabular-nums"
             />
           </div>
 
@@ -179,16 +184,24 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold font-malayalam"
+              disabled={isLoading}
+              className="flex-1 py-2.5 rounded-xl text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold font-malayalam transition-colors"
             >
               റദ്ദാക്കുക
             </button>
             <button
               type="submit"
               disabled={isLoading || newPin.length !== 4 || confirmPin.length !== 4}
-              className="flex-1 py-2.5 rounded-xl bg-epso-red dark:bg-amber-500 hover:bg-epso-red-hover dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold font-malayalam shadow-sm press-apple disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 py-2.5 rounded-xl bg-epso-red dark:bg-amber-500 hover:bg-epso-red-hover dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold font-malayalam shadow-sm press-apple disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
-              {isLoading ? 'സേവ് ചെയ്യുന്നു...' : 'സേവ് ചെയ്യുക'}
+              {isLoading ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
+                  <span>സേവ് ചെയ്യുന്നു...</span>
+                </>
+              ) : (
+                <span>സേവ് ചെയ്യുക</span>
+              )}
             </button>
           </div>
         </form>

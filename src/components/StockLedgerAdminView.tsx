@@ -44,6 +44,17 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
   const outCount = movements.filter((m) => m.movementType === 'out').length;
   const adjustCount = movements.filter((m) => m.movementType === 'adjust').length;
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 400);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Actions */}
@@ -60,10 +71,11 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
             </button>
           )}
           <button
-            onClick={onRefresh}
-            className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#322c2c] text-stone-700 dark:text-stone-300 font-bold text-xs press-apple transition-colors cursor-pointer"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#322c2c] text-stone-700 dark:text-stone-300 font-bold text-xs press-apple transition-colors cursor-pointer disabled:opacity-60"
           >
-            <FiRefreshCw className="w-3.5 h-3.5" />
+            <FiRefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
         </div>

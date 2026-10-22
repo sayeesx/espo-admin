@@ -27,7 +27,6 @@ export type AdminTab =
   | 'costing'
   | 'products'
   | 'ingredients'
-  | 'recipes'
   | 'movements'
   | 'notifications';
 
@@ -38,6 +37,7 @@ interface HeaderProps {
   isRefreshing?: boolean;
   notificationCount?: number;
   onOpenPinModal?: () => void;
+  changingTab?: AdminTab | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -47,6 +47,7 @@ export const Header: React.FC<HeaderProps> = ({
   isRefreshing,
   notificationCount = 0,
   onOpenPinModal,
+  changingTab = null,
 }) => {
   const { logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -64,13 +65,12 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'costing', labelMl: 'കോസ്റ്റിംഗ്', icon: FiDollarSign },
     { id: 'products', labelMl: 'ഉൽപ്പന്നങ്ങൾ', icon: FiPackage },
     { id: 'ingredients', labelMl: 'ചേരുവകൾ', icon: FiBox },
-    { id: 'recipes', labelMl: 'പാചകക്കുറിപ്പ്', icon: FiBookOpen },
     { id: 'movements', labelMl: 'ലെഡ്ജർ', icon: FiClock },
     { id: 'notifications', labelMl: 'അറിയിപ്പുകൾ', icon: FiBell, badge: notificationCount },
   ];
 
   return (
-    <aside className="hidden md:flex md:w-56 lg:w-60 md:fixed md:inset-y-0 md:left-0 z-40 flex-col bg-white dark:bg-[#181515] border-r border-stone-200 dark:border-[#2E2828] transition-colors select-none">
+    <aside className="hidden md:flex md:w-56 lg:w-60 md:fixed md:inset-y-0 md:left-0 z-40 flex-col bg-white dark:bg-[#181515] border-r border-[#E0E2EC] dark:border-[#2E2828] transition-colors select-none">
       {/* Brand Header */}
       <div className="p-4 border-b border-stone-100 dark:border-[#282323]">
         <div className="flex items-center gap-2.5">
@@ -84,10 +84,10 @@ export const Header: React.FC<HeaderProps> = ({
           />
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-black text-base tracking-tight text-stone-900 dark:text-white">
+              <span className="font-black text-base tracking-tight text-stone-900 dark:text-white font-sans">
                 EPSO
               </span>
-              <span className="px-1.5 py-0.5 text-[9px] font-black rounded-md bg-epso-red/10 text-epso-red dark:bg-amber-400/20 dark:text-amber-400 uppercase tracking-wider">
+              <span className="px-1.5 py-0.5 text-[9px] font-black rounded-md bg-epso-red/10 text-epso-red dark:bg-amber-400/20 dark:text-amber-400 uppercase tracking-wider font-sans">
                 Admin
               </span>
             </div>
@@ -99,39 +99,44 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Vertical Navigation Menu */}
-      <div className="flex-1 py-3 px-2.5 overflow-y-auto no-scrollbar space-y-1.5">
-        <span className="px-2.5 text-[10px] font-extrabold uppercase tracking-wider text-stone-400 dark:text-stone-500 block mb-1">
+      <div className="flex-1 py-3 px-2.5 overflow-y-auto no-scrollbar space-y-1">
+        <span className="px-2.5 text-[10px] font-extrabold uppercase tracking-wider text-stone-400 dark:text-stone-500 block mb-1 font-sans">
           മെനു
         </span>
 
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
+          const isCurrentChanging = changingTab === item.id;
 
           return (
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-bold transition-all press-apple group cursor-pointer ${
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-full font-bold transition-all group cursor-pointer ${
                 isActive
-                  ? 'bg-epso-red text-white shadow-md dark:bg-amber-500 dark:text-stone-950 font-black'
-                  : 'text-stone-700 dark:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#242020]'
+                  ? 'bg-epso-red text-white shadow-sm dark:bg-amber-500 dark:text-stone-950 font-black'
+                  : 'text-stone-700 dark:text-stone-200 hover:bg-[#F1F3F4] dark:hover:bg-[#28292A]'
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
-                <Icon
-                  className={`w-4 h-4 shrink-0 transition-transform duration-200 group-hover:scale-110 ${
-                    isActive ? 'text-white dark:text-stone-950' : 'text-stone-400 dark:text-stone-400'
-                  }`}
-                />
-                <span className="block font-bold text-sm lg:text-[15px] font-malayalam leading-tight truncate">
+                {isCurrentChanging ? (
+                  <div className={`w-4 h-4 border-2 ${isActive ? 'border-white dark:border-stone-950' : 'border-epso-red dark:border-amber-400'} border-t-transparent rounded-full animate-spin shrink-0`} />
+                ) : (
+                  <Icon
+                    className={`w-4 h-4 shrink-0 transition-transform duration-200 group-hover:scale-110 ${
+                      isActive ? 'text-white dark:text-stone-950' : 'text-stone-500 dark:text-stone-400'
+                    }`}
+                  />
+                )}
+                <span className="block font-bold text-sm lg:text-[14px] font-malayalam leading-tight truncate">
                   {item.labelMl}
                 </span>
               </div>
 
               {item.badge && item.badge > 0 ? (
                 <span
-                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 ${
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 font-sans tabular-nums ${
                     isActive
                       ? 'bg-white text-epso-red dark:bg-stone-950 dark:text-amber-400'
                       : 'bg-epso-red text-white animate-pulse'

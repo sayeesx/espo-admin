@@ -375,6 +375,11 @@ export async function saveRecipe(
 
     if (recErr) throw recErr;
 
+    // Ensure product is linked
+    if (recipe.productId) {
+      await supabase.from('products').update({ recipe_id: recipeId }).eq('id', recipe.productId);
+    }
+
     // Remove old recipe items
     await supabase.from('recipe_items').delete().eq('recipe_id', recipeId);
   }
@@ -395,6 +400,7 @@ export async function saveRecipe(
 }
 
 export async function deleteRecipe(id: string): Promise<void> {
+  await supabase.from('products').update({ recipe_id: null }).eq('recipe_id', id);
   await supabase.from('recipe_items').delete().eq('recipe_id', id);
   const { error } = await supabase.from('recipes').delete().eq('id', id);
   if (error) throw error;

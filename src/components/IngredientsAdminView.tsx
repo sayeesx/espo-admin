@@ -569,9 +569,16 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmitting || Number(adjustDelta) <= 0}
-                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm press-apple font-malayalam cursor-pointer"
+                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm press-apple font-malayalam cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                 >
-                  {isSubmitting ? 'സൂക്ഷിക്കുന്നു...' : 'അപ്ഡേറ്റ് ചെയ്യുക (Update)'}
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                      <span>സൂക്ഷിക്കുന്നു...</span>
+                    </>
+                  ) : (
+                    <span>അപ്ഡേറ്റ് ചെയ്യുക (Update)</span>
+                  )}
                 </button>
               </div>
             </form>
@@ -726,9 +733,16 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple font-malayalam"
+                    className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple font-malayalam flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                   >
-                    {isSubmitting ? 'സൂക്ഷിക്കുന്നു...' : 'സൂക്ഷിക്കുക (Save)'}
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
+                        <span>സൂക്ഷിക്കുന്നു...</span>
+                      </>
+                    ) : (
+                      <span>സൂക്ഷിക്കുക (Save)</span>
+                    )}
                   </button>
                 </div>
               </div>
