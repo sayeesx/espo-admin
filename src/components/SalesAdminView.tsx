@@ -17,6 +17,8 @@ import {
 import { Product, SaleRecord } from '../types';
 import { fetchSales, recordSale, deleteSale, fetchProductSellingPrices } from '../services/supabase';
 import { AnimatedNumber } from './AnimatedNumber';
+import { createPortal } from 'react-dom';
+import { ThemeSelect } from './ThemeSelect';
 
 interface SalesAdminViewProps {
   products: Product[];
@@ -522,9 +524,9 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
       </div>
 
       {/* Record Sale Modal with Apple Fluid Animation */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-apple-backdrop">
-          <div className="w-full md:w-[70vw] md:max-w-4xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal overflow-hidden">
+      {isModalOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] w-screen h-screen min-h-screen bg-black/65 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-apple-backdrop">
+          <div className="w-full md:w-[70vw] md:max-w-4xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal my-auto">
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-stone-100 dark:border-[#282323]">
               <div className="flex items-center gap-2.5">
                 <div className="p-2.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
@@ -571,16 +573,16 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
                   <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
                     യൂണിറ്റ് (Unit)
                   </label>
-                  <select
+                  <ThemeSelect
                     value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                    className="w-full px-3 py-2 bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] rounded-xl text-stone-900 dark:text-white focus:outline-none"
-                  >
-                    <option value="kg">kg (കിലോഗ്രാം)</option>
-                    <option value="packet">packet (പാക്കറ്റ്)</option>
-                    <option value="box">box (ബോക്സ്)</option>
-                    <option value="pcs">pcs</option>
-                  </select>
+                    onChange={(val) => setUnit(val)}
+                    options={[
+                      { value: 'kg', label: 'kg (കിലോഗ്രാം)' },
+                      { value: 'packet', label: 'packet (പാക്കറ്റ്)' },
+                      { value: 'box', label: 'box (ബോക്സ്)' },
+                      { value: 'pcs', label: 'pcs' },
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -588,22 +590,19 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
                 <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
                   ഉൽപ്പന്നം (Product) *
                 </label>
-                <select
-                  required
+                <ThemeSelect
                   value={productId}
-                  onChange={(e) => handleProductChange(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] rounded-xl text-stone-900 dark:text-white font-bold focus:outline-none"
-                >
-                  <option value="">ഉൽപ്പന്നം തിരഞ്ഞെടുക്കുക</option>
-                  {products.map((p) => {
+                  onChange={(val) => handleProductChange(val)}
+                  placeholder="ഉൽപ്പന്നം തിരഞ്ഞെടുക്കുക"
+                  searchable={true}
+                  options={products.map((p) => {
                     const costPrice = costingPrices[p.id];
-                    return (
-                      <option key={p.id} value={p.id}>
-                        {p.name} {costPrice ? `(കോസ്റ്റിംഗ് വില: ₹${costPrice}/kg)` : p.wholesalePrice ? `(₹${p.wholesalePrice})` : ''}
-                      </option>
-                    );
+                    return {
+                      value: p.id,
+                      label: `${p.name} ${costPrice ? `(കോസ്റ്റിംഗ് വില: ₹${costPrice}/kg)` : p.wholesalePrice ? `(₹${p.wholesalePrice})` : ''}`.trim(),
+                    };
                   })}
-                </select>
+                />
                 {fetchedCostingRate !== null && (
                   <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-semibold flex items-center gap-1">
                     <FiCheck className="w-3 h-3" />
@@ -695,30 +694,30 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
                   <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
                     പേയ്‌മെന്റ് രീതി
                   </label>
-                  <select
+                  <ThemeSelect
                     value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="w-full px-3 py-2 bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] rounded-xl text-stone-900 dark:text-white focus:outline-none"
-                  >
-                    <option value="cash">Cash (പണം)</option>
-                    <option value="upi">UPI / GPay</option>
-                    <option value="bank">Bank Transfer</option>
-                    <option value="credit">Credit (കടം)</option>
-                  </select>
+                    onChange={(val) => setPaymentMethod(val as any)}
+                    options={[
+                      { value: 'cash', label: 'Cash (പണം)' },
+                      { value: 'upi', label: 'UPI / GPay' },
+                      { value: 'bank', label: 'Bank Transfer' },
+                      { value: 'credit', label: 'Credit (കടം)' },
+                    ]}
+                  />
                 </div>
 
                 <div>
                   <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
                     സ്റ്റാറ്റസ്
                   </label>
-                  <select
+                  <ThemeSelect
                     value={paymentStatus}
-                    onChange={(e) => setPaymentStatus(e.target.value)}
-                    className="w-full px-3 py-2 bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] rounded-xl text-stone-900 dark:text-white focus:outline-none"
-                  >
-                    <option value="paid">പൂർണ്ണമായി ലഭിച്ചു (Paid)</option>
-                    <option value="pending">തുക ബാക്കി (Pending)</option>
-                  </select>
+                    onChange={(val) => setPaymentStatus(val as any)}
+                    options={[
+                      { value: 'paid', label: 'പൂർണ്ണമായി ലഭിച്ചു (Paid)' },
+                      { value: 'pending', label: 'തുക ബാക്കി (Pending)' },
+                    ]}
+                  />
                 </div>
               </div>
 
@@ -776,13 +775,14 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Add New Buyer Modal */}
-      {showAddBuyerModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-apple-backdrop">
-          <div className="w-full max-w-sm bg-white dark:bg-[#1E1B1B] rounded-3xl p-5 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal">
+      {showAddBuyerModal && createPortal(
+        <div className="fixed inset-0 z-[10000] w-screen h-screen min-h-screen bg-black/65 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-apple-backdrop">
+          <div className="w-full max-w-sm bg-white dark:bg-[#1E1B1B] rounded-3xl p-5 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal my-auto">
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-sm font-black text-stone-900 dark:text-white flex items-center gap-2">
                 <FiUserPlus className="w-4 h-4 text-epso-red" />
@@ -855,13 +855,14 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Printable Invoice / Bill Modal with EPSO Logo */}
-      {isBillModalOpen && activeBillSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md animate-apple-backdrop">
-          <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl text-stone-900 border border-stone-200 animate-apple-modal overflow-hidden max-h-[95vh] flex flex-col">
+      {isBillModalOpen && activeBillSale && createPortal(
+        <div className="fixed inset-0 z-[9999] w-screen h-screen min-h-screen bg-black/65 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-apple-backdrop">
+          <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl text-stone-900 border border-stone-200 animate-apple-modal overflow-hidden max-h-[95vh] flex flex-col my-auto">
             {/* Action Bar (Not printed) */}
             <div className="flex items-center justify-between pb-4 border-b border-stone-200 mb-4 shrink-0 no-print">
               <span className="text-xs font-bold text-stone-500">
@@ -997,7 +998,8 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

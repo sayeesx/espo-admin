@@ -18,6 +18,8 @@ import {
 import { saveProduct, deleteProduct, saveRecipe, deleteRecipe } from '../services/supabase';
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
+import { createPortal } from 'react-dom';
+import { ThemeSelect } from './ThemeSelect';
 
 interface ProductsAdminViewProps {
   products: Product[];
@@ -514,343 +516,362 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
       {/* ===================================================================== */}
       {/* MODAL 1: Add / Edit Product                                           */}
       {/* ===================================================================== */}
-      {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-apple-backdrop">
-          <div className="w-full md:w-[70vw] md:max-w-3xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal">
-            <h2 className="text-lg font-bold text-stone-900 dark:text-white mb-1">
-              {editingProduct ? 'ഉൽപ്പന്നം തിരുത്തുക (Edit)' : 'പുതിയ ഉൽപ്പന്നം (New Product)'}
-            </h2>
-            <p className="text-xs text-stone-500 dark:text-stone-400 mb-4">
-              വിലയും സ്റ്റോക്ക് വിവരങ്ങളും രേഖപ്പെടുത്തുക
-            </p>
+      {modalOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] overflow-y-auto">
+          {/* Edge-to-edge backdrop covering entire screen */}
+          <div
+            className="fixed inset-0 w-full h-full bg-black/65 backdrop-blur-md animate-apple-backdrop"
+            onClick={() => !isSubmitting && setModalOpen(false)}
+          />
 
-            {errorMsg && (
-              <div className="p-3 mb-4 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-xs flex items-center gap-2 border border-red-200 dark:border-red-900/60">
-                <FiAlertCircle className="w-4 h-4 shrink-0" />
-                <span>{errorMsg}</span>
-              </div>
-            )}
+          <div className="min-h-full flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
+            <div className="w-full md:w-[70vw] md:max-w-2xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto">
+              <h2 className="text-lg font-bold text-stone-900 dark:text-white mb-1">
+                {editingProduct ? 'ഉൽപ്പന്നം തിരുത്തുക (Edit)' : 'പുതിയ ഉൽപ്പന്നം (New Product)'}
+              </h2>
+              <p className="text-xs text-stone-500 dark:text-stone-400 mb-4">
+                വിലയും സ്റ്റോക്ക് വിവരങ്ങളും രേഖപ്പെടുത്തുക
+              </p>
 
-            <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                  പേര് (Product Name) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. മിക്സ്ചർ (Mixture)"
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
-                />
-              </div>
+              {errorMsg && (
+                <div className="p-3 mb-4 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-xs flex items-center gap-2 border border-red-200 dark:border-red-900/60">
+                  <FiAlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+              )}
 
-              <div className="grid grid-cols-2 gap-3">
+              <form onSubmit={handleSubmit} className="space-y-4 text-xs">
                 <div>
                   <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                    SKU കോഡ്
+                    പേര് (Product Name) *
                   </label>
                   <input
                     type="text"
-                    value={sku}
-                    onChange={(e) => setSku(e.target.value)}
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. മിക്സ്ചർ (Mixture)"
+                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                      SKU കോഡ്
+                    </label>
+                    <input
+                      type="text"
+                      value={sku}
+                      onChange={(e) => setSku(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <ThemeSelect
+                      label="അളവ് യൂണിറ്റ് (Unit)"
+                      value={unit}
+                      onChange={(val) => setUnit(val as UnitType)}
+                      options={[
+                        { value: 'kg', label: 'kg (കിലോഗ്രാം)' },
+                        { value: 'g', label: 'g (ഗ്രാം)' },
+                        { value: 'pkt', label: 'pkt (പാക്കറ്റ്)' },
+                        { value: 'pcs', label: 'pcs (എണ്ണം)' },
+                        { value: 'box', label: 'box (ബോക്സ്)' },
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                    മൊത്ത വിൽപ്പന വില (Wholesale Price ₹) *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    required
+                    value={wholesalePrice === 0 ? '' : wholesalePrice}
+                    onChange={(e) => setWholesalePrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    onFocus={(e) => e.target.select()}
                     className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
                   />
                 </div>
 
                 <div>
                   <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                    അളവ് യൂണിറ്റ് (Unit)
+                    നിലവിലെ ഫിനിഷ്ഡ് സ്റ്റോക്ക് (Current Stock)
                   </label>
-                  <select
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value as UnitType)}
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    value={currentStock === 0 ? '' : currentStock}
+                    onChange={(e) => setCurrentStock(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    onFocus={(e) => e.target.select()}
                     className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
-                  >
-                    <option value="kg">kg (കിലോഗ്രാം)</option>
-                    <option value="g">g (ഗ്രാം)</option>
-                    <option value="pkt">pkt (പാക്കറ്റ്)</option>
-                    <option value="pcs">pcs (എണ്ണം)</option>
-                    <option value="box">box (ബോക്സ്)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                  മൊത്ത വിൽപ്പന വില (Wholesale Price ₹) *
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  required
-                  value={wholesalePrice === 0 ? '' : wholesalePrice}
-                  onChange={(e) => setWholesalePrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                  onFocus={(e) => e.target.select()}
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                  നിലവിലെ ഫിനിഷ്ഡ് സ്റ്റോക്ക് (Current Stock)
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  min="0"
-                  value={currentStock === 0 ? '' : currentStock}
-                  onChange={(e) => setCurrentStock(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                  onFocus={(e) => e.target.select()}
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828]">
-                <div>
-                  <span className="font-bold text-stone-900 dark:text-white">
-                    ഉൽപ്പാദനത്തിൽ സജീവം (Active)
-                  </span>
-                  <p className="text-[10px] text-stone-400">
-                    അടുക്കളയിൽ തിരഞ്ഞെടുക്കാൻ അനുവദിക്കുക
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={isActive}
-                  onClick={() => setIsActive(!isActive)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-epso-red/30 ${
-                    isActive ? 'bg-epso-red dark:bg-amber-500' : 'bg-stone-300 dark:bg-stone-700'
-                  }`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white dark:bg-stone-900 shadow-md ring-0 transition duration-200 ease-in-out ${
-                      isActive ? 'translate-x-5' : 'translate-x-0'
-                    }`}
                   />
-                </button>
-              </div>
+                </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100 dark:border-[#2E2828]">
-                <button
-                  type="button"
-                  onClick={() => setModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold"
-                >
-                  റദ്ദാക്കുക (Cancel)
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
-                      <span>സൂക്ഷിക്കുന്നു...</span>
-                    </>
-                  ) : (
-                    <span>സൂക്ഷിക്കുക (Save)</span>
-                  )}
-                </button>
-              </div>
-            </form>
+                <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828]">
+                  <div>
+                    <span className="font-bold text-stone-900 dark:text-white">
+                      ഉൽപ്പാദനത്തിൽ സജീവം (Active)
+                    </span>
+                    <p className="text-[10px] text-stone-400">
+                      അടുക്കളയിൽ തിരഞ്ഞെടുക്കാൻ അനുവദിക്കുക
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isActive}
+                    onClick={() => setIsActive(!isActive)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-epso-red/30 ${
+                      isActive ? 'bg-epso-red dark:bg-amber-500' : 'bg-stone-300 dark:bg-stone-700'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white dark:bg-stone-900 shadow-md ring-0 transition duration-200 ease-in-out ${
+                        isActive ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100 dark:border-[#2E2828]">
+                  <button
+                    type="button"
+                    onClick={() => setModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold"
+                  >
+                    റദ്ദാക്കുക (Cancel)
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
+                        <span>സൂക്ഷിക്കുന്നു...</span>
+                      </>
+                    ) : (
+                      <span>സൂക്ഷിക്കുക (Save)</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ===================================================================== */}
       {/* MODAL 2: Set Ingredients / Recipe for Product                          */}
       {/* ===================================================================== */}
-      {recipeModalOpen && recipeProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md overflow-y-auto animate-apple-backdrop">
-          <div className="w-full md:w-[70vw] md:max-w-5xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal my-8 animate-apple-modal">
-            <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-[#2E2828]">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                    <FiBookOpen className="w-5 h-5" />
-                  </span>
-                  <h2 className="text-lg font-bold text-stone-900 dark:text-white">
-                    {recipeProduct.name} - ചേരുവകൾ (Recipe Ingredients)
-                  </h2>
+      {recipeModalOpen && recipeProduct && createPortal(
+        <div className="fixed inset-0 z-[9999] overflow-hidden">
+          {/* Edge-to-edge backdrop covering entire screen */}
+          <div
+            className="fixed inset-0 w-full h-full bg-black/65 backdrop-blur-md animate-apple-backdrop"
+            onClick={() => !isSavingRecipe && setRecipeModalOpen(false)}
+          />
+
+          <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
+            <div className="w-full md:w-[75vw] md:max-w-4xl max-h-[90vh] flex flex-col bg-white dark:bg-[#1E1B1B] rounded-3xl border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto overflow-hidden">
+              {/* Pinned Modal Header */}
+              <div className="flex items-center justify-between p-5 pb-3 border-b border-stone-200 dark:border-[#2E2828] shrink-0">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                      <FiBookOpen className="w-5 h-5" />
+                    </span>
+                    <h2 className="text-lg font-bold text-stone-900 dark:text-white">
+                      {recipeProduct.name} - ചേരുവകൾ (Recipe Ingredients)
+                    </h2>
+                  </div>
+                  <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+                    ഈ ഉൽപ്പന്നത്തിനുള്ള അസംസ്കൃത ചേരുവകളുടെ അനുപാതം നൽകുക
+                  </p>
                 </div>
-                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-                  ഈ ഉൽപ്പന്നത്തിനുള്ള അസംസ്കൃത ചേരുവകളുടെ അനുപാതം നൽകുക
-                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setRecipeModalOpen(false)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
               </div>
 
-              <button
-                onClick={() => setRecipeModalOpen(false)}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
-              >
-                <FiX className="w-5 h-5" />
-              </button>
-            </div>
+              {recipeError && (
+                <div className="mx-5 mt-3 p-3 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-xs flex items-center gap-2 border border-red-200 dark:border-red-900/60 shrink-0">
+                  <FiAlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{recipeError}</span>
+                </div>
+              )}
 
-            {recipeError && (
-              <div className="p-3 my-3 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-xs flex items-center gap-2 border border-red-200 dark:border-red-900/60">
-                <FiAlertCircle className="w-4 h-4 shrink-0" />
-                <span>{recipeError}</span>
-              </div>
-            )}
+              {/* Scrollable Form Body */}
+              <form onSubmit={handleSaveRecipeSubmit} id="recipeForm" className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+                {/* Base Batch Output */}
+                <div className="p-4 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                      ഒരു ബാച്ചിലെ ഉൽപ്പാദനം (Base Output Quantity) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      required
+                      value={recipeBaseQuantity}
+                      onChange={(e) => setRecipeBaseQuantity(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white font-bold outline-none"
+                      placeholder="e.g. 10"
+                    />
+                  </div>
 
-            <form onSubmit={handleSaveRecipeSubmit} className="space-y-4 pt-3 text-xs">
-              {/* Base Batch Output */}
-              <div className="p-4 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] grid grid-cols-2 gap-4">
+                  <div>
+                    <ThemeSelect
+                      label="യൂണിറ്റ് (Unit)"
+                      value={recipeBaseUnit}
+                      onChange={(val) => setRecipeBaseUnit(val)}
+                      options={[
+                        { value: 'kg', label: 'kg (കിലോഗ്രാം)' },
+                        { value: 'pkt', label: 'pkt (പാക്കറ്റ്)' },
+                        { value: 'pcs', label: 'pcs (എണ്ണം)' },
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                {/* Recipe Ingredients Rows */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="font-bold text-stone-700 dark:text-stone-300">
+                      ചേരുവകൾ (Ingredients List) *
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleAddRecipeItem}
+                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                    >
+                      <FiPlus className="w-3.5 h-3.5" />
+                      <span>ചേരുവ ചേർക്കുക</span>
+                    </button>
+                  </div>
+
+                  {/* Scrollable container for ingredients list - does NOT increase modal height */}
+                  <div className="space-y-2 max-h-[36vh] sm:max-h-[40vh] overflow-y-auto pr-1.5 p-1 rounded-xl bg-stone-100/50 dark:bg-[#141212]/50 border border-stone-200/60 dark:border-[#282323]">
+                    {recipeItems.map((item, idx) => {
+                      const ing = ingredients.find((i) => i.id === item.ingredientId);
+                      const lineCost = (Number(item.quantity) || 0) * (ing?.avgCostPerUnit || 0);
+
+                      const ingOptions = recipeEligibleIngredients.map((ingItem: Ingredient) => ({
+                        value: ingItem.id,
+                        label: ingItem.name,
+                        badge: `${ingItem.unit} • ₹${ingItem.avgCostPerUnit || 0}/${ingItem.unit}`,
+                      }));
+
+                      return (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#282323] shadow-xs"
+                        >
+                          {/* Ingredient ThemeSelect with search */}
+                          <div className="flex-1 min-w-[140px]">
+                            <ThemeSelect
+                              value={item.ingredientId}
+                              onChange={(val) => handleRecipeItemChange(idx, 'ingredientId', val)}
+                              options={ingOptions}
+                              searchable={true}
+                              placeholder="ചേരുവ തിരഞ്ഞെടുക്കുക..."
+                            />
+                          </div>
+
+                          {/* Quantity */}
+                          <div className="w-24">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0.01"
+                              required
+                              value={item.quantity}
+                              onChange={(e) => handleRecipeItemChange(idx, 'quantity', e.target.value)}
+                              className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white text-xs font-bold outline-none text-right"
+                              placeholder="Qty"
+                            />
+                          </div>
+
+                          {/* Unit Badge */}
+                          <div className="w-12 text-center text-xs font-bold text-stone-500">
+                            {item.unit}
+                          </div>
+
+                          {/* Line Cost */}
+                          <div className="w-20 text-right font-bold text-xs text-stone-700 dark:text-stone-300">
+                            ₹{lineCost.toFixed(1)}
+                          </div>
+
+                          {/* Delete Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRecipeItem(idx)}
+                            disabled={recipeItems.length <= 1}
+                            className="p-1.5 text-stone-400 hover:text-red-600 disabled:opacity-30 transition-colors cursor-pointer"
+                          >
+                            <FiTrash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Recipe Costing Estimation Strip */}
+                <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-500/20 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-amber-800 dark:text-amber-300 block">
+                      ഏകദേശ ബാച്ച് ചെലവ് (Est. Batch Raw Material Cost):
+                    </span>
+                    <span className="font-extrabold text-base text-stone-900 dark:text-white">
+                      ₹{calculateTotalRecipeCost().toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-amber-800 dark:text-amber-300 block">
+                      കിലോഗ്രാമിന് ചിലവ് (Cost / {recipeBaseUnit}):
+                    </span>
+                    <span className="font-extrabold text-base text-amber-700 dark:text-amber-400">
+                      ₹{(calculateTotalRecipeCost() / (Number(recipeBaseQuantity) || 1)).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Instructions / Formulation Notes */}
                 <div>
                   <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                    ഒരു ബാച്ചിലെ ഉൽപ്പാദനം (Base Output Quantity) *
+                    പാചകക്കുറിപ്പ് നിർദ്ദേശങ്ങൾ / ഫോർമുലേഷൻ (Instructions / Method)
                   </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0.1"
-                    required
-                    value={recipeBaseQuantity}
-                    onChange={(e) => setRecipeBaseQuantity(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white font-bold outline-none"
-                    placeholder="e.g. 10"
+                  <textarea
+                    rows={2}
+                    value={recipeInstructions}
+                    onChange={(e) => setRecipeInstructions(e.target.value)}
+                    placeholder="ഉദാ: വറുത്ത ചേരുവകൾ തണുത്ത ശേഷം മസാല ചേർക്കുക..."
+                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white text-xs focus:outline-none"
                   />
                 </div>
+              </form>
 
-                <div>
-                  <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                    യൂണിറ്റ് (Unit)
-                  </label>
-                  <select
-                    value={recipeBaseUnit}
-                    onChange={(e) => setRecipeBaseUnit(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white font-bold outline-none"
-                  >
-                    <option value="kg">kg (കിലോഗ്രാം)</option>
-                    <option value="pkt">pkt (പാക്കറ്റ്)</option>
-                    <option value="pcs">pcs (എണ്ണം)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Recipe Ingredients Rows */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-stone-700 dark:text-stone-300">
-                    ചേരുവകൾ (Ingredients List) *
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleAddRecipeItem}
-                    className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                  >
-                    <FiPlus className="w-3.5 h-3.5" />
-                    <span>ചേരുവ ചേർക്കുക</span>
-                  </button>
-                </div>
-
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                  {recipeItems.map((item, idx) => {
-                    const ing = ingredients.find((i) => i.id === item.ingredientId);
-                    const lineCost = (Number(item.quantity) || 0) * (ing?.avgCostPerUnit || 0);
-
-                    return (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-2 p-2.5 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323]"
-                      >
-                        {/* Ingredient Select */}
-                        <div className="flex-1 min-w-[140px]">
-                          <select
-                            value={item.ingredientId}
-                            onChange={(e) => handleRecipeItemChange(idx, 'ingredientId', e.target.value)}
-                            className="w-full p-2 rounded-lg border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white text-xs font-bold outline-none"
-                          >
-                            {recipeEligibleIngredients.map((ingItem: Ingredient) => (
-                              <option key={ingItem.id} value={ingItem.id}>
-                                {ingItem.name} ({ingItem.unit}) - ₹{ingItem.avgCostPerUnit || 0}/{ingItem.unit}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        {/* Quantity */}
-                        <div className="w-24">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0.01"
-                            required
-                            value={item.quantity}
-                            onChange={(e) => handleRecipeItemChange(idx, 'quantity', e.target.value)}
-                            className="w-full p-2 rounded-lg border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white text-xs font-bold outline-none text-right"
-                            placeholder="Qty"
-                          />
-                        </div>
-
-                        {/* Unit Badge */}
-                        <div className="w-12 text-center text-xs font-bold text-stone-500">
-                          {item.unit}
-                        </div>
-
-                        {/* Line Cost */}
-                        <div className="w-20 text-right font-bold text-xs text-stone-700 dark:text-stone-300">
-                          ₹{lineCost.toFixed(1)}
-                        </div>
-
-                        {/* Delete Button */}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveRecipeItem(idx)}
-                          disabled={recipeItems.length <= 1}
-                          className="p-1.5 text-stone-400 hover:text-red-600 disabled:opacity-30 transition-colors cursor-pointer"
-                        >
-                          <FiTrash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Recipe Costing Estimation Strip */}
-              <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-500/20 flex items-center justify-between text-xs">
-                <div>
-                  <span className="text-amber-800 dark:text-amber-300 block">
-                    ഏകദേശ ബാച്ച് ചെലവ് (Est. Batch Raw Material Cost):
-                  </span>
-                  <span className="font-extrabold text-base text-stone-900 dark:text-white">
-                    ₹{calculateTotalRecipeCost().toFixed(2)}
-                  </span>
-                </div>
-
-                <div className="text-right">
-                  <span className="text-amber-800 dark:text-amber-300 block">
-                    കിലോഗ്രാമിന് ചിലവ് (Cost / {recipeBaseUnit}):
-                  </span>
-                  <span className="font-extrabold text-base text-amber-700 dark:text-amber-400">
-                    ₹{(calculateTotalRecipeCost() / (Number(recipeBaseQuantity) || 1)).toFixed(2)}
-                  </span>
-                </div>
-              </div>
-
-              {/* Instructions / Formulation Notes */}
-              <div>
-                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                  പാചകക്കുറിപ്പ് നിർദ്ദേശങ്ങൾ / ഫോർമുലേഷൻ (Instructions / Method)
-                </label>
-                <textarea
-                  rows={2}
-                  value={recipeInstructions}
-                  onChange={(e) => setRecipeInstructions(e.target.value)}
-                  placeholder="ഉദാ: വറുത്ത ചേരുവകൾ തണുത്ത ശേഷം മസാല ചേർക്കുക..."
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white text-xs focus:outline-none"
-                />
-              </div>
-
-              {/* Modal Footer */}
-              <div className="flex items-center justify-between pt-3 border-t border-stone-100 dark:border-[#2E2828]">
+              {/* Pinned Modal Footer */}
+              <div className="p-4 px-5 border-t border-stone-100 dark:border-[#2E2828] bg-stone-50/80 dark:bg-[#1A1616]/80 backdrop-blur-sm shrink-0 flex items-center justify-between">
                 {existingRecipe ? (
                   <button
                     type="button"
@@ -882,6 +903,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                   </button>
                   <button
                     type="submit"
+                    form="recipeForm"
                     disabled={isSavingRecipe}
                     className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                   >
@@ -896,9 +918,10 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                   </button>
                 </div>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Printable Purchase List Modal */}

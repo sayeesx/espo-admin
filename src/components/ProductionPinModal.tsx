@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { FiLock, FiX, FiCheck, FiAlertCircle } from 'react-icons/fi';
 import { supabase } from '../services/supabase';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
@@ -103,9 +104,9 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-sm bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] w-screen h-screen min-h-screen flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-md overflow-y-auto animate-apple-backdrop">
+      <div className="w-full max-w-sm bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal my-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
@@ -206,6 +207,7 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

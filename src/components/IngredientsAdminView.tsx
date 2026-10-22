@@ -22,6 +22,8 @@ import {
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 import { AddPurchaseModal } from './AddPurchaseModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
+import { createPortal } from 'react-dom';
+import { ThemeSelect } from './ThemeSelect';
 
 interface IngredientsAdminViewProps {
   ingredients: Ingredient[];
@@ -473,282 +475,294 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
       )}
 
       {/* Modal: Adjust Stock */}
-      {adjustModalOpen && selectedIngredient && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-apple-backdrop">
-          <div className="w-full md:w-[70vw] md:max-w-2xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal">
-            <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
-              സ്റ്റോക്ക് ക്രമീകരിക്കുക (Adjust Stock)
-            </h2>
-            <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4">
-              {selectedIngredient.name} • നിലവിലെ സ്റ്റോക്ക്: {selectedIngredient.currentStock} {selectedIngredient.unit}
-            </p>
+      {adjustModalOpen && selectedIngredient && createPortal(
+        <div className="fixed inset-0 z-[9999] overflow-y-auto">
+          {/* Edge-to-edge backdrop */}
+          <div
+            className="fixed inset-0 w-full h-full bg-black/65 backdrop-blur-md animate-apple-backdrop"
+            onClick={() => !isSubmitting && setAdjustModalOpen(false)}
+          />
 
-            <form onSubmit={handleAdjustSubmit} className="space-y-4 text-xs">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setAdjustIsAdd(true)}
-                  className={`flex-1 py-2 rounded-xl font-bold font-malayalam border ${
-                    adjustIsAdd
-                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                      : 'bg-stone-50 dark:bg-[#141212] text-stone-600 dark:text-stone-300 border-stone-200 dark:border-[#2E2828]'
-                  }`}
-                >
-                  + ഇൻവാർഡ് (Inward)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAdjustIsAdd(false)}
-                  className={`flex-1 py-2 rounded-xl font-bold font-malayalam border ${
-                    !adjustIsAdd
-                      ? 'bg-red-600 text-white border-red-600 shadow-sm'
-                      : 'bg-stone-50 dark:bg-[#141212] text-stone-600 dark:text-stone-300 border-stone-200 dark:border-[#2E2828]'
-                  }`}
-                >
-                  - ഔട്ട്‌വാർഡ് (Outward)
-                </button>
-              </div>
+          <div className="min-h-full flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
+            <div className="w-full md:w-[70vw] md:max-w-xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto">
+              <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
+                സ്റ്റോക്ക് ക്രമീകരിക്കുക (Adjust Stock)
+              </h2>
+              <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4">
+                {selectedIngredient.name} • നിലവിലെ സ്റ്റോക്ക്: {selectedIngredient.currentStock} {selectedIngredient.unit}
+              </p>
 
-              <div>
-                <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                  അളവ് ({selectedIngredient.unit}) *
-                </label>
-                <input
-                  type="number"
-                  step="any"
-                  min="0.01"
-                  required
-                  value={adjustDelta === 0 ? '' : adjustDelta}
-                  onChange={(e) => setAdjustDelta(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                  onFocus={(e) => e.target.select()}
-                  placeholder={`0.00 ${selectedIngredient.unit}`}
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-sm font-bold text-stone-900 dark:text-white focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                  കാരണം (Reason) *
-                </label>
-                <select
-                  value={adjustReason}
-                  onChange={(e) => setAdjustReason(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none font-malayalam"
-                >
-                  <option value="പുതിയ പർച്ചേസ് (Purchase Inward)">പുതിയ പർച്ചേസ് (Purchase Inward)</option>
-                  <option value="കേടുപാടുകൾ / വേസ്റ്റേജ് (Damaged/Wastage)">കേടുപാടുകൾ / വേസ്റ്റേജ് (Damaged/Wastage)</option>
-                  <option value="ഫിസിക്കൽ ഓഡിറ്റ് തിരുത്തൽ (Stock Audit Adjustment)">ഫിസിക്കൽ ഓഡിറ്റ് തിരുത്തൽ (Stock Audit Adjustment)</option>
-                  <option value="സാമ്പിൾ നൽകിയത് (Free Sample)">സാമ്പിൾ നൽകിയത് (Free Sample)</option>
-                </select>
-              </div>
-
-              {/* Warning when stock is 0 and trying to deduct */}
-              {!adjustIsAdd && selectedIngredient.currentStock <= 0 && (
-                <div className="p-3 rounded-xl bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-900/60 text-xs text-red-900 dark:text-red-200 font-bold font-malayalam flex items-center gap-2">
-                  <FiAlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
-                  <span>മുന്നറിയിപ്പ്: സ്റ്റോക്ക് 0 ആണ്! നെഗറ്റീവ് ആക്കാൻ കഴിയില്ല.</span>
-                </div>
-              )}
-
-              <div className="p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] text-xs">
-                <span className="text-stone-400 font-malayalam block">പുതിയ സ്റ്റോക്ക് ബാലൻസ്:</span>
-                <span className={`text-base font-extrabold ${!adjustIsAdd && Number(adjustDelta) > selectedIngredient.currentStock ? 'text-red-600' : 'text-stone-900 dark:text-white'}`}>
-                  {Math.max(0, selectedIngredient.currentStock + (adjustIsAdd ? (Number(adjustDelta) || 0) : -(Number(adjustDelta) || 0)))}{' '}
-                  {selectedIngredient.unit}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100 dark:border-[#2E2828]">
-                <button
-                  type="button"
-                  onClick={() => setAdjustModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold font-malayalam cursor-pointer"
-                >
-                  റദ്ദാക്കുക (Cancel)
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting || Number(adjustDelta) <= 0}
-                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm press-apple font-malayalam cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-                      <span>സൂക്ഷിക്കുന്നു...</span>
-                    </>
-                  ) : (
-                    <span>അപ്ഡേറ്റ് ചെയ്യുക (Update)</span>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Add / Edit Ingredient */}
-      {formModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-apple-backdrop">
-          <div className="w-full md:w-[70vw] md:max-w-3xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal">
-            <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
-              {selectedIngredient ? 'ചേരുവ തിരുത്തുക (Edit)' : 'പുതിയ ചേരുവ (New Ingredient)'}
-            </h2>
-            <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4">
-              അസംസ്കൃത വസ്തുക്കളുടെ വിവരങ്ങളും നിരക്കുകളും
-            </p>
-
-            <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                  ചേരുവയുടെ പേര് (Name) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="ഉദാ: ഓയിൽ, കറിവേപ്പില"
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-epso-red/30 font-malayalam"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                    വിഭാഗം (Category)
-                  </label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as IngredientCategory)}
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none font-malayalam"
-                  >
-                    <option value="basic">Category A (Basic)</option>
-                    <option value="other">Category B (Other)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                    യൂണിറ്റ് (Unit)
-                  </label>
-                  <select
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value as UnitType)}
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
-                  >
-                    <option value="kg">Kilogram (kg)</option>
-                    <option value="L">Liter (L)</option>
-                    <option value="g">Gram (g)</option>
-                    <option value="ml">Milliliter (ml)</option>
-                    <option value="pcs">Pieces (എണ്ണം)</option>
-                    <option value="packs">Packs (പാക്കറ്റ്)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                    കുറഞ്ഞ പരിധി (Min Alert)
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    value={minStock === 0 ? '' : minStock}
-                    onChange={(e) => setMinStock(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    onFocus={(e) => e.target.select()}
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                    വാങ്ങൽ നിരക്ക് (Cost / {unit})
-                  </label>
-                  <input
-                    type="number"
-                    step="any"
-                    min="0"
-                    value={avgCostPerUnit === 0 ? '' : avgCostPerUnit}
-                    onChange={(e) => setAvgCostPerUnit(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    onFocus={(e) => e.target.select()}
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                  കുറിപ്പ് (Notes / Supplier)
-                </label>
-                <input
-                  type="text"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="ഉദാ: സപ്ലയർ വിവരങ്ങൾ..."
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none font-malayalam"
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828]">
-                <span className="font-bold text-stone-900 dark:text-white font-malayalam">
-                  Active (സജീവം)
-                </span>
-                <input
-                  type="checkbox"
-                  checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
-                  className="w-5 h-5 accent-epso-red rounded cursor-pointer"
-                />
-              </div>
-
-              <div className="flex items-center justify-between gap-2 pt-3 border-t border-stone-100 dark:border-[#2E2828]">
-                {selectedIngredient ? (
+              <form onSubmit={handleAdjustSubmit} className="space-y-4 text-xs">
+                <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (selectedIngredient) {
-                        setFormModalOpen(false);
-                        handleDelete(selectedIngredient);
-                      }
-                    }}
-                    className="px-3 py-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold font-malayalam flex items-center gap-1.5 transition-colors"
+                    onClick={() => setAdjustIsAdd(true)}
+                    className={`flex-1 py-2 rounded-xl font-bold font-malayalam border ${
+                      adjustIsAdd
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                        : 'bg-stone-50 dark:bg-[#141212] text-stone-600 dark:text-stone-300 border-stone-200 dark:border-[#2E2828]'
+                    }`}
                   >
-                    <FiTrash2 className="w-4 h-4" />
-                    <span>ഡിലീറ്റ്</span>
+                    + ഇൻവാർഡ് (Inward)
                   </button>
-                ) : (
-                  <div />
+                  <button
+                    type="button"
+                    onClick={() => setAdjustIsAdd(false)}
+                    className={`flex-1 py-2 rounded-xl font-bold font-malayalam border ${
+                      !adjustIsAdd
+                        ? 'bg-red-600 text-white border-red-600 shadow-sm'
+                        : 'bg-stone-50 dark:bg-[#141212] text-stone-600 dark:text-stone-300 border-stone-200 dark:border-[#2E2828]'
+                    }`}
+                  >
+                    - ഔട്ട്‌വാർഡ് (Outward)
+                  </button>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
+                    അളവ് ({selectedIngredient.unit}) *
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0.01"
+                    required
+                    value={adjustDelta === 0 ? '' : adjustDelta}
+                    onChange={(e) => setAdjustDelta(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    onFocus={(e) => e.target.select()}
+                    placeholder={`0.00 ${selectedIngredient.unit}`}
+                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-sm font-bold text-stone-900 dark:text-white focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <ThemeSelect
+                    label="കാരണം (Reason) *"
+                    value={adjustReason}
+                    onChange={(val) => setAdjustReason(val)}
+                    options={[
+                      { value: 'പുതിയ പർച്ചേസ് (Purchase Inward)', label: 'പുതിയ പർച്ചേസ് (Purchase Inward)' },
+                      { value: 'കേടുപാടുകൾ / വേസ്റ്റേജ് (Damaged/Wastage)', label: 'കേടുപാടുകൾ / വേസ്റ്റേജ് (Damaged/Wastage)' },
+                      { value: 'ഫിസിക്കൽ ഓഡിറ്റ് തിരുത്തൽ (Stock Audit Adjustment)', label: 'ഫിസിക്കൽ ഓഡിറ്റ് തിരുത്തൽ (Stock Audit Adjustment)' },
+                      { value: 'സാമ്പിൾ നൽകിയത് (Free Sample)', label: 'സാമ്പിൾ നൽകിയത് (Free Sample)' },
+                    ]}
+                  />
+                </div>
+
+                {/* Warning when stock is 0 and trying to deduct */}
+                {!adjustIsAdd && selectedIngredient.currentStock <= 0 && (
+                  <div className="p-3 rounded-xl bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-900/60 text-xs text-red-900 dark:text-red-200 font-bold font-malayalam flex items-center gap-2">
+                    <FiAlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+                    <span>മുന്നറിയിപ്പ്: സ്റ്റോക്ക് 0 ആണ്! നെഗറ്റീവ് ആക്കാൻ കഴിയില്ല.</span>
+                  </div>
                 )}
 
-                <div className="flex items-center gap-2">
+                <div className="p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] text-xs">
+                  <span className="text-stone-400 font-malayalam block">പുതിയ സ്റ്റോക്ക് ബാലൻസ്:</span>
+                  <span className={`text-base font-extrabold ${!adjustIsAdd && Number(adjustDelta) > selectedIngredient.currentStock ? 'text-red-600' : 'text-stone-900 dark:text-white'}`}>
+                    {Math.max(0, selectedIngredient.currentStock + (adjustIsAdd ? (Number(adjustDelta) || 0) : -(Number(adjustDelta) || 0)))}{' '}
+                    {selectedIngredient.unit}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100 dark:border-[#2E2828]">
                   <button
                     type="button"
-                    onClick={() => setFormModalOpen(false)}
-                    className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold font-malayalam"
+                    onClick={() => setAdjustModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold font-malayalam cursor-pointer"
                   >
                     റദ്ദാക്കുക (Cancel)
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting}
-                    className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple font-malayalam flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    disabled={isSubmitting || Number(adjustDelta) <= 0}
+                    className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm press-apple font-malayalam cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                   >
                     {isSubmitting ? (
                       <>
-                        <div className="w-3.5 h-3.5 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
                         <span>സൂക്ഷിക്കുന്നു...</span>
                       </>
                     ) : (
-                      <span>സൂക്ഷിക്കുക (Save)</span>
+                      <span>അപ്ഡേറ്റ് ചെയ്യുക (Update)</span>
                     )}
                   </button>
                 </div>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal: Add / Edit Ingredient */}
+      {formModalOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] overflow-y-auto">
+          {/* Edge-to-edge backdrop */}
+          <div
+            className="fixed inset-0 w-full h-full bg-black/65 backdrop-blur-md animate-apple-backdrop"
+            onClick={() => !isSubmitting && setFormModalOpen(false)}
+          />
+
+          <div className="min-h-full flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
+            <div className="w-full md:w-[70vw] md:max-w-2xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto">
+              <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
+                {selectedIngredient ? 'ചേരുവ തിരുത്തുക (Edit)' : 'പുതിയ ചേരുവ (New Ingredient)'}
+              </h2>
+              <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4">
+                അസംസ്കൃത വസ്തുക്കളുടെ വിവരങ്ങളും നിരക്കുകളും
+              </p>
+
+              <form onSubmit={handleFormSubmit} className="space-y-4 text-xs">
+                <div>
+                  <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
+                    ചേരുവയുടെ പേര് (Name) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="ഉദാ: ഓയിൽ, കറിവേപ്പില"
+                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-epso-red/30 font-malayalam"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <ThemeSelect
+                      label="വിഭാഗം (Category)"
+                      value={category}
+                      onChange={(val) => setCategory(val as IngredientCategory)}
+                      options={[
+                        { value: 'basic', label: 'Category A (Basic)' },
+                        { value: 'other', label: 'Category B (Other)' },
+                      ]}
+                    />
+                  </div>
+
+                  <div>
+                    <ThemeSelect
+                      label="യൂണിറ്റ് (Unit)"
+                      value={unit}
+                      onChange={(val) => setUnit(val as UnitType)}
+                      options={[
+                        { value: 'kg', label: 'Kilogram (kg)' },
+                        { value: 'L', label: 'Liter (L)' },
+                        { value: 'g', label: 'Gram (g)' },
+                        { value: 'ml', label: 'Milliliter (ml)' },
+                        { value: 'pcs', label: 'Pieces (എണ്ണം)' },
+                        { value: 'packs', label: 'Packs (പാക്കറ്റ്)' },
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
+                      കുറഞ്ഞ പരിധി (Min Alert)
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={minStock === 0 ? '' : minStock}
+                      onChange={(e) => setMinStock(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      onFocus={(e) => e.target.select()}
+                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
+                      വാങ്ങൽ നിരക്ക് (Cost / {unit})
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0"
+                      value={avgCostPerUnit === 0 ? '' : avgCostPerUnit}
+                      onChange={(e) => setAvgCostPerUnit(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      onFocus={(e) => e.target.select()}
+                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
+                    കുറിപ്പ് (Notes / Supplier)
+                  </label>
+                  <input
+                    type="text"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="ഉദാ: സപ്ലയർ വിവരങ്ങൾ..."
+                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none font-malayalam"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828]">
+                  <span className="font-bold text-stone-900 dark:text-white font-malayalam">
+                    Active (സജീവം)
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={isActive}
+                    onChange={(e) => setIsActive(e.target.checked)}
+                    className="w-5 h-5 accent-epso-red rounded cursor-pointer"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-3 border-t border-stone-100 dark:border-[#2E2828]">
+                  {selectedIngredient ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedIngredient) {
+                          setFormModalOpen(false);
+                          handleDelete(selectedIngredient);
+                        }
+                      }}
+                      className="px-3 py-2 rounded-xl text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold font-malayalam flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <FiTrash2 className="w-4 h-4" />
+                      <span>ഡിലീറ്റ്</span>
+                    </button>
+                  ) : (
+                    <div />
+                  )}
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFormModalOpen(false)}
+                      className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold font-malayalam cursor-pointer"
+                    >
+                      റദ്ദാക്കുക (Cancel)
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple font-malayalam flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <div className="w-3.5 h-3.5 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
+                          <span>സൂക്ഷിക്കുന്നു...</span>
+                        </>
+                      ) : (
+                        <span>സൂക്ഷിക്കുക (Save)</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* Printable Purchase & Reorder List Modal */}

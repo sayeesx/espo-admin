@@ -93,11 +93,6 @@
     touch-action: none !important;
   }
 
-  body.modal-open header,
-  body.modal-open .sticky {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
 
   .pb-safe {
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
@@ -216,5 +211,103 @@
 
 .animate-apple-backdrop {
   animation: appleBackdropIn 0.28s ease-out both;
+}
+
+/* ============================== */
+/* Batch Success Animation Styles */
+/* ============================== */
+
+@keyframes batchSuccessBackdrop {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes batchSuccessContainer {
+  0% { opacity: 0; transform: scale(0.5) translateY(20px); }
+  50% { opacity: 1; transform: scale(1.08) translateY(-4px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes batchCircleFill {
+  0% { transform: scale(0); opacity: 0; }
+  40% { transform: scale(1.15); opacity: 1; }
+  60% { transform: scale(0.95); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes batchCheckmarkDraw {
+  0% { stroke-dashoffset: 60; opacity: 0; }
+  30% { opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 1; }
+}
+
+@keyframes batchRipple {
+  0% { transform: scale(0.9); opacity: 0; }
+  30% { opacity: 0.7; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+@keyframes batchParticleBurst {
+  0% { transform: translate(-50%, -50%) rotate(var(--particle-angle)) translateY(0) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(var(--particle-angle)) translateY(-42px) scale(0); opacity: 0; }
+}
+
+@keyframes batchConfettiBurst {
+  0% { transform: translate(-50%, -50%) rotate(var(--confetti-angle)) translateY(0) scale(0); opacity: 1; }
+  50% { transform: translate(-50%, -50%) rotate(var(--confetti-angle)) translateY(calc(-1 * var(--confetti-distance))) scale(1.2); opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(var(--confetti-angle)) translateY(calc(-1 * var(--confetti-distance) - 10px)) scale(0); opacity: 0; }
+}
+
+@keyframes batchSuccessText {
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.batch-success-backdrop {
+  animation: batchSuccessBackdrop 0.25s ease-out both;
+}
+
+.batch-success-container {
+  animation: batchSuccessContainer 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.batch-circle-fill {
+  animation: batchCircleFill 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+}
+
+.batch-checkmark-path {
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: batchCheckmarkDraw 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both;
+}
+
+.batch-ripple-1 {
+  animation: batchRipple 0.9s ease-out 0.2s both;
+}
+.batch-ripple-2 {
+  animation: batchRipple 0.9s ease-out 0.35s both;
+}
+.batch-ripple-3 {
+  animation: batchRipple 0.9s ease-out 0.5s both;
+}
+
+.batch-particle {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--particle-color);
+  animation: batchParticleBurst 0.65s cubic-bezier(0.16, 1, 0.3, 1) var(--particle-delay) both;
+}
+
+.batch-confetti {
+  width: 5px;
+  height: 5px;
+  border-radius: 2px;
+  background: var(--confetti-color);
+  animation: batchConfettiBurst 0.7s cubic-bezier(0.16, 1, 0.3, 1) var(--confetti-delay) both;
+}
+
+.batch-success-text {
+  animation: batchSuccessText 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.5s both;
 }
 
