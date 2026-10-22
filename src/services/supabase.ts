@@ -287,7 +287,7 @@ export async function fetchRecipes(): Promise<Recipe[]> {
     .from('recipes')
     .select(`
       *,
-      products (name)
+      products!recipes_product_id_fkey (name)
     `)
     .order('created_at', { ascending: false });
 
