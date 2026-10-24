@@ -17,6 +17,8 @@ import {
   FiUsers,
   FiDollarSign,
   FiShoppingBag,
+  FiCpu,
+  FiSettings,
 } from 'react-icons/fi';
 
 export type AdminTab =
@@ -25,10 +27,12 @@ export type AdminTab =
   | 'sales'
   | 'wages'
   | 'costing'
+  | 'ai'
   | 'products'
   | 'ingredients'
   | 'movements'
-  | 'notifications';
+  | 'notifications'
+  | 'settings';
 
 interface HeaderProps {
   activeTab: AdminTab;
@@ -63,10 +67,12 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'sales', labelMl: 'വിൽപ്പന', icon: FiShoppingBag },
     { id: 'wages', labelMl: 'കൂലി', icon: FiUsers },
     { id: 'costing', labelMl: 'കോസ്റ്റിംഗ്', icon: FiDollarSign },
+    { id: 'ai', labelMl: 'AI അസിസ്റ്റന്റ്', icon: FiCpu },
     { id: 'products', labelMl: 'ഉൽപ്പന്നങ്ങൾ', icon: FiPackage },
     { id: 'ingredients', labelMl: 'ചേരുവകൾ', icon: FiBox },
     { id: 'movements', labelMl: 'ലെഡ്ജർ', icon: FiClock },
     { id: 'notifications', labelMl: 'അറിയിപ്പുകൾ', icon: FiBell, badge: notificationCount },
+    { id: 'settings', labelMl: 'സെറ്റിംഗ്സ്', icon: FiSettings },
   ];
 
   return (

@@ -16,6 +16,8 @@ import { LoadingSpinner } from './components/LoadingSpinner';
 import { OfflineScreen } from './components/OfflineScreen';
 import { SalesAdminView } from './components/SalesAdminView';
 import { WagesAdminView } from './components/WagesAdminView';
+import { AIAdminAssistant } from './components/AIAdminAssistant';
+import { SettingsAdminView } from './components/SettingsAdminView';
 import {
   fetchProducts,
   fetchIngredients,
@@ -43,10 +45,12 @@ export const App: React.FC = () => {
         'sales',
         'wages',
         'costing',
+        'ai',
         'notifications',
         'products',
         'ingredients',
         'movements',
+        'settings',
       ];
       if (tabParam && validTabs.includes(tabParam)) return tabParam;
       if (tabParam === ('recipes' as any)) return 'products';
@@ -326,6 +330,17 @@ export const App: React.FC = () => {
                 />
               )}
 
+              {activeTab === 'ai' && (
+                <AIAdminAssistant
+                  products={products}
+                  ingredients={ingredients}
+                  productionRuns={productionRuns}
+                  stockMovements={stockMovements}
+                  recipes={recipes}
+                  onRefresh={loadAllData}
+                />
+              )}
+
               {activeTab === 'products' && (
                 <ProductsAdminView
                   products={products}
@@ -338,6 +353,7 @@ export const App: React.FC = () => {
               {activeTab === 'ingredients' && (
                 <IngredientsAdminView
                   ingredients={ingredients}
+                  products={products}
                   stockMovements={stockMovements}
                   onRefresh={loadAllData}
                 />
@@ -347,6 +363,16 @@ export const App: React.FC = () => {
                 <StockLedgerAdminView
                   movements={stockMovements}
                   ingredients={ingredients}
+                  onRefresh={loadAllData}
+                />
+              )}
+
+              {activeTab === 'settings' && (
+                <SettingsAdminView
+                  products={products}
+                  ingredients={ingredients}
+                  productionRuns={productionRuns}
+                  stockMovements={stockMovements}
                   onRefresh={loadAllData}
                 />
               )}

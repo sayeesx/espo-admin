@@ -263,10 +263,15 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
           <div className="relative w-full md:w-[70vw] md:max-w-6xl bg-white dark:bg-[#1E1B1B] rounded-2xl border border-stone-200 dark:border-[#2E2828] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-apple-modal my-auto">
           {/* Modal Header */}
           <div className="p-4 sm:p-5 border-b border-stone-200 dark:border-[#2E2828] flex items-center justify-between gap-3 bg-stone-50/50 dark:bg-[#181515]">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-950/50 text-epso-orange flex items-center justify-center font-black">
-                <FiPrinter className="w-5 h-5" />
-              </div>
+            <div className="flex items-center gap-3">
+              <img
+                src="/epso-logo-transparent.png"
+                alt="EPSO Logo"
+                className="w-10 h-10 object-contain rounded-lg"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/epso-swirl-transparent.png';
+                }}
+              />
               <div>
                 <h2 className="text-base sm:text-lg font-black text-stone-900 dark:text-white flex items-center gap-2">
                   <span>Purchase & Reorder List</span>
@@ -570,14 +575,24 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
               <div>
                 {/* Print Header */}
                 <div style={{ borderBottom: '2px solid #000000', paddingBottom: '10px', marginBottom: '14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div>
-                      <h1 style={{ fontSize: '20px', fontWeight: '900', margin: '0 0 3px 0', letterSpacing: '-0.5px' }}>
-                        EPSO FOOD PRODUCTS
-                      </h1>
-                      <h2 style={{ fontSize: '13px', fontWeight: 'bold', margin: '0', color: '#222222' }}>
-                        PANTRY PURCHASE LIST (പർച്ചേസ് ലിസ്റ്റ്)
-                      </h2>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                      <img
+                        src="/epso-logo-transparent.png"
+                        alt="EPSO Logo"
+                        style={{ width: '52px', height: '52px', objectFit: 'contain' }}
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/epso-swirl-transparent.png';
+                        }}
+                      />
+                      <div>
+                        <h1 style={{ fontSize: '20px', fontWeight: '900', margin: '0 0 3px 0', letterSpacing: '-0.5px' }}>
+                          EPSO FOOD PRODUCTS
+                        </h1>
+                        <h2 style={{ fontSize: '13px', fontWeight: 'bold', margin: '0', color: '#222222' }}>
+                          PANTRY PURCHASE LIST (പർച്ചേസ് ലിസ്റ്റ്)
+                        </h2>
+                      </div>
                     </div>
                     <div style={{ textAlign: 'right', fontSize: '11px', color: '#333333' }}>
                       <div><strong>Date:</strong> {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>

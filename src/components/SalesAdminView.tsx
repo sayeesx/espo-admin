@@ -13,6 +13,7 @@ import {
   FiPrinter,
   FiUserPlus,
   FiRefreshCw,
+  FiCopy,
 } from 'react-icons/fi';
 import { Product, SaleRecord } from '../types';
 import { fetchSales, recordSale, deleteSale, fetchProductSellingPrices } from '../services/supabase';
@@ -42,6 +43,31 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
   const [activeBillSale, setActiveBillSale] = useState<SaleRecord | null>(null);
   const [isBillModalOpen, setIsBillModalOpen] = useState<boolean>(false);
   const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null);
+  const [billCopied, setBillCopied] = useState<boolean>(false);
+
+  const handleCopyBillWhatsApp = () => {
+    if (!activeBillSale) return;
+    const text = `🧾 *EPSO FOOD PRODUCTS - INVOICE*
+--------------------------------
+Invoice: #EPS-${String(activeBillSale.id).slice(0, 8).toUpperCase()}
+Date: ${activeBillSale.sale_date}
+Customer: ${activeBillSale.customer_name || 'Counter Sale'}
+Payment: ${String(activeBillSale.payment_method || 'CASH').toUpperCase()} (${activeBillSale.payment_status === 'paid' ? 'PAID' : 'PENDING'})
+--------------------------------
+*Item:* ${activeBillSale.product_name}
+*Qty:* ${activeBillSale.quantity} ${activeBillSale.unit}
+*Rate:* ₹${Number(activeBillSale.unit_price).toFixed(2)}
+--------------------------------
+*Total Amount:* ₹${Number(activeBillSale.total_amount).toFixed(2)}
+--------------------------------
+_Thank you for your business!_
+EPSO Food Products, Kerala`;
+
+    navigator.clipboard.writeText(text).then(() => {
+      setBillCopied(true);
+      setTimeout(() => setBillCopied(false), 2000);
+    });
+  };
 
   // Buyers management state
   const [buyersList, setBuyersList] = useState<BuyerInfo[]>(() => {
@@ -304,25 +330,42 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
       {/* Printable Receipt CSS */}
       <style>{`
         @media print {
+          @page {
+            size: auto;
+            margin: 4mm 6mm;
+          }
+          body {
+            background: #ffffff !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
           body * {
-            visibility: hidden;
+            visibility: hidden !important;
           }
           #epso-bill-print-area, #epso-bill-print-area * {
-            visibility: visible;
+            visibility: visible !important;
           }
           #epso-bill-print-area {
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background: white !important;
-            color: black !important;
-            padding: 24px;
-            z-index: 999999;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            max-width: 380px !important;
+            margin: 0 auto !important;
+            padding: 12px 14px !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+            border: 1px dashed #aaaaaa !important;
+            border-radius: 4px !important;
+            box-shadow: none !important;
+            z-index: 999999 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
-          .no-print {
+          .no-print, .no-print * {
             display: none !important;
+            visibility: hidden !important;
           }
         }
       `}</style>
@@ -859,141 +902,207 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
         document.body
       )}
 
-      {/* Printable Invoice / Bill Modal with EPSO Logo */}
+      {/* Modern Clean Printable Receipt / Bill Modal */}
       {isBillModalOpen && activeBillSale && createPortal(
-        <div className="fixed inset-0 z-[9999] w-screen h-screen min-h-screen bg-black/65 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-apple-backdrop">
-          <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl text-stone-900 border border-stone-200 animate-apple-modal overflow-hidden max-h-[95vh] flex flex-col my-auto">
-            {/* Action Bar (Not printed) */}
-            <div className="flex items-center justify-between pb-4 border-b border-stone-200 mb-4 shrink-0 no-print">
-              <span className="text-xs font-bold text-stone-500">
-                ബിൽ പ്രിവ്യൂ (Invoice Preview)
-              </span>
+        <div className="fixed inset-0 z-[9999] w-screen h-screen min-h-screen bg-black/70 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-apple-backdrop">
+          <div className="w-full max-w-md bg-stone-100 dark:bg-[#181515] rounded-3xl p-4 sm:p-5 shadow-2xl text-stone-900 border border-stone-200 dark:border-[#2E2828] animate-apple-modal max-h-[96vh] flex flex-col my-auto">
+            {/* Modal Action Bar (Screen Only - Not Printed) */}
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-[#2E2828] mb-3 shrink-0 no-print">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs font-black text-stone-800 dark:text-stone-200">
+                  ബിൽ പ്രിവ്യൂ (Receipt Preview)
+                </span>
+              </div>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => window.print()}
-                  className="px-4 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover text-white font-black text-xs flex items-center gap-1.5 shadow-md press-apple cursor-pointer"
+                  onClick={handleCopyBillWhatsApp}
+                  className="px-3 py-1.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#252020] text-stone-700 dark:text-stone-300 hover:bg-stone-50 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="Copy receipt for WhatsApp"
                 >
-                  <FiPrinter className="w-4 h-4" />
-                  <span>പ്രിന്റ് ചെയ്യുക</span>
+                  {billCopied ? (
+                    <>
+                      <FiCheck className="w-3.5 h-3.5 text-emerald-500" />
+                      <span className="text-emerald-600 dark:text-emerald-400">Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiCopy className="w-3.5 h-3.5 text-stone-500" />
+                      <span>WhatsApp</span>
+                    </>
+                  )}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="px-3.5 py-1.5 rounded-xl bg-epso-red hover:bg-epso-red-hover text-white font-black text-xs flex items-center gap-1.5 shadow-md press-apple cursor-pointer"
+                >
+                  <FiPrinter className="w-3.5 h-3.5" />
+                  <span>Print Receipt</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setIsBillModalOpen(false)}
-                  className="w-8 h-8 rounded-full flex items-center justify-center bg-stone-100 text-stone-500 hover:text-stone-800"
+                  className="w-7 h-7 rounded-full flex items-center justify-center bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:text-stone-900 cursor-pointer"
                 >
                   <FiX className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* Print Area with EPSO Logo */}
-            <div id="epso-bill-print-area" className="flex-1 overflow-y-auto space-y-4 p-2 bg-white text-stone-900 font-sans">
-              {/* Header with Epso Logo */}
-              <div className="flex items-center justify-between pb-3 border-b-2 border-stone-800">
-                <div className="flex items-center gap-3">
-                  <img
-                    src="/epso-logo-transparent.png"
-                    alt="Epso Logo"
-                    className="w-14 h-14 object-contain"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = '/epso-swirl-transparent.png';
-                    }}
-                  />
+            {/* Printable Modern Receipt Area */}
+            <div className="flex-1 overflow-y-auto no-scrollbar rounded-2xl bg-white shadow-xs p-1">
+              <div
+                id="epso-bill-print-area"
+                className="w-full bg-white text-stone-900 font-sans p-4 sm:p-5 text-xs select-text"
+                style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}
+              >
+                {/* Modern Brand Receipt Header */}
+                <div className="text-center pb-3">
+                  <div className="flex justify-center mb-1.5">
+                    <img
+                      src="/epso-logo-transparent.png"
+                      alt="Epso Logo"
+                      className="w-12 h-12 object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/epso-swirl-transparent.png';
+                      }}
+                    />
+                  </div>
+                  <h1 className="text-base font-black tracking-tight text-stone-950 uppercase leading-none">
+                    EPSO FOOD PRODUCTS
+                  </h1>
+                  <p className="text-[10px] font-bold text-stone-600 font-malayalam mt-0.5">
+                    രുചിയുടെ ഉത്തമ കൂട്ടായ്മ • കേരളം
+                  </p>
+                  <p className="text-[9px] text-stone-500 font-mono mt-0.5">
+                    Mob: +91 94470 00000 • FSSAI Lic: 21324189000124
+                  </p>
+                </div>
+
+                {/* Receipt Title & Divider */}
+                <div className="border-t border-b border-dashed border-stone-300 py-1.5 my-2 flex items-center justify-between font-mono text-[10px]">
+                  <span className="font-black uppercase tracking-wider text-stone-800">
+                    TAX / CASH RECEIPT
+                  </span>
+                  <span className="font-bold text-stone-600">
+                    #{String(activeBillSale.id).slice(0, 8).toUpperCase()}
+                  </span>
+                </div>
+
+                {/* Receipt Meta Details */}
+                <div className="grid grid-cols-2 gap-1 text-[10px] font-mono py-1 text-stone-600">
                   <div>
-                    <h1 className="text-xl font-black tracking-tight text-stone-950 font-serif">
-                      EPSO FOOD PRODUCTS
-                    </h1>
-                    <p className="text-[11px] font-bold text-stone-600 font-malayalam">
-                      രുചിയുടെ ഉത്തമ കൂട്ടായ്മ • കേരളം
-                    </p>
-                    <p className="text-[10px] text-stone-500 font-mono">
-                      Ph: +91 94470 00000 • FSSAI Lic. Verified
-                    </p>
+                    <span className="text-stone-400">Date: </span>
+                    <strong className="text-stone-900">{activeBillSale.sale_date}</strong>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-stone-400">Time: </span>
+                    <strong className="text-stone-900">
+                      {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="text-stone-400">Cashier: </span>
+                    <strong className="text-stone-900">Admin</strong>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-stone-400">Mode: </span>
+                    <strong className="text-stone-900 uppercase">{activeBillSale.payment_method || 'CASH'}</strong>
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className="px-2 py-0.5 rounded-md bg-stone-900 text-white text-[10px] font-black uppercase tracking-wider">
-                    TAX INVOICE
-                  </span>
-                  <p className="text-xs font-black text-stone-800 font-mono mt-1">
-                    #{String(activeBillSale.id).slice(0, 8).toUpperCase()}
-                  </p>
-                  <p className="text-[11px] text-stone-600 font-mono">
-                    {activeBillSale.sale_date}
-                  </p>
-                </div>
-              </div>
 
-              {/* Customer / Buyer Information */}
-              <div className="p-3 rounded-xl bg-stone-50 border border-stone-200 text-xs">
-                <span className="text-[10px] font-bold text-stone-500 uppercase tracking-wider block mb-0.5">
-                  ബിൽ നൽകിയത് (Billed To):
-                </span>
-                <p className="text-sm font-black text-stone-900 font-malayalam">
-                  {activeBillSale.customer_name || 'റീട്ടെയിൽ കസ്റ്റമർ (Counter Sale)'}
-                </p>
-                <div className="flex items-center justify-between text-[11px] text-stone-600 mt-1">
-                  <span>പേയ്‌മെന്റ്: <strong className="uppercase">{activeBillSale.payment_method || 'CASH'}</strong></span>
-                  <span className="font-bold text-emerald-700 uppercase">
-                    {activeBillSale.payment_status === 'paid' ? 'പൂർണ്ണമായി അടച്ചു (PAID)' : 'തുക ബാക്കി (PENDING)'}
-                  </span>
+                {/* Customer Info Card */}
+                <div className="my-2 p-2 rounded-lg bg-stone-50 border border-stone-200 text-[11px]">
+                  <div className="text-[9px] font-bold text-stone-400 uppercase tracking-wider">
+                    Customer / Billed To:
+                  </div>
+                  <div className="font-black text-stone-900 font-malayalam leading-tight mt-0.5">
+                    {activeBillSale.customer_name || 'റീട്ടെയിൽ കസ്റ്റമർ (Counter Sale)'}
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] mt-1 text-stone-500 font-mono">
+                    <span>Status:</span>
+                    <span className="font-black px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 uppercase">
+                      {activeBillSale.payment_status === 'paid' ? 'PAID / സ്വീകരിച്ചു' : 'PENDING'}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              {/* Items Table */}
-              <table className="w-full text-left text-xs border border-stone-300 rounded-lg overflow-hidden">
-                <thead className="bg-stone-100 text-stone-700 font-bold border-b border-stone-300">
-                  <tr>
-                    <th className="py-2 px-3">ഇനം (Item)</th>
-                    <th className="py-2 px-3 text-right">അളവ് (Qty)</th>
-                    <th className="py-2 px-3 text-right">വില (Rate)</th>
-                    <th className="py-2 px-3 text-right">ആകെ (Total)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-stone-200">
-                  <tr>
-                    <td className="py-3 px-3 font-bold text-stone-900 font-malayalam">
-                      {activeBillSale.product_name}
-                      {activeBillSale.notes && (
-                        <span className="text-[10px] text-stone-500 font-normal block">
-                          {activeBillSale.notes}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono font-semibold">
-                      {activeBillSale.quantity} {activeBillSale.unit}
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono text-stone-700">
-                      ₹{Number(activeBillSale.unit_price).toFixed(2)}
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono font-black text-stone-900">
+                {/* Line Items Table */}
+                <table className="w-full my-2 text-left text-[11px] border-collapse font-sans">
+                  <thead>
+                    <tr className="border-b border-t border-dashed border-stone-300 text-[10px] font-mono text-stone-500">
+                      <th className="py-1.5 text-left font-bold">ITEM</th>
+                      <th className="py-1.5 text-right font-bold">QTY</th>
+                      <th className="py-1.5 text-right font-bold">RATE</th>
+                      <th className="py-1.5 text-right font-bold">AMOUNT</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-dotted divide-stone-200">
+                    <tr>
+                      <td className="py-2 pr-1 font-bold text-stone-900 font-malayalam leading-tight">
+                        {activeBillSale.product_name}
+                        {activeBillSale.notes && (
+                          <span className="text-[9px] text-stone-400 block font-normal">
+                            {activeBillSale.notes}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 text-right font-mono font-semibold whitespace-nowrap">
+                        {activeBillSale.quantity} {activeBillSale.unit}
+                      </td>
+                      <td className="py-2 text-right font-mono text-stone-700 whitespace-nowrap">
+                        ₹{Number(activeBillSale.unit_price).toFixed(2)}
+                      </td>
+                      <td className="py-2 text-right font-mono font-black text-stone-950 whitespace-nowrap">
+                        ₹{Number(activeBillSale.total_amount).toFixed(2)}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                {/* Amount Totals Box */}
+                <div className="border-t border-dashed border-stone-300 pt-2 space-y-1 font-mono text-[11px]">
+                  <div className="flex items-center justify-between text-stone-600">
+                    <span>Subtotal:</span>
+                    <span>₹{Number(activeBillSale.total_amount).toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-stone-500 text-[10px]">
+                    <span>GST (Agro 0%):</span>
+                    <span>₹0.00</span>
+                  </div>
+                  <div className="border-t-2 border-stone-900 pt-2 flex items-center justify-between text-sm sm:text-base font-black text-stone-950">
+                    <span className="font-malayalam uppercase">ആകെ തുക (Total):</span>
+                    <span className="font-mono text-lg text-stone-950">
                       ₹{Number(activeBillSale.total_amount).toFixed(2)}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-
-              {/* Grand Total */}
-              <div className="p-3 rounded-xl bg-stone-100 border border-stone-300 flex items-center justify-between">
-                <span className="text-sm font-black text-stone-900 font-malayalam uppercase">
-                  ആകെ തുക (Grand Total):
-                </span>
-                <span className="text-xl font-black text-stone-950 font-mono">
-                  ₹{Number(activeBillSale.total_amount).toFixed(2)}
-                </span>
-              </div>
-
-              {/* Signatory Footer */}
-              <div className="pt-6 border-t border-stone-200 flex items-end justify-between text-[11px] text-stone-500">
-                <div>
-                  <p className="font-malayalam">നന്ദി, വീണ്ടും സന്ദർശിക്കുക!</p>
-                  <p className="text-[9px] font-sans">Computer Generated Invoice</p>
+                    </span>
+                  </div>
                 </div>
-                <div className="text-center">
-                  <div className="w-28 border-b border-stone-400 mb-1" />
-                  <p className="font-bold text-[10px]">Authorized Signatory</p>
-                  <p className="text-[9px]">EPSO PRODUCTIONS</p>
+
+                {/* Clean Barcode Aesthetic & Sign Off */}
+                <div className="mt-4 pt-3 border-t border-dashed border-stone-300 text-center space-y-1">
+                  {/* Decorative Barcode Lines */}
+                  <div className="flex items-center justify-center gap-0.5 h-6 opacity-75 my-1">
+                    {[3, 1, 4, 1, 2, 5, 2, 1, 3, 2, 4, 1, 2, 3, 1, 4, 2, 1, 3, 2, 5, 1, 2].map((w, idx) => (
+                      <div
+                        key={idx}
+                        className="bg-stone-900 h-full"
+                        style={{ width: `${w * 1.5}px` }}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-[9px] font-mono text-stone-400 tracking-widest">
+                    * {String(activeBillSale.id).slice(0, 12).toUpperCase()} *
+                  </p>
+                  <p className="text-[11px] font-black text-stone-800 font-malayalam mt-1">
+                    നന്ദി, വീണ്ടും സന്ദർശിക്കുക!
+                  </p>
+                  <p className="text-[8px] text-stone-400 font-sans uppercase tracking-wider">
+                    Clean Modern Digital Receipt • EPSO Productions
+                  </p>
                 </div>
               </div>
             </div>

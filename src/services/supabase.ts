@@ -980,6 +980,63 @@ export async function deletePackagingItem(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function adjustPackagingItemStock(
+  id: string,
+  delta: number,
+  reason: string = 'Stock adjustment'
+): Promise<PackagingItem> {
+  const { data: item, error: fetchErr } = await supabase
+    .from('packaging_items')
+    .select('*, products(name)')
+    .eq('id', id)
+    .single();
+
+  if (fetchErr || !item) throw new Error(fetchErr?.message || 'Packaging item not found');
+
+  const prevStock = Number(item.current_stock) || 0;
+  const newStock = Math.max(0, prevStock + delta);
+
+  const { data, error } = await supabase
+    .from('packaging_items')
+    .update({
+      current_stock: newStock,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select('*, products(name)')
+    .single();
+
+  if (error) throw error;
+
+  await supabase.from('stock_movements').insert({
+    item_id: id,
+    item_type: 'ingredient',
+    item_name: `${item.products?.name || 'Product'} ${item.size_label} Cover`,
+    movement_type: delta >= 0 ? 'purchase' : 'adjust',
+    quantity: delta,
+    unit: 'pcs',
+    previous_balance: prevStock,
+    new_balance: newStock,
+    cost_per_unit: Number(item.unit_cost) || 0,
+    reference: `COVER-${Date.now().toString().slice(-6)}`,
+    operator_name: 'Admin',
+    reason,
+    created_at: new Date().toISOString(),
+  });
+
+  return {
+    id: data.id,
+    productId: data.product_id,
+    productName: data.products?.name || '',
+    sizeLabel: data.size_label,
+    sizeGrams: Number(data.size_grams),
+    currentStock: Number(data.current_stock),
+    unitCost: Number(data.unit_cost),
+    packingLabourRate: Number(data.packing_labour_rate),
+    isActive: data.is_active,
+  };
+}
+
 export async function recordPacking(params: {
   packingDate: string;
   productId: string;

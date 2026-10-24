@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Ingredient, IngredientCategory, UnitType, StockMovement } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Ingredient, IngredientCategory, UnitType, StockMovement, Product, PackagingItem } from '../types';
 import {
   FiPlus,
   FiSearch,
@@ -13,11 +13,17 @@ import {
   FiLayers,
   FiPrinter,
   FiShoppingBag,
+  FiPackage,
+  FiBox,
 } from 'react-icons/fi';
 import {
   saveIngredient,
   deleteIngredient,
   adjustIngredientStock,
+  fetchPackagingItems,
+  savePackagingItem,
+  deletePackagingItem,
+  adjustPackagingItemStock,
 } from '../services/supabase';
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 import { AddPurchaseModal } from './AddPurchaseModal';
@@ -27,12 +33,14 @@ import { ThemeSelect } from './ThemeSelect';
 
 interface IngredientsAdminViewProps {
   ingredients: Ingredient[];
+  products?: Product[];
   stockMovements?: StockMovement[];
   onRefresh: () => void;
 }
 
 export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   ingredients,
+  products = [],
   stockMovements = [],
   onRefresh,
 }) => {
@@ -46,7 +54,156 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   const [addPurchaseModalOpen, setAddPurchaseModalOpen] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
 
-  useLockBodyScroll(formModalOpen || adjustModalOpen || purchaseListModalOpen || addPurchaseModalOpen);
+  // Tab state: Raw Ingredients vs Packet Types
+  const [activeIngredientTab, setActiveIngredientTab] = useState<'ingredients' | 'packets'>('ingredients');
+
+  // Packaging / Packet Types states
+  const [packagingItems, setPackagingItems] = useState<PackagingItem[]>([]);
+  const [loadingPackaging, setLoadingPackaging] = useState<boolean>(false);
+  const [packetModalOpen, setPacketModalOpen] = useState(false);
+  const [selectedPackagingItem, setSelectedPackagingItem] = useState<PackagingItem | null>(null);
+  const [packProductId, setPackProductId] = useState<string>('');
+  const [packSizeLabel, setPackSizeLabel] = useState<string>('100g');
+  const [packSizeGrams, setPackSizeGrams] = useState<number | string>(100);
+  const [packCurrentStock, setPackCurrentStock] = useState<number | string>(500);
+  const [packUnitCost, setPackUnitCost] = useState<number | string>(1.5);
+  const [packLabourRate, setPackLabourRate] = useState<number | string>(1.0);
+  const [packIsActive, setPackIsActive] = useState<boolean>(true);
+  const [packSearch, setPackSearch] = useState<string>('');
+
+  // Packaging Stock Adjust modal
+  const [packAdjustModalOpen, setPackAdjustModalOpen] = useState(false);
+  const [packAdjustItem, setPackAdjustItem] = useState<PackagingItem | null>(null);
+  const [packAdjustDelta, setPackAdjustDelta] = useState<number | string>(100);
+  const [packAdjustReason, setPackAdjustReason] = useState<string>('പുതിയ കവർ പർച്ചേസ് (New Covers Inward)');
+  const [packAdjustIsAdd, setPackAdjustIsAdd] = useState<boolean>(true);
+
+  useLockBodyScroll(
+    formModalOpen ||
+    adjustModalOpen ||
+    purchaseListModalOpen ||
+    addPurchaseModalOpen ||
+    packetModalOpen ||
+    packAdjustModalOpen
+  );
+
+  const loadPackagingItems = async () => {
+    setLoadingPackaging(true);
+    try {
+      const items = await fetchPackagingItems();
+      setPackagingItems(items);
+    } catch (err) {
+      console.error('Failed to load packaging items:', err);
+    } finally {
+      setLoadingPackaging(false);
+    }
+  };
+
+  useEffect(() => {
+    loadPackagingItems();
+  }, []);
+
+  const openCreatePacketModal = () => {
+    setSelectedPackagingItem(null);
+    setPackProductId(products.length > 0 ? products[0].id : '');
+    setPackSizeLabel('100g');
+    setPackSizeGrams(100);
+    setPackCurrentStock(500);
+    setPackUnitCost(1.5);
+    setPackLabourRate(1.0);
+    setPackIsActive(true);
+    setPacketModalOpen(true);
+  };
+
+  const openEditPacketModal = (item: PackagingItem) => {
+    setSelectedPackagingItem(item);
+    setPackProductId(item.productId);
+    setPackSizeLabel(item.sizeLabel);
+    setPackSizeGrams(item.sizeGrams);
+    setPackCurrentStock(item.currentStock);
+    setPackUnitCost(item.unitCost);
+    setPackLabourRate(item.packingLabourRate);
+    setPackIsActive(item.isActive);
+    setPacketModalOpen(true);
+  };
+
+  const openPackAdjustModal = (item: PackagingItem) => {
+    setPackAdjustItem(item);
+    setPackAdjustDelta(100);
+    setPackAdjustReason('പുതിയ കവർ പർച്ചേസ് (New Covers Inward)');
+    setPackAdjustIsAdd(true);
+    setPackAdjustModalOpen(true);
+  };
+
+  const handlePacketSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!packProductId || !packSizeLabel.trim()) {
+      alert('ഉൽപ്പന്നവും പാക്കറ്റ് അളവും തിരഞ്ഞെടുക്കണം (Please select product and size)');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await savePackagingItem({
+        id: selectedPackagingItem?.id,
+        productId: packProductId,
+        sizeLabel: packSizeLabel.trim(),
+        sizeGrams: Number(packSizeGrams) || 100,
+        currentStock: Number(packCurrentStock) || 0,
+        unitCost: Number(packUnitCost) || 0,
+        packingLabourRate: Number(packLabourRate) || 1.0,
+        isActive: packIsActive,
+      });
+      setPacketModalOpen(false);
+      loadPackagingItems();
+      onRefresh();
+    } catch (err: any) {
+      alert(`പാക്കറ്റ് സേവ് ചെയ്യുന്നതിൽ പിഴവ്: ${err?.message || 'Error saving packet'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePackAdjustSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const deltaAmount = Number(packAdjustDelta) || 0;
+    if (!packAdjustItem || deltaAmount <= 0) return;
+
+    if (!packAdjustIsAdd && packAdjustItem.currentStock <= 0) {
+      alert('മുന്നറിയിപ്പ്: കവർ സ്റ്റോക്ക് 0 ആണ്!');
+      return;
+    }
+
+    if (!packAdjustIsAdd && deltaAmount > packAdjustItem.currentStock) {
+      alert(`മുന്നറിയിപ്പ്: ലഭ്യമായ സ്റ്റോക്കിൽ (${packAdjustItem.currentStock} pcs) കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല!`);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const delta = packAdjustIsAdd ? deltaAmount : -deltaAmount;
+      await adjustPackagingItemStock(packAdjustItem.id, delta, packAdjustReason);
+      setPackAdjustModalOpen(false);
+      loadPackagingItems();
+      onRefresh();
+    } catch (err: any) {
+      alert(`കവർ സ്റ്റോക്ക് മാറ്റുന്നതിൽ പിഴവ്: ${err?.message || 'Error updating stock'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeletePackaging = async (item: PackagingItem) => {
+    const confirm = window.confirm(`"${item.productName || 'Product'} - ${item.sizeLabel}" പാക്കറ്റ് ടൈപ്പ് നീക്കം ചെയ്യണോ?`);
+    if (!confirm) return;
+    try {
+      await deletePackagingItem(item.id);
+      loadPackagingItems();
+      onRefresh();
+    } catch (err: any) {
+      alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message}`);
+    }
+  };
 
   // Form states
   const [name, setName] = useState('');
@@ -166,7 +323,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     }
   };
 
-  const isWagesItem = (itemName: string) => {
+  const isExcludedItem = (itemName: string) => {
     const n = (itemName || '').trim().toLowerCase();
     return (
       n === 'കൂലി' ||
@@ -174,12 +331,15 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
       n === 'കൂലി പാക്കിംഗ്' ||
       n.startsWith('കൂലി') ||
       n === 'wages' ||
-      n === 'packing wages'
+      n === 'packing wages' ||
+      n === 'കവർ' ||
+      n === 'cover' ||
+      n.startsWith('കവർ')
     );
   };
 
   const visibleIngredients = useMemo(() => {
-    return ingredients.filter((ing) => !isWagesItem(ing.name));
+    return ingredients.filter((ing) => !isExcludedItem(ing.name));
   }, [ingredients]);
 
   const filteredIngredients = visibleIngredients.filter((ing) => {
@@ -200,7 +360,44 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Actions & Low Stock Notice Header */}
+      {/* Top Tab Switcher: Raw Ingredients vs Packet Types */}
+      <div className="flex items-center gap-2 p-1.5 bg-stone-100 dark:bg-[#1E1B1B] rounded-2xl border border-stone-200 dark:border-[#2E2828] w-fit">
+        <button
+          type="button"
+          onClick={() => setActiveIngredientTab('ingredients')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all press-apple cursor-pointer ${
+            activeIngredientTab === 'ingredients'
+              ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-white shadow-xs'
+              : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+          }`}
+        >
+          <FiBox className="w-4 h-4 text-amber-500" />
+          <span>ചേരുവകൾ (Raw Materials)</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-stone-100 dark:bg-stone-700 text-stone-700 dark:text-stone-200">
+            {visibleIngredients.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveIngredientTab('packets')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all press-apple cursor-pointer ${
+            activeIngredientTab === 'packets'
+              ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-white shadow-xs'
+              : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+          }`}
+        >
+          <FiPackage className="w-4 h-4 text-epso-orange" />
+          <span>പാക്കറ്റ് തരങ്ങൾ (Packet Types & Covers)</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-300 font-bold">
+            {packagingItems.length}
+          </span>
+        </button>
+      </div>
+
+      {activeIngredientTab === 'ingredients' ? (
+        <>
+          {/* Actions & Low Stock Notice Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
         {lowStockCount > 0 ? (
           <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs font-bold font-malayalam">
@@ -471,6 +668,209 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
       {filteredIngredients.length === 0 && (
         <div className="py-12 text-center text-xs text-stone-400 dark:text-stone-500 font-malayalam">
           ചേരുവകൾ ഒന്നും കണ്ടെത്താനായില്ല (No ingredients found)
+        </div>
+      )}
+        </>
+      ) : (
+        <div className="space-y-6 font-malayalam">
+          {/* Header & Quick Action */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
+            <div>
+              <h2 className="text-base font-black text-stone-900 dark:text-white flex items-center gap-2">
+                <span>പാക്കറ്റ് തരങ്ങളും കവർ സ്റ്റോക്കും</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-300 font-bold">
+                  {packagingItems.length} Variants
+                </span>
+              </h2>
+              <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                ഓരോ ഉൽപ്പന്നത്തിനുമുള്ള പാക്കറ്റ് തരങ്ങൾ, കവറുകൾ (Pouches), കൂലി നിരക്ക്
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={openCreatePacketModal}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
+            >
+              <FiPlus className="w-4 h-4" />
+              <span>New Packet Type (പുതിയ പാക്കറ്റ്)</span>
+            </button>
+          </div>
+
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card">
+              <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">പാക്കറ്റ് തരങ്ങൾ</span>
+              <span className="text-xl font-black text-stone-900 dark:text-white font-mono">{packagingItems.length}</span>
+              <span className="text-[10px] text-stone-400 block mt-0.5 font-sans">Active sizes</span>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card">
+              <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">ആകെ കവർ സ്റ്റോക്ക്</span>
+              <span className="text-xl font-black text-epso-orange font-mono">
+                {packagingItems.reduce((acc, p) => acc + (p.currentStock || 0), 0).toLocaleString('en-IN')}
+              </span>
+              <span className="text-[10px] text-stone-400 block mt-0.5 font-sans">Total Covers (pcs)</span>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card">
+              <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">കവർ സ്റ്റോക്ക് മൂല്യം</span>
+              <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                ₹{packagingItems.reduce((acc, p) => acc + ((p.currentStock || 0) * (p.unitCost || 0)), 0).toLocaleString('en-IN')}
+              </span>
+              <span className="text-[10px] text-stone-400 block mt-0.5 font-sans">Inventory valuation</span>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card">
+              <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">കുറഞ്ഞ കവറുകൾ</span>
+              <span className="text-xl font-black text-amber-500 font-mono">
+                {packagingItems.filter(p => (p.currentStock || 0) <= 100).length}
+              </span>
+              <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5 font-sans">≤ 100 pcs left</span>
+            </div>
+          </div>
+
+          {/* Search Bar */}
+          <div className="relative">
+            <FiSearch className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input
+              type="text"
+              value={packSearch}
+              onChange={(e) => setPackSearch(e.target.value)}
+              placeholder="Search by packet size, product name..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-epso-red/30 transition-all font-malayalam"
+            />
+          </div>
+
+          {/* Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {packagingItems
+              .filter((p) => {
+                if (!packSearch.trim()) return true;
+                const q = packSearch.toLowerCase();
+                return (
+                  (p.productName || '').toLowerCase().includes(q) ||
+                  p.sizeLabel.toLowerCase().includes(q)
+                );
+              })
+              .map((item) => {
+                const stock = item.currentStock || 0;
+                const valuation = stock * (item.unitCost || 0);
+
+                return (
+                  <div
+                    key={item.id}
+                    className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark flex flex-col justify-between transition-all group"
+                  >
+                    <div>
+                      {/* Top Header */}
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/50 text-epso-orange flex items-center justify-center font-black text-sm shrink-0">
+                            <FiPackage className="w-5 h-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="font-bold text-sm text-stone-900 dark:text-white font-malayalam leading-tight truncate">
+                              {item.productName || 'Product'}
+                            </h3>
+                            <span className="inline-block mt-0.5 px-2 py-0.5 rounded-md bg-stone-100 dark:bg-[#282323] text-stone-700 dark:text-stone-300 text-[11px] font-black font-mono">
+                              {item.sizeLabel} ({item.sizeGrams}g)
+                            </span>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                            stock > 200
+                              ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300'
+                              : stock > 50
+                              ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
+                              : 'bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300'
+                          }`}
+                        >
+                          {stock > 50 ? `${stock} pcs` : `${stock} pcs Low!`}
+                        </span>
+                      </div>
+
+                      {/* Detail Metrics */}
+                      <div className="grid grid-cols-3 gap-2 py-2.5 px-3 rounded-xl bg-stone-50 dark:bg-[#181515] border border-stone-100 dark:border-[#282323] text-[11px] mb-3">
+                        <div>
+                          <span className="text-stone-400 block text-[9px] uppercase font-bold">കവർ വില</span>
+                          <span className="font-black font-mono text-stone-800 dark:text-stone-200">
+                            ₹{Number(item.unitCost).toFixed(2)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-stone-400 block text-[9px] uppercase font-bold">കൂലി നിരക്ക്</span>
+                          <span className="font-black font-mono text-stone-800 dark:text-stone-200">
+                            ₹{Number(item.packingLabourRate).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-stone-400 block text-[9px] uppercase font-bold">ആകെ മൂല്യം</span>
+                          <span className="font-black font-mono text-emerald-600 dark:text-emerald-400">
+                            ₹{Math.round(valuation).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 pt-2 border-t border-stone-100 dark:border-[#282323]">
+                      <button
+                        type="button"
+                        onClick={() => openPackAdjustModal(item)}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold border border-amber-500/30 transition-all cursor-pointer"
+                        title="Add or deduct cover stock"
+                      >
+                        <FiRepeat className="w-3.5 h-3.5" />
+                        <span className="font-malayalam">കവർ സ്റ്റോക്ക്</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => openEditPacketModal(item)}
+                        className="p-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] border border-stone-200 dark:border-[#2E2828] transition-all cursor-pointer"
+                        title="Edit packet type"
+                      >
+                        <FiEdit2 className="w-3.5 h-3.5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePackaging(item)}
+                        className="p-2 rounded-xl text-stone-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 border border-stone-200 dark:border-[#2E2828] transition-all cursor-pointer"
+                        title="Delete packet type"
+                      >
+                        <FiTrash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+
+          {packagingItems.length === 0 && !loadingPackaging && (
+            <div className="p-8 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] text-center space-y-3">
+              <div className="w-12 h-12 rounded-2xl bg-orange-100 dark:bg-orange-950/50 text-epso-orange flex items-center justify-center mx-auto">
+                <FiPackage className="w-6 h-6" />
+              </div>
+              <h3 className="text-sm font-black text-stone-900 dark:text-white">
+                പാക്കറ്റ് തരങ്ങൾ ചേർത്തിട്ടില്ല (No packet types configured)
+              </h3>
+              <p className="text-xs text-stone-400 font-malayalam max-w-sm mx-auto">
+                ഓരോ ഉൽപ്പന്നത്തിനുമുള്ള പാക്കറ്റ് സൈസുകൾ (100g, 250g, 500g, etc.) കവർ സ്റ്റോക്ക് സഹിതം ഇവിടെ ചേർക്കാം.
+              </p>
+              <button
+                type="button"
+                onClick={openCreatePacketModal}
+                className="px-4 py-2 rounded-xl bg-epso-red text-white text-xs font-bold shadow-md press-apple cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <FiPlus className="w-4 h-4" />
+                <span>ആദ്യത്തെ പാക്കറ്റ് ചേർക്കുക</span>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -757,6 +1157,296 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       )}
                     </button>
                   </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal: Add / Edit Packet Type */}
+      {packetModalOpen && createPortal(
+        <div className="fixed inset-0 z-[9999] overflow-y-auto">
+          <div
+            className="fixed inset-0 w-full h-full bg-black/65 backdrop-blur-md animate-apple-backdrop"
+            onClick={() => !isSubmitting && setPacketModalOpen(false)}
+          />
+
+          <div className="min-h-full flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
+            <div className="w-full md:w-[70vw] md:max-w-xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto">
+              <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
+                {selectedPackagingItem ? 'പാക്കറ്റ് തരം തിരുത്തുക (Edit Packet)' : 'പുതിയ പാക്കറ്റ് തരം (New Packet Type)'}
+              </h2>
+              <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4">
+                ഉൽപ്പന്നത്തിൻ്റെ പാക്കറ്റ് സൈസ്, കവർ സ്റ്റോക്ക് (Cover Stock), പാക്കിംഗ് കൂലി നിരക്ക്
+              </p>
+
+              <form onSubmit={handlePacketSubmit} className="space-y-4 text-xs font-malayalam">
+                {/* Product Select */}
+                <div>
+                  <ThemeSelect
+                    label="ഉൽപ്പന്നം (Product) *"
+                    value={packProductId}
+                    onChange={(val) => setPackProductId(val)}
+                    options={products.map((p) => ({
+                      value: p.id,
+                      label: `${p.name} (${p.unit})`,
+                    }))}
+                  />
+                  {products.length === 0 && (
+                    <p className="text-[11px] text-amber-500 mt-1">
+                      ഉൽപ്പന്നങ്ങൾ ലഭ്യമല്ല. ആദ്യം Products ടാബിൽ ഉൽപ്പന്നങ്ങൾ ചേർക്കുക.
+                    </p>
+                  )}
+                </div>
+
+                {/* Size Label & Grams */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                      പാക്കറ്റ് പേര് / അളവ് (Size Label) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={packSizeLabel}
+                      onChange={(e) => setPackSizeLabel(e.target.value)}
+                      placeholder="ഉദാ: 100g, 250g, 500g, 1kg"
+                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono font-bold focus:outline-none focus:ring-2 focus:ring-epso-red/30"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                      ഗ്രാം തൂക്കം (Size in Grams) *
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="1"
+                      required
+                      value={packSizeGrams === 0 ? '' : packSizeGrams}
+                      onChange={(e) => setPackSizeGrams(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      placeholder="100"
+                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono font-bold focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Cover Current Stock (pcs) & Unit Cost (₹) */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                      കവർ സ്റ്റോക്ക് (Cover Stock in pcs) *
+                    </label>
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      required
+                      value={packCurrentStock === 0 ? '' : packCurrentStock}
+                      onChange={(e) => setPackCurrentStock(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                      placeholder="500"
+                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono font-bold focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                      കവർ ഒന്നിന് വില (Cover Cost ₹ / pc) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      value={packUnitCost === 0 ? '' : packUnitCost}
+                      onChange={(e) => setPackUnitCost(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      placeholder="1.50"
+                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono font-bold focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Labour Rate & Total Valuation */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                      പാക്കിംഗ് കൂലി നിരക്ക് (Labour ₹ / pc) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      value={packLabourRate === 0 ? '' : packLabourRate}
+                      onChange={(e) => setPackLabourRate(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      placeholder="1.00"
+                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono font-bold focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] flex flex-col justify-center">
+                    <span className="text-[10px] text-stone-400 font-bold block uppercase">കവർ ഇൻവെന്ററി മൂല്യം</span>
+                    <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                      ₹{Math.round((Number(packCurrentStock) || 0) * (Number(packUnitCost) || 0)).toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Active Checkbox */}
+                <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828]">
+                  <span className="font-bold text-stone-900 dark:text-white">
+                    Active (ഈ പാക്കറ്റ് സൈസ് സജീവമാണ്)
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={packIsActive}
+                    onChange={(e) => setPackIsActive(e.target.checked)}
+                    className="w-5 h-5 accent-epso-red rounded cursor-pointer"
+                  />
+                </div>
+
+                {/* Modal Footer Buttons */}
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100 dark:border-[#2E2828]">
+                  <button
+                    type="button"
+                    onClick={() => setPacketModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold cursor-pointer"
+                  >
+                    റദ്ദാക്കുക (Cancel)
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !packProductId}
+                    className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
+                        <span>സൂക്ഷിക്കുന്നു...</span>
+                      </>
+                    ) : (
+                      <span>സൂക്ഷിക്കുക (Save Packet)</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal: Adjust Cover Stock (Pieces) */}
+      {packAdjustModalOpen && packAdjustItem && createPortal(
+        <div className="fixed inset-0 z-[9999] overflow-y-auto">
+          <div
+            className="fixed inset-0 w-full h-full bg-black/65 backdrop-blur-md animate-apple-backdrop"
+            onClick={() => !isSubmitting && setPackAdjustModalOpen(false)}
+          />
+
+          <div className="min-h-full flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
+            <div className="w-full md:w-[70vw] md:max-w-xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto">
+              <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
+                കവർ സ്റ്റോക്ക് മാറ്റുക (Adjust Cover Stock)
+              </h2>
+              <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4">
+                {packAdjustItem.productName || 'Product'} • {packAdjustItem.sizeLabel} ({packAdjustItem.sizeGrams}g) • നിലവിലെ സ്റ്റോക്ക്: <span className="font-bold font-mono text-stone-800 dark:text-stone-200">{packAdjustItem.currentStock} pcs</span>
+              </p>
+
+              <form onSubmit={handlePackAdjustSubmit} className="space-y-4 text-xs font-malayalam">
+                {/* Inward / Outward Toggle */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPackAdjustIsAdd(true)}
+                    className={`flex-1 py-2.5 rounded-xl font-bold border transition-all ${
+                      packAdjustIsAdd
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                        : 'bg-stone-50 dark:bg-[#141212] text-stone-600 dark:text-stone-300 border-stone-200 dark:border-[#2E2828]'
+                    }`}
+                  >
+                    + കവർ ഇൻവാർഡ് (Inward / Purchase)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPackAdjustIsAdd(false)}
+                    className={`flex-1 py-2.5 rounded-xl font-bold border transition-all ${
+                      !packAdjustIsAdd
+                        ? 'bg-red-600 text-white border-red-600 shadow-sm'
+                        : 'bg-stone-50 dark:bg-[#141212] text-stone-600 dark:text-stone-300 border-stone-200 dark:border-[#2E2828]'
+                    }`}
+                  >
+                    - കവർ ഔട്ട്‌വാർഡ് (Damaged / Outward)
+                  </button>
+                </div>
+
+                {/* Delta quantity in pcs */}
+                <div>
+                  <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                    കവറുകളുടെ എണ്ണം (Pieces) *
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    required
+                    value={packAdjustDelta === 0 ? '' : packAdjustDelta}
+                    onChange={(e) => setPackAdjustDelta(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                    onFocus={(e) => e.target.select()}
+                    placeholder="100 pcs"
+                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-sm font-bold text-stone-900 dark:text-white font-mono focus:outline-none"
+                  />
+                </div>
+
+                {/* Reason Select */}
+                <div>
+                  <ThemeSelect
+                    label="കാരണം (Reason) *"
+                    value={packAdjustReason}
+                    onChange={(val) => setPackAdjustReason(val)}
+                    options={[
+                      { value: 'പുതിയ കവർ പർച്ചേസ് (New Covers Inward)', label: 'പുതിയ കവർ പർച്ചേസ് (New Covers Inward)' },
+                      { value: 'പ്രിന്റിംഗ് കേടുപാടുകൾ / വേസ്റ്റേജ് (Damaged/Wastage)', label: 'പ്രിന്റിംഗ് കേടുപാടുകൾ / വേസ്റ്റേജ് (Damaged/Wastage)' },
+                      { value: 'ഫിസിക്കൽ ഓഡിറ്റ് തിരുത്തൽ (Physical Stock Audit)', label: 'ഫിസിക്കൽ ഓഡിറ്റ് തിരുത്തൽ (Physical Stock Audit)' },
+                      { value: 'സാമ്പിൾ പാക്കിംഗ് നൽകിയത് (Free Samples / Promotional)', label: 'സാമ്പിൾ പാക്കിംഗ് നൽകിയത് (Free Samples / Promotional)' },
+                    ]}
+                  />
+                </div>
+
+                {/* Balance preview */}
+                <div className="p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] flex items-center justify-between">
+                  <span className="text-stone-400 font-bold">പുതിയ കവർ ബാലൻസ്:</span>
+                  <span className={`text-base font-extrabold font-mono ${!packAdjustIsAdd && Number(packAdjustDelta) > packAdjustItem.currentStock ? 'text-red-600' : 'text-stone-900 dark:text-white'}`}>
+                    {Math.max(0, packAdjustItem.currentStock + (packAdjustIsAdd ? (Number(packAdjustDelta) || 0) : -(Number(packAdjustDelta) || 0)))}{' '}pcs
+                  </span>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100 dark:border-[#2E2828]">
+                  <button
+                    type="button"
+                    onClick={() => setPackAdjustModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold cursor-pointer"
+                  >
+                    റദ്ദാക്കുക (Cancel)
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || Number(packAdjustDelta) <= 0}
+                    className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shadow-sm press-apple flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                        <span>അപ്ഡേറ്റ് ചെയ്യുന്നു...</span>
+                      </>
+                    ) : (
+                      <span>അപ്ഡേറ്റ് ചെയ്യുക (Update Stock)</span>
+                    )}
+                  </button>
                 </div>
               </form>
             </div>

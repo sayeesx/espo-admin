@@ -590,6 +590,41 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
+        {/* Mobile Quick Action Buttons Bar */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+          <button
+            type="button"
+            onClick={() => onNavigateTab('ingredients')}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 flex items-center gap-1.5 press-apple font-malayalam whitespace-nowrap shrink-0 shadow-2xs"
+          >
+            <span>➕ പർച്ചേസ്</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateTab('wages')}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-orange-50 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50 flex items-center gap-1.5 press-apple font-malayalam whitespace-nowrap shrink-0 shadow-2xs"
+          >
+            <span>🍳 കൂലി കണക്ക്</span>
+            <span className="text-[10px] font-mono font-black px-1.5 py-0.2 rounded bg-orange-200/80 dark:bg-orange-900/80 text-orange-950 dark:text-orange-200">
+              {todayWage ? `₹${todayWage.totalWageBudget}` : '₹4000'}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateTab('sales')}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-1.5 press-apple font-malayalam whitespace-nowrap shrink-0 shadow-2xs"
+          >
+            <span>💰 വിൽപ്പന</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onNavigateTab('costing')}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-900/50 flex items-center gap-1.5 press-apple font-malayalam whitespace-nowrap shrink-0 shadow-2xs"
+          >
+            <span>📊 കോസ്റ്റിംഗ്</span>
+          </button>
+        </div>
+
         {/* Production Output Card (Shows only for that day when selected, normal 7-day trend when unselected) */}
         <div className="p-4 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
           <div className="flex items-center justify-between mb-2">
@@ -876,15 +911,54 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* DESKTOP VIEW                                                 */}
       {/* ============================================================ */}
       <div className="hidden md:block space-y-6">
-        {/* Top Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-[#2E2828]">
+        {/* Top Header with Quick Operations on the same line */}
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
           <div>
-            <h1 className="text-2xl font-black text-stone-900 dark:text-white">
-              Dashboard
+            <h1 className="text-2xl font-black text-stone-900 dark:text-white flex items-center gap-2">
+              <span>Dashboard</span>
             </h1>
             <p className="text-xs text-stone-400 font-malayalam mt-0.5">
               തത്സമയ വിൽപന മൂല്യനിർണ്ണയവും ഉൽപ്പാദന കണക്കുകളും
             </p>
+          </div>
+
+          {/* Quick Operations Action Bar on same line as title */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onNavigateTab('ingredients')}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all shadow-2xs"
+              title="Add Purchase"
+            >
+              <span>➕ പർച്ചേസ് ചേർക്കുക</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('wages')}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/60 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all shadow-2xs"
+              title="Daily Wages"
+            >
+              <span>🍳 കൂലി കണക്ക്</span>
+              <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded-md bg-orange-200/80 dark:bg-orange-900/80 text-orange-950 dark:text-orange-200">
+                {todayWage ? `₹${todayWage.totalWageBudget}` : '₹4000'}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('sales')}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all shadow-2xs"
+              title="Record Sale"
+            >
+              <span>💰 വിൽപ്പന രേഖപ്പെടുത്തുക</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('costing')}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all shadow-2xs"
+              title="Costing Analysis"
+            >
+              <span>📊 കോസ്റ്റിംഗ് വിശകലനം</span>
+            </button>
           </div>
         </div>
 
@@ -987,9 +1061,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Daily Operations Card (Desktop) with smooth load animation */}
-        <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all animate-daily-ops">
-          <div className="flex items-center justify-between mb-4">
+        {/* Daily Operations Card (Desktop) with reduced height without changing chart sizes */}
+        <div className="py-3 px-4 sm:px-5 sm:py-3.5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all animate-daily-ops">
+          <div className="flex items-center justify-between mb-2">
             <div>
               <h2 className="text-sm font-black text-stone-900 dark:text-white">
                 Daily Operations
@@ -1003,7 +1077,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 pt-1">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 pt-1">
             <CircularGauge
               label="Batches"
               value={String(activeDateRuns.length)}
@@ -1044,46 +1118,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               color="#10B981"
               subtext={lowStockIngredients.length > 0 ? `${lowStockIngredients.length} കുറവ്` : 'സുരക്ഷിതം'}
             />
-          </div>
-
-          {/* Quick Operations Action Bar */}
-          <div className="mt-4 pt-3 border-t border-stone-100 dark:border-[#282323] flex flex-wrap items-center justify-between gap-2">
-            <span className="text-[11px] font-bold text-stone-400 font-malayalam">
-              പ്രധാന പ്രവർത്തനങ്ങൾ (Quick Operations):
-            </span>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => onNavigateTab('ingredients')}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all"
-              >
-                <span>➕ പർച്ചേസ് ചേർക്കുക</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigateTab('wages')}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-900/60 border border-orange-200 dark:border-orange-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all"
-              >
-                <span>🍳 കൂലി കണക്ക്</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-orange-200/60 dark:bg-orange-900/80">
-                  {todayWage ? `₹${todayWage.totalWageBudget}` : 'Pending'}
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigateTab('sales')}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all"
-              >
-                <span>💰 വിൽപ്പന രേഖപ്പെടുത്തുക</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => onNavigateTab('costing')}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all"
-              >
-                <span>📊 കോസ്റ്റിംഗ് വിശകലനം</span>
-              </button>
-            </div>
           </div>
         </div>
 
