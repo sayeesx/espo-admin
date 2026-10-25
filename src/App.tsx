@@ -68,6 +68,9 @@ export const App: React.FC = () => {
   const [changingTab, setChangingTab] = useState<AdminTab | null>(null);
 
   const handleTabChange = useCallback((newTab: AdminTab) => {
+    if (newTab === 'ai') {
+      setIsAIOpen(true);
+    }
     setChangingTab(newTab);
     setTimeout(() => {
       setActiveTab(newTab);
@@ -94,6 +97,7 @@ export const App: React.FC = () => {
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState<boolean>(false);
+  const [isAIOpen, setIsAIOpen] = useState<boolean>(false);
 
   // Persistent dismissed notification IDs
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(() => {
@@ -331,12 +335,11 @@ export const App: React.FC = () => {
               )}
 
               {activeTab === 'ai' && (
-                <AIAdminAssistant
+                <DashboardView
                   products={products}
                   ingredients={ingredients}
                   productionRuns={productionRuns}
-                  stockMovements={stockMovements}
-                  recipes={recipes}
+                  onNavigateTab={handleTabChange}
                   onRefresh={loadAllData}
                 />
               )}
@@ -387,6 +390,23 @@ export const App: React.FC = () => {
         onTabChange={handleTabChange}
         notificationCount={notificationCount}
         changingTab={changingTab}
+      />
+
+      {/* Floating AI Assistant Chat Bot Widget in Left Corner */}
+      <AIAdminAssistant
+        products={products}
+        ingredients={ingredients}
+        productionRuns={productionRuns}
+        stockMovements={stockMovements}
+        recipes={recipes}
+        onRefresh={loadAllData}
+        isOpen={isAIOpen || activeTab === 'ai'}
+        onToggle={() => {
+          setIsAIOpen((prev) => !prev);
+          if (activeTab === 'ai') {
+            setActiveTab('dashboard');
+          }
+        }}
       />
 
       {/* Production PIN Configuration Modal */}

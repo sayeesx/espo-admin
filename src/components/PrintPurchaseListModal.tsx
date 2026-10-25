@@ -265,11 +265,11 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
           <div className="p-4 sm:p-5 border-b border-stone-200 dark:border-[#2E2828] flex items-center justify-between gap-3 bg-stone-50/50 dark:bg-[#181515]">
             <div className="flex items-center gap-3">
               <img
-                src="/epso-logo-transparent.png"
-                alt="EPSO Logo"
-                className="w-10 h-10 object-contain rounded-lg"
+                src="/epso-swirl-transparent.png"
+                alt="EPSO Brand Icon"
+                className="w-10 h-10 object-contain"
                 onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/epso-swirl-transparent.png';
+                  (e.target as HTMLImageElement).src = '/pwa-512x512.png';
                 }}
               />
               <div>
@@ -578,11 +578,11 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                       <img
-                        src="/epso-logo-transparent.png"
-                        alt="EPSO Logo"
-                        style={{ width: '52px', height: '52px', objectFit: 'contain' }}
+                        src="/epso-swirl-transparent.png"
+                        alt="EPSO Brand Icon"
+                        style={{ width: '48px', height: '48px', objectFit: 'contain' }}
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/epso-swirl-transparent.png';
+                          (e.target as HTMLImageElement).src = '/pwa-512x512.png';
                         }}
                       />
                       <div>

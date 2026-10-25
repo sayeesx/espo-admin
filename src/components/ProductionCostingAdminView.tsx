@@ -67,7 +67,19 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   productionRuns,
   onRefresh,
 }) => {
-  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const latestProductionDate = useMemo(() => {
+    const dates = productionRuns
+      .filter((r) => r.status === 'completed' && r.productionDate)
+      .map((r) => r.productionDate)
+      .sort();
+    return dates.length > 0 ? dates[dates.length - 1] : new Date().toISOString().split('T')[0];
+  }, [productionRuns]);
+
+  const [selectedDate, setSelectedDate] = useState<string>(latestProductionDate);
+
+  useEffect(() => {
+    setSelectedDate(latestProductionDate);
+  }, [latestProductionDate]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductCostSummary | null>(null);
 
@@ -411,30 +423,6 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   // Dashboard view
   return (
     <div className="space-y-6 pb-8 font-malayalam">
-      {/* Date Picker */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 pb-4 border-b border-stone-200 dark:border-[#2E2828]">
-        <div className="flex items-center gap-2 flex-1">
-          <FiCalendar className="w-4 h-4 text-stone-400" />
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-sm text-stone-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-epso-red/30 dark:focus:ring-amber-500/30"
-          />
-          <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">
-            {formatDate(selectedDate)}
-          </span>
-        </div>
-        <button
-          onClick={() => loadCostingData(selectedDate)}
-          disabled={isLoading}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-xs font-bold text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] press-apple transition-colors cursor-pointer disabled:opacity-50"
-        >
-          <FiRefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-epso-red' : ''}`} />
-          <span>പുതുക്കുക</span>
-        </button>
-      </div>
-
       {isLoading ? (
         <div className="min-h-[30vh] flex items-center justify-center">
           <LoadingSpinner size="md" label="കോസ്റ്റിംഗ് വിവരങ്ങൾ ലഭ്യമാക്കുന്നു..." />
@@ -442,46 +430,10 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
       ) : productCosts.length === 0 ? (
         <div className="min-h-[30vh] flex flex-col items-center justify-center gap-3 text-center">
           <FiLayers className="w-12 h-12 text-stone-300 dark:text-stone-600" />
-          <p className="text-sm font-bold text-stone-500 dark:text-stone-400">ഈ തീയതിയിൽ ഉൽപ്പാദന വിവരങ്ങൾ ലഭ്യമല്ല</p>
-          <p className="text-xs text-stone-400 dark:text-stone-500">പൂർത്തിയായ ഉൽപ്പാദനം ഉള്ള ഒരു തീയതി തിരഞ്ഞെടുക്കുക</p>
+          <p className="text-sm font-bold text-stone-500 dark:text-stone-400">ഉൽപ്പാദന വിവരങ്ങൾ ലഭ്യമല്ല</p>
         </div>
       ) : (
         <>
-          {/* Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3.5 rounded-2xl bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30">
-              <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider">ആകെ ഉൽപ്പാദനം</p>
-              <p className="text-lg font-black text-blue-800 dark:text-blue-200 font-mono">{totals.totalKg.toFixed(1)} kg</p>
-            </div>
-            <div className="p-3.5 rounded-2xl bg-purple-50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/30">
-              <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">ആകെ പാക്കറ്റുകൾ</p>
-              <p className="text-lg font-black text-purple-800 dark:text-purple-200 font-mono">{totals.totalPackets}</p>
-            </div>
-            <div className="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30">
-              <p className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">ആകെ ചെലവ്</p>
-              <p className="text-lg font-black text-emerald-800 dark:text-emerald-200 font-mono">{formatCurrency(totals.totalMfgCost)}</p>
-            </div>
-            <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30">
-              <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider">ഉൽപ്പന്നങ്ങൾ</p>
-              <p className="text-lg font-black text-amber-800 dark:text-amber-200 font-mono">{productCosts.length}</p>
-            </div>
-          </div>
-
-          {/* Expense Summary */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-            {[
-              { label: 'ചേരുവകൾ', value: totals.totalIngredientCost, color: 'text-blue-600 dark:text-blue-400' },
-              { label: 'ഓയിൽ', value: totals.totalOilCost, color: 'text-amber-600 dark:text-amber-400' },
-              { label: 'കുക്കിംഗ് കൂലി', value: totals.totalProdWages, color: 'text-orange-600 dark:text-orange-400' },
-              { label: 'പാക്കിംഗ് കൂലി', value: totals.totalPackWages, color: 'text-indigo-600 dark:text-indigo-400' },
-              { label: 'പാക്കിംഗ്', value: totals.totalPackMaterial, color: 'text-purple-600 dark:text-purple-400' },
-            ].map((item, idx) => (
-              <div key={idx} className="p-2.5 rounded-xl bg-white dark:bg-[#1A1616] border border-stone-200 dark:border-[#2E2828]">
-                <p className="text-[9px] font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider">{item.label}</p>
-                <p className={`text-sm font-black font-mono ${item.color}`}>{formatCurrency(item.value)}</p>
-              </div>
-            ))}
-          </div>
 
           {/* Product Cards */}
           <div className="space-y-3">
