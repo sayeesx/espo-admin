@@ -813,6 +813,32 @@ export async function recordSale(sale: {
   return data;
 }
 
+export async function recordSalesBatch(sales: Array<{
+  sale_date: string;
+  product_id?: string;
+  product_name: string;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  total_amount: number;
+  customer_name?: string;
+  payment_method?: string;
+  payment_status?: string;
+  notes?: string;
+}>): Promise<any[]> {
+  if (!sales || sales.length === 0) return [];
+  const { data, error } = await supabase
+    .from('sales')
+    .insert(sales)
+    .select();
+
+  if (error) {
+    console.error('Error recording sales batch:', error);
+    throw error;
+  }
+  return data || [];
+}
+
 export async function deleteSale(id: string): Promise<void> {
   const { error } = await supabase.from('sales').delete().eq('id', id);
   if (error) {

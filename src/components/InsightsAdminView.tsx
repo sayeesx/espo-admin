@@ -449,15 +449,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
       </div>
 
       {/* Range Summary Indicators (Malayalam) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-3 bg-stone-50 dark:bg-[#1A1818] rounded-xl border border-stone-200 dark:border-[#2E2828]">
-          <div className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam tracking-tight">
-            തിരഞ്ഞെടുത്ത ബാച്ചുകൾ
-          </div>
-          <div className="text-xl font-black text-stone-900 dark:text-white mt-0.5">
-            <AnimatedNumber value={completedRunsInRange.length} />
-          </div>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="p-3 bg-stone-50 dark:bg-[#1A1818] rounded-xl border border-stone-200 dark:border-[#2E2828]">
           <div className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam tracking-tight">
             ആകെ ഉൽപ്പാദനം

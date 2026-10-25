@@ -197,6 +197,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       .reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
   }, [salesList, todayIso]);
 
+  const allTimeSalesTotal = useMemo(() => {
+    return salesList.reduce((sum, s) => sum + (Number(s.total_amount) || 0), 0);
+  }, [salesList]);
+
   // Map of total produced kg per product from completed production runs
   const productProducedKgMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -791,17 +795,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
             <div>
               <p className="text-[11px] font-bold text-emerald-800 dark:text-emerald-300 font-malayalam">
-                ഇന്നത്തെ വിൽപ്പന (Today's Sales)
+                ആകെ വിൽപ്പന (Total Sales)
               </p>
               <p className="text-lg font-black text-emerald-600 dark:text-emerald-400 font-mono leading-tight">
-                <AnimatedNumber value={todaySalesTotal} prefix="₹" decimals={2} />
+                <AnimatedNumber value={allTimeSalesTotal} prefix="₹" decimals={2} />
               </p>
             </div>
           </div>
           <div className="text-right">
-            <span className="text-[10px] text-stone-400 block font-malayalam">ഈ മാസം</span>
-            <span className="text-xs font-bold text-stone-700 dark:text-stone-300 font-mono">
-              ₹{monthSalesTotal.toFixed(0)}
+            <span className="text-[10px] text-stone-400 block font-malayalam">ഈ മാസം: ₹{monthSalesTotal.toFixed(0)}</span>
+            <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+              ഇന്ന്: ₹{todaySalesTotal.toFixed(0)}
             </span>
           </div>
         </div>
@@ -962,290 +966,134 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* Multi-Week Horizontal Scrolling Calendar Strip (Desktop) */}
-        <div className="bg-white dark:bg-[#1E1B1B] rounded-2xl p-3 border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-2">
-          <div className="flex items-center justify-between px-2">
-            <div className="flex items-center gap-2">
-              <FiCalendar className="w-4 h-4 text-epso-orange" />
-              <span className="text-xs font-bold text-stone-800 dark:text-stone-200">
-                Production Calendar
-              </span>
-              <span className="text-[11px] text-stone-400 font-malayalam">
-                {selectedDate ? `(${selectedDate})` : '(എല്ലാ ദിവസങ്ങളും)'}
-              </span>
-              <button
-                type="button"
-                onClick={() => setSelectedDate(null)}
-                className={`text-[10px] font-bold px-2.5 py-1 rounded-lg ml-2 transition-colors ${
-                  !selectedDate
-                    ? 'bg-epso-orange text-white'
-                    : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 bg-stone-100 dark:bg-[#282323]'
-                }`}
-              >
-                All Dates
-              </button>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Clickable Date Container (Desktop): Clicking dd/mm/yyyy or calendar icon opens calendar */}
-              <div
-                onClick={() => openCalendarPicker(true)}
-                className="relative flex items-center gap-2 px-3 py-1.5 rounded-xl border border-stone-200 dark:border-[#332c2c] bg-stone-50 dark:bg-[#282323] cursor-pointer hover:border-epso-orange transition-colors select-none group"
-                title="Click date to open calendar"
-              >
-                <FiCalendar className="w-4 h-4 text-epso-orange pointer-events-none group-hover:scale-110 transition-transform" />
-                <span className="text-xs font-bold text-stone-700 dark:text-stone-200 pointer-events-none">
-                  {selectedDate ? selectedDate.split('-').reverse().join('/') : 'dd/mm/yyyy'}
-                </span>
-                <input
-                  ref={desktopDateInputRef}
-                  type="date"
-                  value={selectedDate || ''}
-                  onChange={(e) => setSelectedDate(e.target.value || null)}
-                  onClick={(e) => {
-                    try {
-                      (e.target as any).showPicker?.();
-                    } catch {}
-                  }}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                />
+        {/* ============================================================ */}
+        {/* DESKTOP DASHBOARD CONTENT                                    */}
+        {/* ============================================================ */}
+        {/* Critical Stock Alert Banner */}
+          {lowStockIngredients.length > 0 && (
+            <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400">
+                  <FiAlertTriangle className="w-5 h-5 shrink-0" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-amber-900 dark:text-amber-300 font-malayalam">
+                    കുറഞ്ഞ സ്റ്റോക്ക് മുന്നറിയിപ്പ് ({lowStockIngredients.length} ചേരുവകൾ)
+                  </h2>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 font-malayalam">
+                    {lowStockIngredients.map((i) => i.name).slice(0, 3).join(', ')} കുറവാണ്.
+                  </p>
+                </div>
               </div>
-
               <button
-                type="button"
-                onClick={() => handleScrollWeeks('left', true)}
-                className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500 border border-stone-200 dark:border-[#332c2c] transition-colors cursor-pointer"
-                title="Previous Week"
+                onClick={() => onNavigateTab('notifications')}
+                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white whitespace-nowrap press-apple"
               >
-                <FiChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => handleScrollWeeks('right', true)}
-                className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500 border border-stone-200 dark:border-[#332c2c] transition-colors cursor-pointer"
-                title="Next Week"
-              >
-                <FiChevronRight className="w-4 h-4" />
+                View Alerts
               </button>
             </div>
-          </div>
+          )}
 
-          <div
-            ref={desktopDateScrollRef}
-            className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1"
-          >
-            {multiWeekDays.map((d) => {
-              const isSelected = selectedDate === d.iso;
-              return (
-                <button
-                  key={d.iso}
-                  type="button"
-                  onClick={() => setSelectedDate(selectedDate === d.iso ? null : d.iso)}
-                  className={`py-2 px-3 rounded-xl flex flex-col items-center justify-center transition-all press-apple cursor-pointer shrink-0 min-w-[56px] ${
-                    isSelected
-                      ? 'bg-epso-orange text-white shadow-md font-black ring-2 ring-epso-orange/30'
-                      : 'text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-[#282323]'
-                  }`}
-                >
-                  <span className={`text-[10px] uppercase font-bold ${isSelected ? 'text-white' : 'text-stone-400'}`}>
-                    {d.dayName}
-                  </span>
-                  <span className="text-base font-black mt-0.5 leading-none">
-                    {d.dayNum}
-                  </span>
-                  <span className={`text-[9px] uppercase mt-0.5 ${isSelected ? 'text-white/80' : 'text-stone-400'}`}>
-                    {d.monthName}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+          {/* 5 Primary KPI Cards (Placed at Top) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* Card 1: Total Sales */}
+            <div
+              onClick={() => onNavigateTab('sales')}
+              className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] hover:border-emerald-500/50 shadow-apple-card dark:shadow-apple-card-dark transition-all cursor-pointer group"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
+                  ആകെ വിൽപ്പന
+                </span>
+                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform">
+                  <FiShoppingBag className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                <AnimatedNumber value={allTimeSalesTotal} prefix="₹" decimals={2} />
+              </div>
+              <div className="flex items-center justify-between mt-1 text-[11px] text-stone-400 font-malayalam">
+                <span>മാസം: ₹{monthSalesTotal.toFixed(0)}</span>
+                <span className="text-emerald-500 font-bold flex items-center gap-0.5">
+                  വിൽപ്പന <FiChevronRight className="w-3 h-3" />
+                </span>
+              </div>
+            </div>
 
-        {/* Daily Operations Card (Desktop) with reduced height without changing chart sizes */}
-        <div className="py-3 px-4 sm:px-5 sm:py-3.5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all animate-daily-ops">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h2 className="text-sm font-black text-stone-900 dark:text-white">
-                Daily Operations
-              </h2>
-              <p className="text-xs text-stone-400 font-malayalam">
-                ഇന്നത്തെ പ്രവർത്തനങ്ങൾ (Live Operations Status)
+            {/* Card 2: Total Finished Goods Valuation */}
+            <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
+                  ഉൽപ്പന്ന സ്റ്റോക്ക് മൂല്യം
+                </span>
+                <div className="p-2 rounded-xl bg-red-50 dark:bg-red-950/40 text-epso-red dark:text-amber-400">
+                  <FiDollarSign className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-2xl font-black text-stone-900 dark:text-white">
+                <AnimatedNumber value={totalFinishedGoodsValuation} prefix="₹" />
+              </div>
+              <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
+                മൊത്തവില അടിസ്ഥാനത്തിൽ (Wholesale)
               </p>
             </div>
-            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
-              Live
-            </span>
-          </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 pt-1">
-            <CircularGauge
-              label="Batches"
-              value={String(activeDateRuns.length)}
-              subValue={`/${dailyTargetBatches}`}
-              percentage={batchesProgressPercent}
-              color="#EA580C"
-              subtext={activeDateRuns.length >= dailyTargetBatches ? 'ടാർഗെറ്റ് കഴിഞ്ഞു' : `${Math.max(0, dailyTargetBatches - activeDateRuns.length)} ബാക്കി`}
-            />
-            <CircularGauge
-              label="Production Output"
-              value={`${activeOutputKg}`}
-              subValue="kg"
-              percentage={Math.min(100, Math.round((activeOutputKg / 150) * 100))}
-              color="#F59E0B"
-              subtext="ഉൽപ്പാദനം"
-            />
-            <CircularGauge
-              label="Packets Packed"
-              value={String(todayPacketsCount)}
-              subValue="pkts"
-              percentage={Math.min(100, Math.round((todayPacketsCount / 200) * 100))}
-              color="#8B5CF6"
-              subtext="പാക്കിങ് ചെയ്തവ"
-            />
-            <CircularGauge
-              label="Oil Usage"
-              value={dailyClosing ? `${dailyClosing.oilConsumed}` : '0'}
-              subValue="kg"
-              percentage={dailyClosing && dailyClosing.oilConsumed > 0 ? 100 : 0}
-              color="#0284C7"
-              subtext={dailyClosing ? 'രേഖപ്പെടുത്തി' : 'ബാക്കി'}
-            />
-            <CircularGauge
-              label="Stock Health"
-              value={`${stockHealthPercent}%`}
-              subValue="/100%"
-              percentage={stockHealthPercent}
-              color="#10B981"
-              subtext={lowStockIngredients.length > 0 ? `${lowStockIngredients.length} കുറവ്` : 'സുരക്ഷിതം'}
-            />
-          </div>
-        </div>
+            {/* Card 3: Total Raw Materials Cost */}
+            <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
+                  അസംസ്കൃത വസ്തു മൂല്യം
+                </span>
+                <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                  <FiBox className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="text-2xl font-black text-stone-900 dark:text-white">
+                <AnimatedNumber value={totalRawValuation} prefix="₹" />
+              </div>
+              <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
+                {ingredients.length} രജിസ്റ്റർ ചെയ്ത ചേരുവകൾ
+              </p>
+            </div>
 
-        {/* Critical Stock Alert Banner */}
-        {lowStockIngredients.length > 0 && (
-          <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/60 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-400">
-                <FiAlertTriangle className="w-5 h-5 shrink-0" />
+            {/* Card 4: Production Batches */}
+            <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
+                  ഉൽപ്പാദന ബാച്ചുകൾ
+                </span>
+                <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+                  <FiTrendingUp className="w-4 h-4" />
+                </div>
               </div>
-              <div>
-                <h2 className="text-sm font-bold text-amber-900 dark:text-amber-300 font-malayalam">
-                  കുറഞ്ഞ സ്റ്റോക്ക് മുന്നറിയിപ്പ് ({lowStockIngredients.length} ചേരുവകൾ)
-                </h2>
-                <p className="text-xs text-amber-700 dark:text-amber-400 font-malayalam">
-                  {lowStockIngredients.map((i) => i.name).slice(0, 3).join(', ')} കുറവാണ്.
-                </p>
+              <div className="text-2xl font-black text-stone-900 dark:text-white">
+                <AnimatedNumber value={completedBatchesCount} />
+                <span className="text-sm font-normal text-stone-400 ml-1.5 font-malayalam">ബാച്ചുകൾ</span>
               </div>
+              <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
+                ആകെ പൂർത്തിയായ ബാച്ചുകൾ
+              </p>
             </div>
-            <button
-              onClick={() => onNavigateTab('notifications')}
-              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white whitespace-nowrap press-apple"
-            >
-              View Alerts
-            </button>
-          </div>
-        )}
 
-        {/* 5 Primary KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {/* Card 1: Today's Sales */}
-          <div
-            onClick={() => onNavigateTab('sales')}
-            className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] hover:border-emerald-500/50 shadow-apple-card dark:shadow-apple-card-dark transition-all cursor-pointer group"
-          >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
-                ഇന്നത്തെ വിൽപ്പന
-              </span>
-              <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform">
-                <FiShoppingBag className="w-4 h-4" />
+            {/* Card 5: Products Catalogue */}
+            <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
+                  സ്നാക്ക് ഉൽപ്പന്നങ്ങൾ
+                </span>
+                <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400">
+                  <FiPackage className="w-4 h-4" />
+                </div>
               </div>
-            </div>
-            <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-              <AnimatedNumber value={todaySalesTotal} prefix="₹" decimals={2} />
-            </div>
-            <div className="flex items-center justify-between mt-1 text-[11px] text-stone-400 font-malayalam">
-              <span>മാസം: ₹{monthSalesTotal.toFixed(0)}</span>
-              <span className="text-emerald-500 font-bold flex items-center gap-0.5">
-                വിൽപ്പന <FiChevronRight className="w-3 h-3" />
-              </span>
+              <div className="text-2xl font-black text-stone-900 dark:text-white">
+                <AnimatedNumber value={products.length} />
+                <span className="text-sm font-normal text-stone-400 ml-1.5 font-malayalam">ഇനങ്ങൾ</span>
+              </div>
+              <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
+                {products.filter((p) => p.wholesalePrice > 0).length} മൊത്തവില നിശ്ചയിച്ചവ
+              </p>
             </div>
           </div>
-
-          {/* Card 2: Total Finished Goods Valuation */}
-          <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
-                ഉൽപ്പന്ന സ്റ്റോക്ക് മൂല്യം
-              </span>
-              <div className="p-2 rounded-xl bg-red-50 dark:bg-red-950/40 text-epso-red dark:text-amber-400">
-                <FiDollarSign className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="text-2xl font-black text-stone-900 dark:text-white">
-              <AnimatedNumber value={totalFinishedGoodsValuation} prefix="₹" />
-            </div>
-            <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
-              മൊത്തവില അടിസ്ഥാനത്തിൽ (Wholesale)
-            </p>
-          </div>
-
-          {/* Card 2: Total Raw Materials Cost */}
-          <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
-                അസംസ്കൃത വസ്തു മൂല്യം
-              </span>
-              <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
-                <FiBox className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="text-2xl font-black text-stone-900 dark:text-white">
-              <AnimatedNumber value={totalRawValuation} prefix="₹" />
-            </div>
-            <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
-              {ingredients.length} രജിസ്റ്റർ ചെയ്ത ചേരുവകൾ
-            </p>
-          </div>
-
-          {/* Card 3: Production Batches */}
-          <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
-                ഉൽപ്പാദന ബാച്ചുകൾ
-              </span>
-              <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
-                <FiTrendingUp className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="text-2xl font-black text-stone-900 dark:text-white">
-              <AnimatedNumber value={completedBatchesCount} />
-              <span className="text-sm font-normal text-stone-400 ml-1.5 font-malayalam">ബാച്ചുകൾ</span>
-            </div>
-            <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
-              ആകെ പൂർത്തിയായ ബാച്ചുകൾ
-            </p>
-          </div>
-
-          {/* Card 4: Products Catalogue */}
-          <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
-                സ്നാക്ക് ഉൽപ്പന്നങ്ങൾ
-              </span>
-              <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400">
-                <FiPackage className="w-4 h-4" />
-              </div>
-            </div>
-            <div className="text-2xl font-black text-stone-900 dark:text-white">
-              <AnimatedNumber value={products.length} />
-              <span className="text-sm font-normal text-stone-400 ml-1.5 font-malayalam">ഇനങ്ങൾ</span>
-            </div>
-            <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
-              {products.filter((p) => p.wholesalePrice > 0).length} മൊത്തവില നിശ്ചയിച്ചവ
-            </p>
-          </div>
-        </div>
 
         {/* Desktop Charts Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1508,6 +1356,165 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </table>
             </div>
           )}
+        </div>
+
+        {/* Daily Operations Card (Desktop) - Placed at Bottom */}
+        <div className="py-3 px-4 sm:px-5 sm:py-3.5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all animate-daily-ops">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h2 className="text-sm font-black text-stone-900 dark:text-white">
+                Daily Operations
+              </h2>
+              <p className="text-xs text-stone-400 font-malayalam">
+                ഇന്നത്തെ പ്രവർത്തനങ്ങൾ (Live Operations Status)
+              </p>
+            </div>
+            <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
+              Live
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 pt-1">
+            <CircularGauge
+              label="Batches"
+              value={String(activeDateRuns.length)}
+              subValue={`/${dailyTargetBatches}`}
+              percentage={batchesProgressPercent}
+              color="#EA580C"
+              subtext={activeDateRuns.length >= dailyTargetBatches ? 'ടാർഗെറ്റ് കഴിഞ്ഞു' : `${Math.max(0, dailyTargetBatches - activeDateRuns.length)} ബാക്കി`}
+            />
+            <CircularGauge
+              label="Production Output"
+              value={`${activeOutputKg}`}
+              subValue="kg"
+              percentage={Math.min(100, Math.round((activeOutputKg / 150) * 100))}
+              color="#F59E0B"
+              subtext="ഉൽപ്പാദനം"
+            />
+            <CircularGauge
+              label="Packets Packed"
+              value={String(todayPacketsCount)}
+              subValue="pkts"
+              percentage={Math.min(100, Math.round((todayPacketsCount / 200) * 100))}
+              color="#8B5CF6"
+              subtext="പാക്കിങ് ചെയ്തവ"
+            />
+            <CircularGauge
+              label="Oil Usage"
+              value={dailyClosing ? `${dailyClosing.oilConsumed}` : '0'}
+              subValue="kg"
+              percentage={dailyClosing && dailyClosing.oilConsumed > 0 ? 100 : 0}
+              color="#0284C7"
+              subtext={dailyClosing ? 'രേഖപ്പെടുത്തി' : 'ബാക്കി'}
+            />
+            <CircularGauge
+              label="Stock Health"
+              value={`${stockHealthPercent}%`}
+              subValue="/100%"
+              percentage={stockHealthPercent}
+              color="#10B981"
+              subtext={lowStockIngredients.length > 0 ? `${lowStockIngredients.length} കുറവ്` : 'സുരക്ഷിതം'}
+            />
+          </div>
+        </div>
+
+        {/* Multi-Week Horizontal Scrolling Calendar Strip (Desktop) - Placed at Bottom */}
+        <div className="bg-white dark:bg-[#1E1B1B] rounded-2xl p-3 border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-2">
+          <div className="flex items-center justify-between px-2">
+            <div className="flex items-center gap-2">
+              <FiCalendar className="w-4 h-4 text-epso-orange" />
+              <span className="text-xs font-bold text-stone-800 dark:text-stone-200">
+                Production Calendar
+              </span>
+              <span className="text-[11px] text-stone-400 font-malayalam">
+                {selectedDate ? `(${selectedDate})` : '(എല്ലാ ദിവസങ്ങളും)'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedDate(null)}
+                className={`text-[10px] font-bold px-2.5 py-1 rounded-lg ml-2 transition-colors cursor-pointer ${
+                  !selectedDate
+                    ? 'bg-epso-orange text-white'
+                    : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 bg-stone-100 dark:bg-[#282323]'
+                }`}
+              >
+                All Dates
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Clickable Date Container (Desktop): Clicking dd/mm/yyyy or calendar icon opens calendar */}
+              <div
+                onClick={() => openCalendarPicker(true)}
+                className="relative flex items-center gap-2 px-3 py-1.5 rounded-xl border border-stone-200 dark:border-[#332c2c] bg-stone-50 dark:bg-[#282323] cursor-pointer hover:border-epso-orange transition-colors select-none group"
+                title="Click date to open calendar"
+              >
+                <FiCalendar className="w-4 h-4 text-epso-orange pointer-events-none group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-bold text-stone-700 dark:text-stone-200 pointer-events-none">
+                  {selectedDate ? selectedDate.split('-').reverse().join('/') : 'dd/mm/yyyy'}
+                </span>
+                <input
+                  ref={desktopDateInputRef}
+                  type="date"
+                  value={selectedDate || ''}
+                  onChange={(e) => setSelectedDate(e.target.value || null)}
+                  onClick={(e) => {
+                    try {
+                      (e.target as any).showPicker?.();
+                    } catch {}
+                  }}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleScrollWeeks('left', true)}
+                className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500 border border-stone-200 dark:border-[#332c2c] transition-colors cursor-pointer"
+                title="Previous Week"
+              >
+                <FiChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleScrollWeeks('right', true)}
+                className="p-1.5 rounded-lg hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-500 border border-stone-200 dark:border-[#332c2c] transition-colors cursor-pointer"
+                title="Next Week"
+              >
+                <FiChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          <div
+            ref={desktopDateScrollRef}
+            className="flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1"
+          >
+            {multiWeekDays.map((d) => {
+              const isSelected = selectedDate === d.iso;
+              return (
+                <button
+                  key={d.iso}
+                  type="button"
+                  onClick={() => setSelectedDate(selectedDate === d.iso ? null : d.iso)}
+                  className={`py-2 px-3 rounded-xl flex flex-col items-center justify-center transition-all press-apple cursor-pointer shrink-0 min-w-[56px] ${
+                    isSelected
+                      ? 'bg-epso-orange text-white shadow-md font-black ring-2 ring-epso-orange/30'
+                      : 'text-stone-600 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-[#282323]'
+                  }`}
+                >
+                  <span className={`text-[10px] uppercase font-bold ${isSelected ? 'text-white' : 'text-stone-400'}`}>
+                    {d.dayName}
+                  </span>
+                  <span className="text-base font-black mt-0.5 leading-none">
+                    {d.dayNum}
+                  </span>
+                  <span className={`text-[9px] uppercase mt-0.5 ${isSelected ? 'text-white/80' : 'text-stone-400'}`}>
+                    {d.monthName}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

@@ -186,29 +186,57 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
   };
 
   return (
-    <div className="space-y-6 pb-8 font-malayalam">
-      {/* Date Picker Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 pb-4 border-b border-stone-200 dark:border-[#2E2828]">
-        <div className="flex items-center gap-2 flex-1">
-          <FiCalendar className="w-4 h-4 text-stone-400" />
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-sm text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-epso-red/30 dark:focus:ring-amber-500/30 font-mono"
-          />
+    <div className="space-y-5 pb-8 font-malayalam">
+      {/* Modern Minimal Header with Save Button on Top */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-stone-200 dark:border-[#2E2828]">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-[#332c2c] bg-stone-50 dark:bg-[#1E1B1B]">
+            <FiCalendar className="w-4 h-4 text-stone-500 dark:text-stone-400" />
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-transparent text-sm font-mono text-stone-900 dark:text-white focus:outline-none"
+            />
+          </div>
           <span className="text-xs font-semibold text-stone-500 dark:text-stone-400">
             {formatDate(selectedDate)}
           </span>
+          <button
+            onClick={() => loadDateData(selectedDate)}
+            disabled={isLoading}
+            className="p-2 rounded-lg border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] transition-colors cursor-pointer disabled:opacity-50"
+            title="Refresh"
+          >
+            <FiRefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-epso-red' : ''}`} />
+          </button>
         </div>
-        <button
-          onClick={() => loadDateData(selectedDate)}
-          disabled={isLoading}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-xs font-bold text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] press-apple transition-colors cursor-pointer disabled:opacity-50"
-        >
-          <FiRefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-epso-red' : ''}`} />
-          <span>പുതുക്കുക</span>
-        </button>
+
+        {/* Primary Save Button on Top */}
+        <div className="flex items-center gap-2">
+          {existingWage && (
+            <span className="text-[11px] text-stone-400 hidden md:inline">
+              അപ്ഡേറ്റ്: {new Date(existingWage.updatedAt || existingWage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={isSaving || isLoading}
+            className="px-5 py-2.5 rounded-xl bg-[#1E293B] hover:bg-[#0F172A] dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-all cursor-pointer disabled:opacity-50 flex items-center gap-2"
+          >
+            {isSaving ? (
+              <>
+                <FiRefreshCw className="w-3.5 h-3.5 animate-spin" />
+                <span>സേവ് ചെയ്യുന്നു...</span>
+              </>
+            ) : (
+              <>
+                <FiSave className="w-3.5 h-3.5" />
+                <span>{existingWage ? 'കൂലി അപ്ഡേറ്റ് ചെയ്യുക' : 'കൂലി സൂക്ഷിക്കുക (Save)'}</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -217,26 +245,26 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
         </div>
       ) : (
         <>
-          {/* Production Stats Auto-Fetched */}
+          {/* Production Stats Auto-Fetched (Minimal Clean Cards) */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30">
-              <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">ആകെ ഉൽപ്പാദനം</p>
-              <p className="text-xl font-black text-blue-800 dark:text-blue-200 font-mono">{totalProductionKg.toFixed(1)} kg</p>
-              <p className="text-[10px] text-blue-500 dark:text-blue-400 mt-0.5">പ്രൊഡക്ഷൻ റണ്ണുകളിൽ നിന്ന് കണ്ടെത്തിയത്</p>
+            <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-[#1A1818] border border-stone-200 dark:border-[#2E2828]">
+              <p className="text-[11px] font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider mb-0.5">ആകെ ഉൽപ്പാദനം</p>
+              <p className="text-xl font-black text-stone-900 dark:text-white font-mono">{totalProductionKg.toFixed(1)} kg</p>
+              <p className="text-[10px] text-stone-400 mt-0.5">റണ്ണുകളിൽ നിന്ന് ഓട്ടോമാറ്റിക്</p>
             </div>
-            <div className="p-4 rounded-2xl bg-purple-50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900/30">
-              <p className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider mb-1">ആകെ പാക്കറ്റുകൾ</p>
-              <p className="text-xl font-black text-purple-800 dark:text-purple-200 font-mono">{totalPackets}</p>
-              <p className="text-[10px] text-purple-500 dark:text-purple-400 mt-0.5">പാക്കിംഗ് രേഖകളിൽ നിന്ന് കണ്ടെത്തിയത്</p>
+            <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-[#1A1818] border border-stone-200 dark:border-[#2E2828]">
+              <p className="text-[11px] font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider mb-0.5">ആകെ പാക്കറ്റുകൾ</p>
+              <p className="text-xl font-black text-stone-900 dark:text-white font-mono">{totalPackets}</p>
+              <p className="text-[10px] text-stone-400 mt-0.5">പാക്കിംഗ് രേഖകളിൽ നിന്ന് ഓട്ടോമാറ്റിക്</p>
             </div>
           </div>
 
-          {/* Wage Configuration Form */}
-          <div className="p-5 rounded-2xl bg-white dark:bg-[#1A1616] border border-stone-200 dark:border-[#2E2828] shadow-sm space-y-5">
+          {/* Wage Configuration Form (Minimal Clean Layout) */}
+          <div className="p-4 rounded-xl bg-white dark:bg-[#1A1616] border border-stone-200 dark:border-[#2E2828] space-y-4">
             {/* Budget */}
             <div>
-              <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1.5">
-                <FiDollarSign className="inline w-3.5 h-3.5 mr-1 text-emerald-500" />
+              <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+                <FiDollarSign className="inline w-3.5 h-3.5 mr-1 text-emerald-600" />
                 ദിവസേനയുള്ള ആകെ കൂലി ബഡ്ജറ്റ് (₹)
               </label>
               <input
@@ -245,17 +273,17 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
                 onChange={(e) => setTotalWageBudget(e.target.value)}
                 min="0"
                 step="100"
-                className="w-full px-3 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#1E1B1B] text-sm font-bold text-stone-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                className="w-full px-3 py-2 rounded-lg border border-stone-200 dark:border-[#332c2c] bg-stone-50 dark:bg-[#1E1B1B] text-sm font-bold text-stone-900 dark:text-white font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500"
                 placeholder="4000"
               />
             </div>
 
             {/* Employee Counts */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1.5">
+                <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
                   <FiUsers className="inline w-3.5 h-3.5 mr-1 text-orange-500" />
-                  കുക്കിംഗ് തൊഴിലാളികളുടെ എണ്ണം
+                  കുക്കിംഗ് തൊഴിലാളികൾ (Cooks)
                 </label>
                 <input
                   type="number"
@@ -263,14 +291,14 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
                   onChange={(e) => setNumCooks(e.target.value)}
                   min="0"
                   step="1"
-                  className="w-full px-3 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#1E1B1B] text-sm font-bold text-stone-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-orange-500/30"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200 dark:border-[#332c2c] bg-stone-50 dark:bg-[#1E1B1B] text-sm font-bold text-stone-900 dark:text-white font-mono focus:outline-none focus:ring-1 focus:ring-orange-500"
                   placeholder="2"
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1.5">
+                <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
                   <FiPackage className="inline w-3.5 h-3.5 mr-1 text-indigo-500" />
-                  പാക്കിംഗ് തൊഴിലാളികളുടെ എണ്ണം
+                  പാക്കിംഗ് തൊഴിലാളികൾ (Packers)
                 </label>
                 <input
                   type="number"
@@ -278,7 +306,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
                   onChange={(e) => setNumPackers(e.target.value)}
                   min="0"
                   step="1"
-                  className="w-full px-3 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#1E1B1B] text-sm font-bold text-stone-900 dark:text-white font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                  className="w-full px-3 py-2 rounded-lg border border-stone-200 dark:border-[#332c2c] bg-stone-50 dark:bg-[#1E1B1B] text-sm font-bold text-stone-900 dark:text-white font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   placeholder="2"
                 />
               </div>
@@ -286,80 +314,55 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
 
             {/* Notes */}
             <div>
-              <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1.5">കുറിപ്പുകൾ (ഐച്ഛികം)</label>
+              <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">കുറിപ്പുകൾ (ഐച്ഛികം)</label>
               <input
                 type="text"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#1E1B1B] text-xs text-stone-700 dark:text-stone-300 focus:outline-none focus:ring-2 focus:ring-epso-red/20"
+                className="w-full px-3 py-2 rounded-lg border border-stone-200 dark:border-[#332c2c] bg-stone-50 dark:bg-[#1E1B1B] text-xs text-stone-700 dark:text-stone-300 focus:outline-none focus:ring-1 focus:ring-stone-400"
                 placeholder="ഇന്നത്തെ ദിവസത്തെ കുറിപ്പുകൾ..."
               />
             </div>
           </div>
 
-          {/* Wage Allocation Breakdown */}
-          <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20 border border-emerald-200 dark:border-emerald-900/30 shadow-sm space-y-4">
-            <h3 className="text-sm font-black text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
-              <FiDollarSign className="w-4 h-4" />
-              കൂലി വിഹിത വിതരണ കണക്ക്
+          {/* Wage Allocation Breakdown (Minimal Clean Grid) */}
+          <div className="p-4 rounded-xl bg-stone-50 dark:bg-[#1A1616] border border-stone-200 dark:border-[#2E2828] space-y-3">
+            <h3 className="text-xs font-black text-stone-800 dark:text-stone-200 flex items-center gap-1.5 uppercase tracking-wider">
+              <FiDollarSign className="w-3.5 h-3.5 text-emerald-600" />
+              കൂലി വിഹിത വിതരണ കണക്ക് (Wage Split)
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Production Team */}
-              <div className="p-4 rounded-xl bg-white/80 dark:bg-[#1A1616]/80 border border-emerald-100 dark:border-emerald-900/20 space-y-2">
+              <div className="p-3.5 rounded-lg bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] space-y-1">
                 <p className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider">പ്രൊഡക്ഷൻ ടീം (കുക്കുകൾ)</p>
-                <p className="text-2xl font-black text-stone-900 dark:text-white font-mono">₹{calculations.productionWageAmount.toLocaleString('en-IN')}</p>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-stone-500 dark:text-stone-400 font-mono">{numCooks} കുക്ക്</span>
+                <p className="text-xl font-black text-stone-900 dark:text-white font-mono">₹{calculations.productionWageAmount.toLocaleString('en-IN')}</p>
+                <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400 pt-1 border-t border-stone-100 dark:border-[#282323]">
+                  <span>{numCooks} കുക്ക്</span>
                   <span className="font-bold text-orange-700 dark:text-orange-300 font-mono">₹{calculations.wagePerCook.toLocaleString('en-IN')} / ഒരാൾക്ക്</span>
                 </div>
               </div>
 
               {/* Packing Team */}
-              <div className="p-4 rounded-xl bg-white/80 dark:bg-[#1A1616]/80 border border-emerald-100 dark:border-emerald-900/20 space-y-2">
+              <div className="p-3.5 rounded-lg bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] space-y-1">
                 <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider">പാക്കിംഗ് ടീം (പാക്കർമാർ)</p>
-                <p className="text-2xl font-black text-stone-900 dark:text-white font-mono">₹{calculations.packingWageAmount.toLocaleString('en-IN')}</p>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-stone-500 dark:text-stone-400 font-mono">{numPackers} പാക്കർ</span>
+                <p className="text-xl font-black text-stone-900 dark:text-white font-mono">₹{calculations.packingWageAmount.toLocaleString('en-IN')}</p>
+                <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400 pt-1 border-t border-stone-100 dark:border-[#282323]">
+                  <span>{numPackers} പാക്കർ</span>
                   <span className="font-bold text-indigo-700 dark:text-indigo-300 font-mono">₹{calculations.wagePerPacker.toLocaleString('en-IN')} / ഒരാൾക്ക്</span>
                 </div>
               </div>
             </div>
 
             {/* Total Verification */}
-            <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50">
-              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">ആകെ വിതരണം ചെയ്ത തുക</span>
-              <span className="text-sm font-black text-emerald-800 dark:text-emerald-200 font-mono">
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-stone-100 dark:bg-[#201C1C] border border-stone-200 dark:border-[#2E2828]">
+              <span className="text-xs font-bold text-stone-600 dark:text-stone-300">ആകെ വിതരണം ചെയ്ത തുക</span>
+              <span className="text-sm font-black text-emerald-700 dark:text-emerald-400 font-mono">
                 ₹{(calculations.productionWageAmount + calculations.packingWageAmount).toLocaleString('en-IN')}
                 {' '}/ ₹{Number(totalWageBudget || 0).toLocaleString('en-IN')}
               </span>
             </div>
           </div>
-
-          {/* Save Button with Loading Animation */}
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="w-full py-3.5 rounded-2xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-black text-sm shadow-md press-apple transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {isSaving ? (
-              <>
-                <FiRefreshCw className="w-4 h-4 animate-spin" />
-                <span>സേവ് ചെയ്യുന്നു...</span>
-              </>
-            ) : (
-              <>
-                <FiSave className="w-4 h-4" />
-                <span>{existingWage ? 'കൂലി വിവരങ്ങൾ അപ്ഡേറ്റ് ചെയ്യുക' : 'കൂലി വിവരങ്ങൾ സൂക്ഷിക്കുക'}</span>
-              </>
-            )}
-          </button>
-
-          {existingWage && (
-            <p className="text-[10px] text-center text-stone-400 dark:text-stone-500 -mt-2">
-              അവസാനം മാറ്റം വരുത്തിയത്: {new Date(existingWage.updatedAt || existingWage.createdAt).toLocaleString('ml-IN')}
-            </p>
-          )}
 
           {/* History Toggle */}
           <div className="border-t border-stone-200 dark:border-[#2E2828] pt-4">
