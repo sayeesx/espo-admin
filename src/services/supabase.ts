@@ -4,6 +4,8 @@ import {
   Ingredient,
   Recipe,
   RecipeItem,
+  PacketType,
+  RecipePacket,
   ProductionRun,
   StockMovement,
   AuditLog,
@@ -282,6 +284,97 @@ export async function deleteIngredient(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function fetchPacketTypes(): Promise<PacketType[]> {
+  const { data, error } = await supabase
+    .from('packet_types')
+    .select('*')
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching packet types:', error);
+    return [];
+  }
+
+  return (data || []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    bundleCost: Number(row.bundle_cost) || 0,
+    bundleQuantity: Number(row.bundle_quantity) || 1,
+    costPerPacket: Number(row.cost_per_packet) || 0,
+    isActive: row.is_active ?? true,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
+export async function savePacketType(packet: Partial<PacketType> & { name: string }): Promise<PacketType> {
+  const bundleCost = Number(packet.bundleCost) || 0;
+  const bundleQuantity = Math.max(1, Number(packet.bundleQuantity) || 1);
+  const costPerPacket = packet.costPerPacket !== undefined && packet.costPerPacket > 0
+    ? Number(packet.costPerPacket)
+    : bundleQuantity > 0 ? Number((bundleCost / bundleQuantity).toFixed(4)) : 0;
+
+  const payload = {
+    name: packet.name.trim(),
+    bundle_cost: bundleCost,
+    bundle_quantity: bundleQuantity,
+    cost_per_packet: costPerPacket,
+    is_active: packet.isActive ?? true,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (packet.id) {
+    const { data, error } = await supabase
+      .from('packet_types')
+      .update(payload)
+      .eq('id', packet.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return {
+      id: data.id,
+      name: data.name,
+      bundleCost: Number(data.bundle_cost) || 0,
+      bundleQuantity: Number(data.bundle_quantity) || 1,
+      costPerPacket: Number(data.cost_per_packet) || 0,
+      isActive: data.is_active,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  } else {
+    const { data, error } = await supabase
+      .from('packet_types')
+      .insert({
+        ...payload,
+        created_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return {
+      id: data.id,
+      name: data.name,
+      bundleCost: Number(data.bundle_cost) || 0,
+      bundleQuantity: Number(data.bundle_quantity) || 1,
+      costPerPacket: Number(data.cost_per_packet) || 0,
+      isActive: data.is_active,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  }
+}
+
+export async function deletePacketType(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('packet_types')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
 export async function fetchRecipes(): Promise<Recipe[]> {
   const { data: recipesData, error: recipesErr } = await supabase
     .from('recipes')
@@ -302,6 +395,10 @@ export async function fetchRecipes(): Promise<Recipe[]> {
 
   if (itemsErr) throw itemsErr;
 
+  const { data: packetsData } = await supabase
+    .from('recipe_packets')
+    .select('*');
+
   return (recipesData || []).map((r) => {
     const items = (itemsData || [])
       .filter((it) => it.recipe_id === r.id)
@@ -315,6 +412,32 @@ export async function fetchRecipes(): Promise<Recipe[]> {
         cost: (Number(it.quantity) || 0) * (Number(it.ingredients?.avg_cost_per_unit) || 0),
       }));
 
+    let packets: RecipePacket[] = [];
+    if (packetsData && packetsData.length > 0) {
+      packets = packetsData
+        .filter((p: any) => p.recipe_id === r.id)
+        .map((p: any) => ({
+          id: p.id,
+          recipeId: p.recipe_id,
+          packetTypeId: p.packet_type_id,
+          packetName: p.packet_name,
+          costPerPacket: Number(p.cost_per_packet) || 0,
+          bundleCost: Number(p.bundle_cost) || 0,
+          bundleQuantity: Number(p.bundle_quantity) || 1,
+        }));
+    }
+    if (packets.length === 0 && Array.isArray(r.packets) && r.packets.length > 0) {
+      packets = r.packets.map((p: any) => ({
+        id: p.id,
+        recipeId: r.id,
+        packetTypeId: p.packetTypeId,
+        packetName: p.packetName || p.name || 'Packet',
+        costPerPacket: Number(p.costPerPacket) || 0,
+        bundleCost: Number(p.bundleCost) || 0,
+        bundleQuantity: Number(p.bundleQuantity) || 1,
+      }));
+    }
+
     return {
       id: r.id,
       productId: r.product_id,
@@ -326,6 +449,7 @@ export async function fetchRecipes(): Promise<Recipe[]> {
       notes: r.notes || '',
       isActive: r.is_active ?? true,
       items,
+      packets,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };
@@ -334,9 +458,18 @@ export async function fetchRecipes(): Promise<Recipe[]> {
 
 export async function saveRecipe(
   recipe: Partial<Recipe> & { productId: string; baseOutputQuantity: number; baseOutputUnit: string },
-  items: Array<{ ingredientId: string; quantity: number; unit: string }>
+  items: Array<{ ingredientId: string; quantity: number; unit: string }>,
+  packets?: Array<{ packetTypeId?: string; packetName: string; costPerPacket: number; bundleCost?: number; bundleQuantity?: number }>
 ): Promise<void> {
   let recipeId = recipe.id;
+
+  const normalizedPackets = (packets || []).map((p) => ({
+    packetTypeId: p.packetTypeId,
+    packetName: p.packetName,
+    costPerPacket: Number(p.costPerPacket) || 0,
+    bundleCost: Number(p.bundleCost) || 0,
+    bundleQuantity: Number(p.bundleQuantity) || 1,
+  }));
 
   if (!recipeId) {
     const { data: newRec, error: recErr } = await supabase
@@ -348,6 +481,7 @@ export async function saveRecipe(
         base_output_unit: recipe.baseOutputUnit,
         instructions: recipe.instructions || null,
         notes: recipe.notes || null,
+        packets: normalizedPackets,
         is_active: recipe.isActive ?? true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -368,6 +502,7 @@ export async function saveRecipe(
         base_output_unit: recipe.baseOutputUnit,
         instructions: recipe.instructions || null,
         notes: recipe.notes || null,
+        packets: normalizedPackets,
         is_active: recipe.isActive ?? true,
         updated_at: new Date().toISOString(),
       })
@@ -380,8 +515,9 @@ export async function saveRecipe(
       await supabase.from('products').update({ recipe_id: recipeId }).eq('id', recipe.productId);
     }
 
-    // Remove old recipe items
+    // Remove old recipe items & packets
     await supabase.from('recipe_items').delete().eq('recipe_id', recipeId);
+    await supabase.from('recipe_packets').delete().eq('recipe_id', recipeId);
   }
 
   // Insert items
@@ -397,11 +533,30 @@ export async function saveRecipe(
     const { error: itemsErr } = await supabase.from('recipe_items').insert(itemsPayload);
     if (itemsErr) throw itemsErr;
   }
+
+  // Insert packets
+  if (normalizedPackets.length > 0) {
+    const packetsPayload = normalizedPackets.map((pkt) => ({
+      recipe_id: recipeId,
+      packet_type_id: pkt.packetTypeId || null,
+      packet_name: pkt.packetName,
+      cost_per_packet: pkt.costPerPacket,
+      bundle_cost: pkt.bundleCost || 0,
+      bundle_quantity: pkt.bundleQuantity || 1,
+      created_at: new Date().toISOString(),
+    }));
+
+    const { error: pktsErr } = await supabase.from('recipe_packets').insert(packetsPayload);
+    if (pktsErr) {
+      console.error('Error inserting recipe_packets:', pktsErr);
+    }
+  }
 }
 
 export async function deleteRecipe(id: string): Promise<void> {
   await supabase.from('products').update({ recipe_id: null }).eq('recipe_id', id);
   await supabase.from('recipe_items').delete().eq('recipe_id', id);
+  await supabase.from('recipe_packets').delete().eq('recipe_id', id);
   const { error } = await supabase.from('recipes').delete().eq('id', id);
   if (error) throw error;
 }
@@ -1040,6 +1195,7 @@ export async function adjustPackagingItemStock(
 export async function recordPacking(params: {
   packingDate: string;
   productId: string;
+  productionRunId?: string;
   packagingItemId?: string;
   packetSize: string;
   packetsPacked: number;
@@ -1049,6 +1205,7 @@ export async function recordPacking(params: {
   const {
     packingDate,
     productId,
+    productionRunId,
     packagingItemId,
     packetSize,
     packetsPacked,
@@ -1114,6 +1271,7 @@ export async function recordPacking(params: {
     .insert({
       packing_date: packingDate,
       product_id: productId,
+      production_run_id: productionRunId || null,
       packaging_item_id: packagingItemId || null,
       packet_size: packetSize,
       packets_packed: packetsPacked,
@@ -1152,6 +1310,7 @@ export async function recordPacking(params: {
     packingDate: created.packing_date,
     productId: created.product_id,
     productName: created.products?.name || prodName,
+    productionRunId: created.production_run_id,
     packagingItemId: created.packaging_item_id,
     packetSize: created.packet_size,
     packetsPacked: Number(created.packets_packed),
@@ -1182,6 +1341,7 @@ export async function fetchPackingRecords(options?: { productId?: string; date?:
     packingDate: row.packing_date,
     productId: row.product_id,
     productName: row.products?.name || 'Product',
+    productionRunId: row.production_run_id,
     packagingItemId: row.packaging_item_id,
     packetSize: row.packet_size,
     packetsPacked: Number(row.packets_packed) || 0,

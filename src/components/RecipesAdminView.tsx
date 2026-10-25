@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Recipe, Product, Ingredient, RecipeItem } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Recipe, Product, Ingredient, RecipeItem, PacketType, RecipePacket } from '../types';
 import {
   FiPlus,
   FiTrash2,
@@ -7,9 +7,11 @@ import {
   FiBookOpen,
   FiDollarSign,
   FiLayers,
+  FiPackage,
 } from 'react-icons/fi';
-import { saveRecipe, deleteRecipe } from '../services/supabase';
+import { saveRecipe, deleteRecipe, fetchPacketTypes } from '../services/supabase';
 import { ThemeSelect } from './ThemeSelect';
+import { ManagePacketTypesModal } from './ManagePacketTypesModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import { createPortal } from 'react-dom';
 
@@ -27,9 +29,26 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
   onRefresh,
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
+  const [managePacketsOpen, setManagePacketsOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
 
-  useLockBodyScroll(modalOpen);
+  // Packet types catalogue
+  const [availablePacketTypes, setAvailablePacketTypes] = useState<PacketType[]>([]);
+
+  const loadPacketCatalog = async () => {
+    try {
+      const data = await fetchPacketTypes();
+      setAvailablePacketTypes(data);
+    } catch (err) {
+      console.error('Failed to load packet types:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadPacketCatalog();
+  }, []);
+
+  useLockBodyScroll(modalOpen || managePacketsOpen);
 
   // Form states
   const [productId, setProductId] = useState('');
@@ -37,6 +56,7 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
   const [baseOutputUnit, setBaseOutputUnit] = useState<string>('kg');
   const [instructions, setInstructions] = useState('');
   const [recipeItems, setRecipeItems] = useState<Array<{ ingredientId: string; quantity: number; unit: string }>>([]);
+  const [recipePackets, setRecipePackets] = useState<Array<{ packetTypeId?: string; packetName: string; costPerPacket: number; bundleCost?: number; bundleQuantity?: number }>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const openCreateModal = () => {
@@ -48,6 +68,7 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
     setRecipeItems([
       { ingredientId: ingredients[0]?.id || '', quantity: 1, unit: ingredients[0]?.unit || 'kg' },
     ]);
+    setRecipePackets([]);
     setModalOpen(true);
   };
 
@@ -62,6 +83,15 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
         ingredientId: it.ingredientId,
         quantity: it.quantity,
         unit: it.unit,
+      }))
+    );
+    setRecipePackets(
+      (r.packets || []).map((p) => ({
+        packetTypeId: p.packetTypeId,
+        packetName: p.packetName,
+        costPerPacket: p.costPerPacket,
+        bundleCost: p.bundleCost,
+        bundleQuantity: p.bundleQuantity,
       }))
     );
     setModalOpen(true);
@@ -91,6 +121,45 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
       updated[idx] = { ...updated[idx], [field]: value };
     }
     setRecipeItems(updated);
+  };
+
+  // Packet rows handlers
+  const handleAddPacketRow = () => {
+    const firstPkt = availablePacketTypes[0];
+    setRecipePackets([
+      ...recipePackets,
+      {
+        packetTypeId: firstPkt?.id,
+        packetName: firstPkt?.name || '3kg HM Packet',
+        costPerPacket: firstPkt?.costPerPacket || 0,
+        bundleCost: firstPkt?.bundleCost || 0,
+        bundleQuantity: firstPkt?.bundleQuantity || 100,
+      },
+    ]);
+  };
+
+  const handleRemovePacketRow = (idx: number) => {
+    setRecipePackets(recipePackets.filter((_, i) => i !== idx));
+  };
+
+  const handlePacketSelect = (idx: number, packetTypeId: string) => {
+    const found = availablePacketTypes.find((pt) => pt.id === packetTypeId);
+    const updated = [...recipePackets];
+    updated[idx] = {
+      ...updated[idx],
+      packetTypeId,
+      packetName: found?.name || updated[idx].packetName,
+      costPerPacket: found?.costPerPacket ?? updated[idx].costPerPacket,
+      bundleCost: found?.bundleCost ?? updated[idx].bundleCost,
+      bundleQuantity: found?.bundleQuantity ?? updated[idx].bundleQuantity,
+    };
+    setRecipePackets(updated);
+  };
+
+  const handlePacketChange = (idx: number, field: string, value: any) => {
+    const updated = [...recipePackets];
+    updated[idx] = { ...updated[idx], [field]: value };
+    setRecipePackets(updated);
   };
 
   const calculateTotalBatchCost = () => {
@@ -125,7 +194,8 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
         recipeItems.map((item) => ({
           ...item,
           quantity: Number(item.quantity) || 0,
-        }))
+        })),
+        recipePackets
       );
       setModalOpen(false);
       onRefresh();
@@ -151,8 +221,18 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
       {/* Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
         <button
+          type="button"
+          onClick={() => setManagePacketsOpen(true)}
+          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/50 text-epso-orange border border-orange-200 dark:border-orange-800/60 font-bold text-xs shadow-xs press-apple transition-colors font-malayalam cursor-pointer"
+        >
+          <FiPackage className="w-4 h-4" />
+          <span>പാക്കറ്റ് തരങ്ങളും ചിലവും (Packet Types & Costs)</span>
+        </button>
+
+        <button
+          type="button"
           onClick={openCreateModal}
-          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors"
+          className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
         >
           <FiPlus className="w-4 h-4" />
           <span>New Recipe</span>
@@ -208,6 +288,29 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                     ))}
                   </div>
                 </div>
+
+                {/* Assigned Packets List */}
+                {r.packets && r.packets.length > 0 && (
+                  <div className="p-3 bg-orange-50/50 dark:bg-orange-950/20 rounded-xl border border-orange-200/60 dark:border-orange-900/40 my-3">
+                    <span className="text-[11px] font-bold text-epso-orange dark:text-amber-400 font-malayalam flex items-center gap-1.5 mb-1.5">
+                      <FiPackage className="w-3.5 h-3.5" />
+                      <span>പാക്കറ്റുകൾ ({r.packets.length} എണ്ണം):</span>
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {r.packets.map((pkt, pIdx) => (
+                        <span
+                          key={pIdx}
+                          className="inline-flex items-center gap-1.5 bg-white dark:bg-[#141212] border border-orange-200/80 dark:border-orange-900/50 px-2.5 py-1 rounded-lg text-xs font-semibold text-stone-800 dark:text-stone-200 shadow-2xs"
+                        >
+                          <span className="font-bold">{pkt.packetName}</span>
+                          <span className="text-epso-red dark:text-amber-400 font-mono font-black">
+                            ₹{Number(pkt.costPerPacket || 0).toFixed(2)}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {r.instructions && (
                   <p className="text-xs text-stone-500 dark:text-stone-400 italic font-malayalam mb-3">
@@ -379,12 +482,108 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                   {/* Real-time batch cost estimate */}
                   <div className="mt-2 pt-2 border-t border-stone-200 dark:border-[#2E2828] flex items-center justify-between text-xs">
                     <span className="text-stone-500 dark:text-stone-400 font-malayalam">
-                      ഏകദേശ ബാച്ച് ചെലവ് (Est. Batch Cost):
+                      ഏകദേശ ബാച്ച് ചേരുവ ചിലവ് (Est. Ingredients Cost):
                     </span>
                     <span className="font-extrabold text-stone-900 dark:text-white">
                       ₹{calculateTotalBatchCost().toFixed(2)}
                     </span>
                   </div>
+                </div>
+
+                {/* Recipe Packets Section */}
+                <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-stone-900 dark:text-white font-malayalam flex items-center gap-1.5">
+                        <FiPackage className="w-4 h-4 text-epso-orange" />
+                        <span>പാക്കറ്റുകൾ (Recipe Packets)</span>
+                      </span>
+                      <p className="text-[10px] text-stone-400 font-malayalam">
+                        ഈ ഉൽപ്പന്നത്തിന് അനുവദിച്ച പാക്കറ്റ് തരങ്ങൾ (PWA-യിൽ ഇവ മാത്രമേ കാണിക്കൂ)
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setManagePacketsOpen(true)}
+                        className="text-[11px] text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 font-bold underline cursor-pointer"
+                      >
+                        പുതിയ പാക്കറ്റ് തരം
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAddPacketRow}
+                        className="flex items-center gap-1 text-[11px] text-epso-red dark:text-amber-400 font-bold hover:underline cursor-pointer"
+                      >
+                        <FiPlus className="w-3.5 h-3.5" />
+                        <span>പാക്കറ്റ് ചേർക്കുക</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Packets list container */}
+                  {recipePackets.length > 0 ? (
+                    <div className="space-y-2 max-h-[30vh] overflow-y-auto pr-1.5 p-1 rounded-xl bg-white/60 dark:bg-[#1E1B1B]/60 border border-stone-200/60 dark:border-[#282323]">
+                      {recipePackets.map((pkt, idx) => {
+                        const pktOptions = availablePacketTypes.map((pt) => ({
+                          value: pt.id,
+                          label: pt.name,
+                          badge: `₹${(pt.costPerPacket || 0).toFixed(2)}/pkt`,
+                        }));
+
+                        return (
+                          <div
+                            key={idx}
+                            className="flex flex-col sm:flex-row sm:items-center gap-2 p-2.5 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323]"
+                          >
+                            <div className="flex-1 min-w-[160px]">
+                              <ThemeSelect
+                                value={pkt.packetTypeId || ''}
+                                onChange={(val) => handlePacketSelect(idx, val)}
+                                options={pktOptions}
+                                searchable={true}
+                                placeholder="പാക്കറ്റ് തരം തിരഞ്ഞെടുക്കുക..."
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 bg-white dark:bg-[#1E1B1B] px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-[#2E2828]">
+                                <span className="text-[10px] text-stone-400 font-bold">₹/pkt:</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="0.00"
+                                  value={pkt.costPerPacket === 0 ? '' : pkt.costPerPacket}
+                                  onChange={(e) => handlePacketChange(idx, 'costPerPacket', parseFloat(e.target.value) || 0)}
+                                  className="w-16 p-1 bg-transparent text-stone-900 dark:text-white text-xs font-mono font-bold text-right outline-none"
+                                />
+                              </div>
+
+                              {pkt.bundleCost && pkt.bundleQuantity ? (
+                                <span className="text-[10px] text-stone-400 font-mono hidden sm:inline" title="Bundle Cost Breakdown">
+                                  (₹{pkt.bundleCost}/{pkt.bundleQuantity})
+                                </span>
+                              ) : null}
+
+                              <button
+                                type="button"
+                                onClick={() => handleRemovePacketRow(idx)}
+                                className="p-1.5 text-red-500 hover:text-red-700 cursor-pointer"
+                                title="ഒഴിവാക്കുക"
+                              >
+                                <FiTrash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-3 text-center rounded-xl bg-white/40 dark:bg-[#1E1B1B]/40 border border-dashed border-stone-200 dark:border-[#282323] text-stone-400 text-xs font-malayalam">
+                      പാക്കറ്റുകൾ നൽകിയിട്ടില്ല (ചേർക്കാൻ '+ പാക്കറ്റ് ചേർക്കുക' ക്ലിക്ക് ചെയ്യുക)
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -424,6 +623,16 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
         </div>,
         document.body
       )}
+
+      {/* Packet Types Management Modal */}
+      <ManagePacketTypesModal
+        isOpen={managePacketsOpen}
+        onClose={() => setManagePacketsOpen(false)}
+        onUpdated={() => {
+          loadPacketCatalog();
+          onRefresh();
+        }}
+      />
     </div>
   );
 };

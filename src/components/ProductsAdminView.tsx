@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { Product, UnitType, Ingredient, Recipe } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Product, UnitType, Ingredient, Recipe, PacketType, RecipePacket } from '../types';
 import {
   FiPlus,
   FiSearch,
@@ -15,7 +15,7 @@ import {
   FiBookOpen,
   FiX,
 } from 'react-icons/fi';
-import { saveProduct, deleteProduct, saveRecipe, deleteRecipe } from '../services/supabase';
+import { saveProduct, deleteProduct, saveRecipe, deleteRecipe, fetchPacketTypes } from '../services/supabase';
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import { createPortal } from 'react-dom';
@@ -98,8 +98,23 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   const [recipeBaseUnit, setRecipeBaseUnit] = useState<string>('kg');
   const [recipeInstructions, setRecipeInstructions] = useState<string>('');
   const [recipeItems, setRecipeItems] = useState<Array<{ ingredientId: string; quantity: number; unit: string }>>([]);
+  const [recipePackets, setRecipePackets] = useState<Array<{ packetTypeId?: string; packetName: string; costPerPacket: number; bundleCost?: number; bundleQuantity?: number }>>([]);
+  const [availablePacketTypes, setAvailablePacketTypes] = useState<PacketType[]>([]);
   const [isSavingRecipe, setIsSavingRecipe] = useState(false);
   const [recipeError, setRecipeError] = useState('');
+
+  const loadPacketCatalog = async () => {
+    try {
+      const data = await fetchPacketTypes();
+      setAvailablePacketTypes(data);
+    } catch (err) {
+      console.error('Failed to load packet types:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadPacketCatalog();
+  }, []);
 
   // Lock scroll whenever any modal is open
   useLockBodyScroll(modalOpen || purchaseListModalOpen || recipeModalOpen);
@@ -146,6 +161,17 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
             }))
           : [{ ingredientId: recipeEligibleIngredients[0]?.id || '', quantity: 1, unit: recipeEligibleIngredients[0]?.unit || 'kg' }]
       );
+      setRecipePackets(
+        rec.packets && rec.packets.length > 0
+          ? rec.packets.map((pkt) => ({
+              packetTypeId: pkt.packetTypeId,
+              packetName: pkt.packetName,
+              costPerPacket: pkt.costPerPacket,
+              bundleCost: pkt.bundleCost,
+              bundleQuantity: pkt.bundleQuantity,
+            }))
+          : []
+      );
     } else {
       setExistingRecipe(null);
       setRecipeBaseQuantity(10);
@@ -154,6 +180,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
       setRecipeItems([
         { ingredientId: recipeEligibleIngredients[0]?.id || '', quantity: 1, unit: recipeEligibleIngredients[0]?.unit || 'kg' },
       ]);
+      setRecipePackets([]);
     }
     setRecipeModalOpen(true);
   };
@@ -182,6 +209,45 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
       updated[index] = { ...updated[index], [field]: value };
     }
     setRecipeItems(updated);
+  };
+
+  // Recipe Packet Rows Handlers
+  const handleAddRecipePacketRow = () => {
+    const firstPkt = availablePacketTypes[0];
+    setRecipePackets([
+      ...recipePackets,
+      {
+        packetTypeId: firstPkt?.id,
+        packetName: firstPkt?.name || '3kg HM Packet',
+        costPerPacket: firstPkt?.costPerPacket || 0,
+        bundleCost: firstPkt?.bundleCost || 0,
+        bundleQuantity: firstPkt?.bundleQuantity || 100,
+      },
+    ]);
+  };
+
+  const handleRemoveRecipePacketRow = (index: number) => {
+    setRecipePackets(recipePackets.filter((_, i) => i !== index));
+  };
+
+  const handleRecipePacketSelect = (index: number, packetTypeId: string) => {
+    const found = availablePacketTypes.find((pt) => pt.id === packetTypeId);
+    const updated = [...recipePackets];
+    updated[index] = {
+      ...updated[index],
+      packetTypeId,
+      packetName: found?.name || updated[index].packetName,
+      costPerPacket: found?.costPerPacket ?? updated[index].costPerPacket,
+      bundleCost: found?.bundleCost ?? updated[index].bundleCost,
+      bundleQuantity: found?.bundleQuantity ?? updated[index].bundleQuantity,
+    };
+    setRecipePackets(updated);
+  };
+
+  const handleRecipePacketChange = (index: number, field: string, value: any) => {
+    const updated = [...recipePackets];
+    updated[index] = { ...updated[index], [field]: value };
+    setRecipePackets(updated);
   };
 
   const calculateTotalRecipeCost = () => {
@@ -215,7 +281,8 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
           ingredientId: it.ingredientId,
           quantity: Number(it.quantity) || 0,
           unit: it.unit,
-        }))
+        })),
+        recipePackets
       );
       setRecipeModalOpen(false);
       onRefresh();
@@ -853,6 +920,92 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                       ₹{(calculateTotalRecipeCost() / (Number(recipeBaseQuantity) || 1)).toFixed(2)}
                     </span>
                   </div>
+                </div>
+
+                {/* Recipe Packets Section */}
+                <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-stone-900 dark:text-white font-malayalam flex items-center gap-1.5">
+                        <FiPackage className="w-4 h-4 text-epso-orange" />
+                        <span>പാക്കറ്റുകൾ (Recipe Packets)</span>
+                      </span>
+                      <p className="text-[10px] text-stone-400 font-malayalam">
+                        ഈ ഉൽപ്പന്നത്തിന് അനുവദിച്ച പാക്കറ്റ് തരങ്ങൾ (PWA-യിൽ ഇവ മാത്രമേ കാണിക്കൂ)
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddRecipePacketRow}
+                      className="px-3 py-1.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                    >
+                      <FiPlus className="w-3.5 h-3.5" />
+                      <span>പാക്കറ്റ് ചേർക്കുക</span>
+                    </button>
+                  </div>
+
+                  {recipePackets.length > 0 ? (
+                    <div className="space-y-2 max-h-[30vh] overflow-y-auto pr-1.5 p-1 rounded-xl bg-white/60 dark:bg-[#1E1B1B]/60 border border-stone-200/60 dark:border-[#282323]">
+                      {recipePackets.map((pkt, idx) => {
+                        const pktOptions = availablePacketTypes.map((pt) => ({
+                          value: pt.id,
+                          label: pt.name,
+                          badge: `₹${(pt.costPerPacket || 0).toFixed(2)}/pkt`,
+                        }));
+
+                        return (
+                          <div
+                            key={idx}
+                            className="flex flex-col sm:flex-row sm:items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#282323] shadow-xs"
+                          >
+                            <div className="flex-1 min-w-[160px]">
+                              <ThemeSelect
+                                value={pkt.packetTypeId || ''}
+                                onChange={(val) => handleRecipePacketSelect(idx, val)}
+                                options={pktOptions}
+                                searchable={true}
+                                placeholder="പാക്കറ്റ് തരം തിരഞ്ഞെടുക്കുക..."
+                              />
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 bg-stone-50 dark:bg-[#141212] px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-[#2E2828]">
+                                <span className="text-[10px] text-stone-400 font-bold">₹/pkt:</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="0.00"
+                                  value={pkt.costPerPacket === 0 ? '' : pkt.costPerPacket}
+                                  onChange={(e) => handleRecipePacketChange(idx, 'costPerPacket', parseFloat(e.target.value) || 0)}
+                                  className="w-16 p-1 bg-transparent text-stone-900 dark:text-white text-xs font-mono font-bold text-right outline-none"
+                                />
+                              </div>
+
+                              {pkt.bundleCost && pkt.bundleQuantity ? (
+                                <span className="text-[10px] text-stone-400 font-mono hidden sm:inline" title="Bundle Cost Breakdown">
+                                  (₹{pkt.bundleCost}/{pkt.bundleQuantity})
+                                </span>
+                              ) : null}
+
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveRecipePacketRow(idx)}
+                                className="p-1.5 text-stone-400 hover:text-red-600 transition-colors cursor-pointer"
+                                title="ഒഴിവാക്കുക"
+                              >
+                                <FiTrash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-3 text-center rounded-xl bg-white/40 dark:bg-[#1E1B1B]/40 border border-dashed border-stone-200 dark:border-[#282323] text-stone-400 text-xs font-malayalam">
+                      പാക്കറ്റുകൾ നൽകിയിട്ടില്ല (ചേർക്കാൻ '+ പാക്കറ്റ് ചേർക്കുക' ക്ലിക്ക് ചെയ്യുക)
+                    </div>
+                  )}
                 </div>
 
                 {/* Instructions / Formulation Notes */}

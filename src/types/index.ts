@@ -29,6 +29,27 @@ export interface Ingredient {
   updatedAt?: string;
 }
 
+export interface PacketType {
+  id: string;
+  name: string;
+  bundleCost: number;
+  bundleQuantity: number;
+  costPerPacket: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RecipePacket {
+  id?: string;
+  recipeId?: string;
+  packetTypeId?: string;
+  packetName: string;
+  costPerPacket: number;
+  bundleCost?: number;
+  bundleQuantity?: number;
+}
+
 export interface RecipeItem {
   id: string;
   recipeId: string;
@@ -50,6 +71,7 @@ export interface Recipe {
   notes?: string;
   isActive: boolean;
   items: RecipeItem[];
+  packets?: RecipePacket[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -163,6 +185,7 @@ export interface PackingRecord {
   packingDate: string;
   productId: string;
   productName?: string;
+  productionRunId?: string;
   packagingItemId?: string;
   packetSize: string;
   packetsPacked: number;
