@@ -187,197 +187,173 @@ ${lowStockIngredients.length > 6 ? `\n...+${lowStockIngredients.length - 6} ച�
     }, 450);
   };
 
+  if (!isOpen) return null;
+
   return (
-    <>
-      {/* FLOATING LAUNCHER BUTTON ANCHORED AT BOTTOM-LEFT */}
-      <div className="fixed bottom-5 left-5 md:left-64 z-50">
-        <button
-          type="button"
-          onClick={toggleOpen}
-          className="flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-xl shadow-purple-500/25 border border-purple-400/30 transition-all transform hover:scale-105 active:scale-95 cursor-pointer font-malayalam select-none"
-          title="EPSO AI Copilot"
-        >
-          <div className="relative flex items-center justify-center">
-            <FiZap className="w-5 h-5 text-amber-300 animate-pulse" />
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-stone-900" />
-          </div>
-          <span className="text-xs font-black tracking-tight hidden sm:inline">AI അസിസ്റ്റന്റ്</span>
-        </button>
-      </div>
-
-      {/* FLOATING CHAT BOT WIDGET POPUP IN LEFT CORNER */}
-      {isOpen && (
-        <div className="fixed bottom-20 left-4 md:left-64 z-50 w-[360px] sm:w-[420px] max-w-[calc(100vw-2rem)] h-[540px] max-h-[82vh] bg-white dark:bg-[#1E1B1B] rounded-3xl shadow-2xl border border-stone-200 dark:border-[#2E2828] flex flex-col overflow-hidden animate-apple-modal font-malayalam">
-          {/* Header */}
-          <div className="p-3.5 px-4 bg-gradient-to-r from-purple-700 via-indigo-700 to-purple-800 text-white flex items-center justify-between shrink-0 shadow-sm">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-amber-300 shadow-inner">
-                <FiZap className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-xs font-black tracking-tight flex items-center gap-1.5 leading-none">
-                  <span>EPSO AI Assistant</span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+    <div className="fixed inset-0 z-[10000] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fade-in font-sans">
+      <div className="w-full max-w-2xl h-[620px] max-h-[92vh] bg-white dark:bg-[#212121] rounded-2xl shadow-2xl border border-stone-200 dark:border-[#2f2f2f] flex flex-col overflow-hidden my-auto">
+        {/* ChatGPT Top Bar */}
+        <div className="px-4 py-3 bg-white dark:bg-[#212121] border-b border-stone-200 dark:border-[#2f2f2f] flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-full bg-emerald-600/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <FiZap className="w-4 h-4 fill-current" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold text-stone-900 dark:text-white leading-none">
+                  EPSO Assistant
                 </h3>
-                <p className="text-[10px] text-purple-200 mt-1 leading-none">
-                  തത്സമയ ഫാക്ടറി ഉപദേശകൻ
-                </p>
+                <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-stone-100 dark:bg-[#2f2f2f] text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-[#383838]">
+                  GPT-4o Model
+                </span>
               </div>
-            </div>
-
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={toggleOpen}
-                className="p-1.5 rounded-lg hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer"
-                title="Minimize / Close"
-              >
-                <FiMinus className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={toggleOpen}
-                className="p-1.5 rounded-lg hover:bg-white/10 text-white/80 hover:text-white transition-colors cursor-pointer"
-                title="Close"
-              >
-                <FiX className="w-4 h-4" />
-              </button>
+              <p className="text-[10px] text-stone-400 font-malayalam mt-0.5">
+                തത്സമയ ഫാക്ടറി ഉപദേശകൻ (Production & Advisory)
+              </p>
             </div>
           </div>
 
-          {/* Quick Action Buttons (Requested: 📊 ഉൽപ്പാദന റിപ്പോർട്ട്, 💡 ഓയിൽ ഒപ്റ്റിമൈസേഷൻ, ⚠️ കുറഞ്ഞ സ്റ്റോക്ക്, 💰 കോസ്റ്റിംഗ് & ലാഭം) */}
-          <div className="p-2.5 bg-stone-50 dark:bg-[#161313] border-b border-stone-200/70 dark:border-[#282323] overflow-x-auto no-scrollbar flex items-center gap-1.5 shrink-0">
-            <button
-              type="button"
-              onClick={() => handleActionClick('ഉൽപ്പാദന റിപ്പോർട്ട്')}
-              className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#221E1E] border border-stone-200 dark:border-[#332A2A] text-[11px] font-bold text-stone-800 dark:text-stone-200 hover:border-purple-400 hover:text-purple-600 dark:hover:text-purple-300 shrink-0 press-apple cursor-pointer flex items-center gap-1.5 shadow-2xs"
-            >
-              <span>📊</span>
-              <span>ഉൽപ്പാദന റിപ്പോർട്ട്</span>
-            </button>
+          <button
+            type="button"
+            onClick={toggleOpen}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#2f2f2f] transition-colors cursor-pointer"
+            title="Close Assistant"
+          >
+            <FiX className="w-4 h-4" />
+          </button>
+        </div>
 
-            <button
-              type="button"
-              onClick={() => handleActionClick('ഓയിൽ ഒപ്റ്റിമൈസേഷൻ')}
-              className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#221E1E] border border-stone-200 dark:border-[#332A2A] text-[11px] font-bold text-stone-800 dark:text-stone-200 hover:border-purple-400 hover:text-purple-600 dark:hover:text-purple-300 shrink-0 press-apple cursor-pointer flex items-center gap-1.5 shadow-2xs"
-            >
-              <span>💡</span>
-              <span>ഓയിൽ ഒപ്റ്റിമൈസേഷൻ</span>
-            </button>
+        {/* ChatGPT Style Quick Prompt Chips */}
+        <div className="px-4 py-2.5 bg-stone-50/70 dark:bg-[#1a1a1a] border-b border-stone-100 dark:border-[#2a2a2a] overflow-x-auto no-scrollbar flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => handleActionClick('ഉൽപ്പാദന റിപ്പോർട്ട്')}
+            className="px-3 py-1.5 rounded-full border border-stone-200 dark:border-[#383838] bg-white dark:bg-[#262626] hover:bg-stone-50 dark:hover:bg-[#303030] text-xs font-medium text-stone-700 dark:text-stone-300 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 shadow-2xs font-malayalam"
+          >
+            <span>📊</span>
+            <span>ഉൽപ്പാദന റിപ്പോർട്ട്</span>
+          </button>
 
-            <button
-              type="button"
-              onClick={() => handleActionClick('കുറഞ്ഞ സ്റ്റോക്ക്')}
-              className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#221E1E] border border-stone-200 dark:border-[#332A2A] text-[11px] font-bold text-stone-800 dark:text-stone-200 hover:border-purple-400 hover:text-purple-600 dark:hover:text-purple-300 shrink-0 press-apple cursor-pointer flex items-center gap-1.5 shadow-2xs"
-            >
-              <span>⚠️</span>
-              <span>കുറഞ്ഞ സ്റ്റോക്ക്</span>
-            </button>
+          <button
+            type="button"
+            onClick={() => handleActionClick('ഓയിൽ ഒപ്റ്റിമൈസേഷൻ')}
+            className="px-3 py-1.5 rounded-full border border-stone-200 dark:border-[#383838] bg-white dark:bg-[#262626] hover:bg-stone-50 dark:hover:bg-[#303030] text-xs font-medium text-stone-700 dark:text-stone-300 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 shadow-2xs font-malayalam"
+          >
+            <span>💡</span>
+            <span>ഓയിൽ ഒപ്റ്റിമൈസേഷൻ</span>
+          </button>
 
-            <button
-              type="button"
-              onClick={() => handleActionClick('കോസ്റ്റിംഗ് & ലാഭം')}
-              className="px-2.5 py-1.5 rounded-xl bg-white dark:bg-[#221E1E] border border-stone-200 dark:border-[#332A2A] text-[11px] font-bold text-stone-800 dark:text-stone-200 hover:border-purple-400 hover:text-purple-600 dark:hover:text-purple-300 shrink-0 press-apple cursor-pointer flex items-center gap-1.5 shadow-2xs"
-            >
-              <span>💰</span>
-              <span>കോസ്റ്റിംഗ് & ലാഭം</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => handleActionClick('കുറഞ്ഞ സ്റ്റോക്ക്')}
+            className="px-3 py-1.5 rounded-full border border-stone-200 dark:border-[#383838] bg-white dark:bg-[#262626] hover:bg-stone-50 dark:hover:bg-[#303030] text-xs font-medium text-stone-700 dark:text-stone-300 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 shadow-2xs font-malayalam"
+          >
+            <span>⚠️</span>
+            <span>കുറഞ്ഞ സ്റ്റോക്ക്</span>
+          </button>
 
-          {/* Messages Scroll Area */}
-          <div className="flex-1 p-3.5 overflow-y-auto space-y-3 bg-stone-50/40 dark:bg-[#171414]">
-            {messages.map((msg) => (
+          <button
+            type="button"
+            onClick={() => handleActionClick('കോസ്റ്റിംഗ് & ലാഭം')}
+            className="px-3 py-1.5 rounded-full border border-stone-200 dark:border-[#383838] bg-white dark:bg-[#262626] hover:bg-stone-50 dark:hover:bg-[#303030] text-xs font-medium text-stone-700 dark:text-stone-300 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 shadow-2xs font-malayalam"
+          >
+            <span>💰</span>
+            <span>കോസ്റ്റിംഗ് & ലാഭം</span>
+          </button>
+        </div>
+
+        {/* ChatGPT Style Messages Stream */}
+        <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-5 bg-white dark:bg-[#212121]">
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`flex gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+            >
+              {msg.sender === 'ai' && (
+                <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs shrink-0 mt-0.5">
+                  <FiZap className="w-3.5 h-3.5 fill-current" />
+                </div>
+              )}
+
               <div
-                key={msg.id}
-                className={`flex gap-2.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`text-xs leading-relaxed ${
+                  msg.sender === 'user'
+                    ? 'bg-stone-100 dark:bg-[#2f2f2f] text-stone-900 dark:text-stone-100 rounded-3xl px-4 py-2.5 max-w-[80%] font-medium'
+                    : 'text-stone-800 dark:text-stone-200 flex-1 min-w-0 font-sans'
+                }`}
               >
+                <div className="whitespace-pre-line font-malayalam leading-relaxed">
+                  {msg.text}
+                </div>
+
                 {msg.sender === 'ai' && (
-                  <div className="w-7 h-7 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-xs">
-                    <FiZap className="w-3.5 h-3.5" />
+                  <div className="flex items-center gap-3 mt-2.5 pt-1.5 text-[11px] text-stone-400">
+                    <span>{msg.timestamp}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(msg.id, msg.text)}
+                      className="flex items-center gap-1 hover:text-stone-700 dark:hover:text-stone-200 transition-colors cursor-pointer"
+                      title="Copy response"
+                    >
+                      {copiedId === msg.id ? (
+                        <>
+                          <FiCheck className="w-3 h-3 text-emerald-500" />
+                          <span className="text-emerald-500 font-semibold">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <FiCopy className="w-3 h-3" />
+                          <span>Copy</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 )}
-
-                <div
-                  className={`max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed ${
-                    msg.sender === 'user'
-                      ? 'bg-purple-600 text-white rounded-br-xs font-bold shadow-xs'
-                      : 'bg-white dark:bg-[#221E1E] border border-stone-200/80 dark:border-[#2E2828] text-stone-800 dark:text-stone-200 rounded-bl-xs shadow-2xs'
-                  }`}
-                >
-                  <p className="whitespace-pre-line">{msg.text}</p>
-                  <div
-                    className={`flex items-center justify-between gap-2 mt-1.5 pt-1 border-t text-[10px] ${
-                      msg.sender === 'user'
-                        ? 'border-purple-500/50 text-purple-200'
-                        : 'border-stone-100 dark:border-[#282323] text-stone-400'
-                    }`}
-                  >
-                    <span>{msg.timestamp}</span>
-                    {msg.sender === 'ai' && (
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(msg.id, msg.text)}
-                        className="flex items-center gap-1 hover:text-purple-600 dark:hover:text-purple-400 cursor-pointer"
-                        title="Copy message"
-                      >
-                        {copiedId === msg.id ? (
-                          <>
-                            <FiCheck className="w-3 h-3 text-emerald-500" />
-                            <span className="text-emerald-500 font-bold">Copied</span>
-                          </>
-                        ) : (
-                          <>
-                            <FiCopy className="w-3 h-3" />
-                            <span>Copy</span>
-                          </>
-                        )}
-                      </button>
-                    )}
-                  </div>
-                </div>
               </div>
-            ))}
-
-            {isThinking && (
-              <div className="flex gap-2.5 items-center">
-                <div className="w-7 h-7 rounded-xl bg-purple-600 text-white flex items-center justify-center text-xs shrink-0">
-                  <FiZap className="w-3.5 h-3.5 animate-spin" />
-                </div>
-                <div className="p-2.5 px-3 rounded-2xl bg-white dark:bg-[#221E1E] border border-stone-200/80 dark:border-[#2E2828] text-xs text-stone-500 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce [animation-delay:0.2s]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-bounce [animation-delay:0.4s]" />
-                  <span className="text-[11px] font-bold ml-1">ചിന്തിക്കുന്നു...</span>
-                </div>
-              </div>
-            )}
-
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Bottom Bar: Unsentable input with Malayalam placeholder "AI ഉടൻ വരുന്നു... (AI is coming soon)" */}
-          <div className="p-3 border-t border-stone-200 dark:border-[#282323] bg-white dark:bg-[#1E1B1B]">
-            <div className="flex items-center gap-2">
-              <input
-                type="text"
-                disabled
-                readOnly
-                value=""
-                placeholder="AI ഉടൻ വരുന്നു... (AI is coming soon)"
-                className="flex-1 py-2 px-3.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-100/70 dark:bg-[#141212] text-xs text-stone-400 placeholder-stone-400 cursor-not-allowed select-none font-medium"
-              />
-              <button
-                type="button"
-                disabled
-                className="p-2 rounded-xl bg-stone-200 dark:bg-stone-800 text-stone-400 cursor-not-allowed opacity-50 shrink-0"
-                title="AI coming soon"
-              >
-                <FiSend className="w-3.5 h-3.5" />
-              </button>
             </div>
-          </div>
+          ))}
+
+          {isThinking && (
+            <div className="flex gap-3 items-center">
+              <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs shrink-0">
+                <FiZap className="w-3.5 h-3.5 fill-current" />
+              </div>
+              <div className="flex items-center gap-1.5 py-1">
+                <span className="w-2 h-2 rounded-full bg-stone-400 dark:bg-stone-500 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-stone-400 dark:bg-stone-500 animate-pulse [animation-delay:0.2s]" />
+                <span className="w-2 h-2 rounded-full bg-stone-400 dark:bg-stone-500 animate-pulse [animation-delay:0.4s]" />
+              </div>
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
         </div>
-      )}
-    </>
+
+        {/* ChatGPT Style Bottom Input Bar */}
+        <div className="p-3 sm:p-4 bg-white dark:bg-[#212121] border-t border-stone-100 dark:border-[#2f2f2f] shrink-0">
+          <div className="rounded-3xl border border-stone-200 dark:border-[#383838] bg-stone-50 dark:bg-[#2f2f2f] px-4 py-2 flex items-center gap-2 shadow-2xs">
+            <input
+              type="text"
+              disabled
+              readOnly
+              value=""
+              placeholder="AI ഉടൻ വരുന്നു... (AI is coming soon)"
+              className="flex-1 bg-transparent border-0 text-xs text-stone-500 placeholder-stone-400 dark:placeholder-stone-500 cursor-not-allowed select-none font-medium focus:outline-none"
+            />
+            <button
+              type="button"
+              disabled
+              className="w-7 h-7 rounded-full bg-stone-300 dark:bg-stone-600 text-white flex items-center justify-center opacity-60 cursor-not-allowed shrink-0"
+              title="AI is coming soon"
+            >
+              <FiSend className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <p className="text-[10px] text-center text-stone-400 dark:text-stone-500 mt-2 font-medium">
+            EPSO AI assists with production metrics. Always verify actual physical stock and measurements.
+          </p>
+        </div>
+      </div>
+    </div>
   );
 };

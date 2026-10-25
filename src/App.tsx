@@ -284,6 +284,7 @@ export const App: React.FC = () => {
                   productionRuns={productionRuns}
                   onNavigateTab={handleTabChange}
                   onRefresh={loadAllData}
+                  onOpenAI={() => setIsAIOpen(true)}
                 />
               )}
 

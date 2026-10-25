@@ -18,6 +18,7 @@ import {
   FiTrash2,
   FiShoppingBag,
   FiRefreshCw,
+  FiCpu,
 } from 'react-icons/fi';
 import {
   deleteProductionRun,
@@ -47,6 +48,7 @@ interface DashboardViewProps {
   productionRuns: ProductionRun[];
   onNavigateTab: (tab: any) => void;
   onRefresh?: () => void;
+  onOpenAI?: () => void;
 }
 
 interface CircularGaugeProps {
@@ -139,6 +141,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   productionRuns,
   onNavigateTab,
   onRefresh,
+  onOpenAI,
 }) => {
   const { isDark } = useTheme();
   const dateScrollRef = useRef<HTMLDivElement>(null);
@@ -934,7 +937,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all shadow-2xs"
               title="Add Purchase"
             >
-              <span>➕ പർച്ചേസ് ചേർക്കുക</span>
+              <span>പർച്ചേസ് ചേർക്കുക</span>
             </button>
             <button
               type="button"
@@ -942,7 +945,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               className="px-3.5 py-2 rounded-xl text-xs font-bold bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/60 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all shadow-2xs"
               title="Daily Wages"
             >
-              <span>🍳 കൂലി കണക്ക്</span>
+              <span>കൂലി കണക്ക്</span>
               <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded-md bg-orange-200/80 dark:bg-orange-900/80 text-orange-950 dark:text-orange-200">
                 {todayWage ? `₹${todayWage.totalWageBudget}` : '₹4000'}
               </span>
@@ -953,7 +956,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all shadow-2xs"
               title="Record Sale"
             >
-              <span>💰 വിൽപ്പന രേഖപ്പെടുത്തുക</span>
+              <span>വിൽപ്പന രേഖപ്പെടുത്തുക</span>
             </button>
             <button
               type="button"
@@ -961,7 +964,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               className="px-3.5 py-2 rounded-xl text-xs font-bold bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all shadow-2xs"
               title="Costing Analysis"
             >
-              <span>📊 കോസ്റ്റിംഗ് വിശകലനം</span>
+              <span>കോസ്റ്റിംഗ് വിശകലനം</span>
+            </button>
+            <button
+              type="button"
+              onClick={onOpenAI || (() => onNavigateTab('ai'))}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 border border-stone-200 dark:border-stone-700 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all shadow-2xs"
+              title="AI Assistant"
+            >
+              <FiCpu className="w-3.5 h-3.5 text-stone-600 dark:text-stone-300" />
+              <span>AI അസിസ്റ്റന്റ്</span>
             </button>
           </div>
         </div>

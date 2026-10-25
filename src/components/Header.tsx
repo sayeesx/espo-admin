@@ -67,12 +67,10 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'sales', labelMl: 'വിൽപ്പന', icon: FiShoppingBag },
     { id: 'wages', labelMl: 'കൂലി', icon: FiUsers },
     { id: 'costing', labelMl: 'കോസ്റ്റിംഗ്', icon: FiDollarSign },
-    { id: 'ai', labelMl: 'AI അസിസ്റ്റന്റ്', icon: FiCpu },
     { id: 'products', labelMl: 'ഉൽപ്പന്നങ്ങൾ', icon: FiPackage },
     { id: 'ingredients', labelMl: 'ചേരുവകൾ', icon: FiBox },
     { id: 'movements', labelMl: 'ലെഡ്ജർ', icon: FiClock },
     { id: 'notifications', labelMl: 'അറിയിപ്പുകൾ', icon: FiBell, badge: notificationCount },
-    { id: 'settings', labelMl: 'സെറ്റിംഗ്സ്', icon: FiSettings },
   ];
 
   return (
@@ -154,22 +152,6 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           );
         })}
-
-        {/* Production PIN Settings Trigger */}
-        {onOpenPinModal && (
-          <div className="pt-2 mt-2 border-t border-stone-100 dark:border-[#282323]">
-            <button
-              onClick={onOpenPinModal}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-[#242020] hover:text-epso-orange dark:hover:text-amber-400 transition-all press-apple group cursor-pointer"
-              title="Set Production PWA PIN"
-            >
-              <FiUser className="w-4 h-4 shrink-0 text-stone-400 group-hover:text-epso-orange" />
-              <span className="block font-bold text-xs lg:text-sm font-malayalam leading-tight truncate">
-                പ്രൊഡക്ഷൻ പിൻ (PIN)
-              </span>
-            </button>
-          </div>
-        )}
       </div>
 
       {/* User Card & Utility Footer */}
@@ -199,6 +181,20 @@ export const Header: React.FC<HeaderProps> = ({
               <FiRefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-epso-orange' : ''}`} />
             </button>
 
+            {/* Settings button placed where theme switch was */}
+            <button
+              onClick={() => onTabChange('settings')}
+              title="Settings (സെറ്റിംഗ്സ്)"
+              className={`p-1.5 rounded-lg transition-colors press-apple cursor-pointer ${
+                activeTab === 'settings'
+                  ? 'bg-epso-red text-white dark:bg-amber-500 dark:text-stone-950 shadow-xs font-bold'
+                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-200/60 dark:hover:bg-[#282323]'
+              }`}
+            >
+              <FiSettings className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Light / Dark theme toggle */}
             <button
               onClick={toggleTheme}
               title="Toggle Dark / Light Mode"
@@ -207,9 +203,10 @@ export const Header: React.FC<HeaderProps> = ({
               {theme === 'dark' ? <FiSun className="w-3.5 h-3.5 text-amber-400" /> : <FiMoon className="w-3.5 h-3.5 text-stone-700" />}
             </button>
 
+            {/* Sign out button */}
             <button
               onClick={logout}
-              title="Logout (ലോഗ് ഔട്ട്)"
+              title="Sign Out (ലോഗ് ഔട്ട്)"
               className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors press-apple cursor-pointer"
             >
               <FiLogOut className="w-3.5 h-3.5" />

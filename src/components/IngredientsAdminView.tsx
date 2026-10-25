@@ -360,87 +360,67 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Tab Switcher: Raw Ingredients vs Packet Types */}
-      <div className="flex items-center gap-2 p-1.5 bg-stone-100 dark:bg-[#1E1B1B] rounded-2xl border border-stone-200 dark:border-[#2E2828] w-fit">
-        <button
-          type="button"
-          onClick={() => setActiveIngredientTab('ingredients')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all press-apple cursor-pointer ${
-            activeIngredientTab === 'ingredients'
-              ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-white shadow-xs'
-              : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
-          }`}
-        >
-          <FiBox className="w-4 h-4 text-amber-500" />
-          <span>ചേരുവകൾ (Raw Materials)</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-stone-100 dark:bg-stone-700 text-stone-700 dark:text-stone-200">
-            {visibleIngredients.length}
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveIngredientTab('packets')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black transition-all press-apple cursor-pointer ${
-            activeIngredientTab === 'packets'
-              ? 'bg-white dark:bg-stone-800 text-stone-900 dark:text-white shadow-xs'
-              : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
-          }`}
-        >
-          <FiPackage className="w-4 h-4 text-epso-orange" />
-          <span>പാക്കറ്റ് തരങ്ങൾ (Packet Types & Covers)</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-300 font-bold">
-            {packagingItems.length}
-          </span>
-        </button>
-      </div>
-
       {activeIngredientTab === 'ingredients' ? (
         <>
           {/* Actions & Low Stock Notice Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
-        {lowStockCount > 0 ? (
-          <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs font-bold font-malayalam">
-            <FiAlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-            <span>{lowStockCount} ചേരുവകൾ കുറഞ്ഞ സ്റ്റോക്കിലാണ് / തീർന്നുപോയി (About to Stock Out)</span>
-          </div>
-        ) : (
-          <div />
-        )}
-
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setAddPurchaseModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
-            title="Add purchases for ingredients in bulk"
-          >
-            <FiShoppingBag className="w-4 h-4" />
-            <span>Add Purchase</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setPurchaseListModalOpen(true)}
-            className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer"
-            title="Print purchase list for low stock ingredients"
-          >
-            <FiPrinter className="w-4 h-4 text-epso-orange" />
-            <span>Print Purchase List</span>
-            {lowStockCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
-                {lowStockCount}
-              </span>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
+            {lowStockCount > 0 ? (
+              <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs font-bold font-malayalam">
+                <FiAlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                <span>{lowStockCount} ചേരുവകൾ കുറഞ്ഞ സ്റ്റോക്കിലാണ് / തീർന്നുപോയി (About to Stock Out)</span>
+              </div>
+            ) : (
+              <div />
             )}
-          </button>
-          <button
-            onClick={openCreateModal}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
-          >
-            <FiPlus className="w-4 h-4" />
-            <span>New Ingredient</span>
-          </button>
-        </div>
-      </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveIngredientTab('packets')}
+                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer"
+                title="പാക്കറ്റ് തരങ്ങൾ (Packet Types & Covers)"
+              >
+                <FiPackage className="w-4 h-4 text-epso-orange" />
+                <span>പാക്കറ്റ് തരങ്ങൾ (Packet Types & Covers)</span>
+                <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-300 font-bold">
+                  {packagingItems.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAddPurchaseModalOpen(true)}
+                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
+                title="Add purchases for ingredients in bulk"
+              >
+                <FiShoppingBag className="w-4 h-4" />
+                <span>Add Purchase</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPurchaseListModalOpen(true)}
+                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer"
+                title="Print purchase list for low stock ingredients"
+              >
+                <FiPrinter className="w-4 h-4 text-epso-orange" />
+                <span>Print Purchase List</span>
+                {lowStockCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">
+                    {lowStockCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={openCreateModal}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
+              >
+                <FiPlus className="w-4 h-4" />
+                <span>New Ingredient</span>
+              </button>
+            </div>
+          </div>
 
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
@@ -687,14 +667,25 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
               </p>
             </div>
 
-            <button
-              type="button"
-              onClick={openCreatePacketModal}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
-            >
-              <FiPlus className="w-4 h-4" />
-              <span>New Packet Type (പുതിയ പാക്കറ്റ്)</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveIngredientTab('ingredients')}
+                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer"
+              >
+                <FiBox className="w-4 h-4 text-amber-500" />
+                <span>ചേരുവകൾ (Raw Materials)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={openCreatePacketModal}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
+              >
+                <FiPlus className="w-4 h-4" />
+                <span>New Packet Type (പുതിയ പാക്കറ്റ്)</span>
+              </button>
+            </div>
           </div>
 
           {/* Quick Metrics Bar */}

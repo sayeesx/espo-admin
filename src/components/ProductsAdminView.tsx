@@ -45,7 +45,7 @@ export const isExcludedRecipeIngredient = (ing: { name?: string; category?: stri
     n.includes('സൺഫ്ലവർ') ||
     n.includes('വെളിച്ചെണ്ണ') ||
     n.includes('ഉപ്പ്') ||
-    n.includes('salt') ||
+    (n.includes('salt') && !n.includes('black salt')) ||
     n.includes('അണ്ടി തോട്') ||
     n.includes('തോട്') ||
     n.includes('കവർ') ||
