@@ -271,3 +271,27 @@ export interface ProductSellingPrice {
   updatedAt?: string;
   createdAt?: string;
 }
+
+export interface FactoryProfile {
+  name: string;
+  subtitle?: string;
+  phone: string;
+  email: string;
+  location: string;
+  address: string;
+  gst: string;
+  fssai: string;
+  billFooter: string;
+}
+
+export const DEFAULT_FACTORY_PROFILE: FactoryProfile = {
+  name: 'EPSO FOOD PRODUCTS',
+  subtitle: 'ഉയർന്ന നിലവാരമുള്ള സ്നാക്ക്സ് & പലഹാരങ്ങൾ',
+  phone: '+91 9876543210',
+  email: 'info@epsofoods.com',
+  location: 'Industrial Estate, Malappuram, Kerala',
+  address: 'Near Industrial Estate, Malappuram, Kerala - 676505',
+  gst: '32AAAAA0000A1Z5',
+  fssai: '11322001000123',
+  billFooter: 'നന്ദി! വീണ്ടും സന്ദർശിക്കുക. ശുദ്ധമായ എണ്ണയിൽ തയ്യാറാക്കിയത്.',
+};

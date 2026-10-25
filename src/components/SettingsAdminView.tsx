@@ -15,7 +15,14 @@ import {
   FiKey,
 } from 'react-icons/fi';
 import { supabase } from '../services/supabase';
-import { Product, Ingredient, ProductionRun, StockMovement } from '../types';
+import {
+  Product,
+  Ingredient,
+  ProductionRun,
+  StockMovement,
+  FactoryProfile,
+  DEFAULT_FACTORY_PROFILE,
+} from '../types';
 
 interface SettingsAdminViewProps {
   products: Product[];
@@ -24,24 +31,6 @@ interface SettingsAdminViewProps {
   stockMovements: StockMovement[];
   onRefresh: () => void;
 }
-
-export interface FactoryProfile {
-  name: string;
-  subtitle: string;
-  phone: string;
-  fssai: string;
-  address: string;
-  billFooter: string;
-}
-
-const DEFAULT_PROFILE: FactoryProfile = {
-  name: 'EPSO FOOD PRODUCTS',
-  subtitle: 'ഉയർന്ന നിലവാരമുള്ള സ്നാക്ക്സ് & പലഹാരങ്ങൾ',
-  phone: '9876543210',
-  fssai: '11322001000123',
-  address: 'Near Industrial Estate, Malappuram, Kerala',
-  billFooter: 'നന്ദി! വീണ്ടും സന്ദർശിക്കുക. ശുദ്ധമായ എണ്ണയിൽ തയ്യാറാക്കിയത്.',
-};
 
 export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   products,
@@ -66,9 +55,9 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   const [profile, setProfile] = useState<FactoryProfile>(() => {
     try {
       const saved = localStorage.getItem('epso_factory_profile');
-      return saved ? { ...DEFAULT_PROFILE, ...JSON.parse(saved) } : DEFAULT_PROFILE;
+      return saved ? { ...DEFAULT_FACTORY_PROFILE, ...JSON.parse(saved) } : DEFAULT_FACTORY_PROFILE;
     } catch {
-      return DEFAULT_PROFILE;
+      return DEFAULT_FACTORY_PROFILE;
     }
   });
   const [profileSaved, setProfileSaved] = useState<boolean>(false);
@@ -94,24 +83,42 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   const [resetLoading, setResetLoading] = useState<boolean>(false);
   const [resetSuccessNotice, setResetSuccessNotice] = useState<string | null>(null);
 
-  // Load PIN from cache and audit logs
+  // Load PIN and Factory Profile from cache and audit logs
   useEffect(() => {
     const cached = localStorage.getItem('epso_production_pin');
     if (cached) setCurrentPin(cached);
 
     (async () => {
       try {
-        const { data } = await supabase
+        // Fetch PIN
+        const { data: pinData } = await supabase
           .from('audit_logs')
           .select('details')
           .eq('action', 'PRODUCTION_PIN_CHANGED')
           .order('created_at', { ascending: false })
           .limit(1);
 
-        if (data && data.length > 0 && data[0].details?.pin) {
-          const pinVal = String(data[0].details.pin);
+        if (pinData && pinData.length > 0 && pinData[0].details?.pin) {
+          const pinVal = String(pinData[0].details.pin);
           setCurrentPin(pinVal);
           localStorage.setItem('epso_production_pin', pinVal);
+        }
+
+        // Fetch Factory / Bill Profile
+        const { data: profileData } = await supabase
+          .from('audit_logs')
+          .select('details')
+          .eq('action', 'FACTORY_PROFILE_UPDATED')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (profileData && profileData.length > 0 && profileData[0].details) {
+          const remoteProfile = profileData[0].details;
+          setProfile((prev) => ({ ...prev, ...remoteProfile }));
+          localStorage.setItem(
+            'epso_factory_profile',
+            JSON.stringify({ ...DEFAULT_FACTORY_PROFILE, ...remoteProfile })
+          );
         }
       } catch {
         // silent fallback
@@ -179,14 +186,20 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   };
 
   // Save Factory Profile
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       localStorage.setItem('epso_factory_profile', JSON.stringify(profile));
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 2500);
-    } catch (err) {
-      alert('Failed to save profile');
+
+      // Cloud persistence via Supabase audit_logs
+      await supabase.from('audit_logs').insert({
+        action: 'FACTORY_PROFILE_UPDATED',
+        details: profile,
+      });
+    } catch {
+      // Local storage fallback already succeeded
     }
   };
 
@@ -463,35 +476,91 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
             )}
           </div>
 
-          <form onSubmit={handleSaveProfile} className="space-y-3 text-xs font-malayalam">
-            <div className="grid grid-cols-2 gap-3">
+          <form onSubmit={handleSaveProfile} className="space-y-3.5 text-xs font-malayalam">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                  ഫാക്ടറി പേര് (Factory Name)
+                  സ്ഥാപന പേര് (Business / EPSO Name)
                 </label>
                 <input
                   type="text"
                   required
                   value={profile.name}
                   onChange={(e) => setProfile({ ...profile, name: e.target.value })}
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-bold focus:outline-none"
+                  placeholder="e.g. EPSO FOOD PRODUCTS"
+                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-bold focus:outline-none focus:ring-1 focus:ring-epso-orange"
                 />
               </div>
 
               <div>
                 <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                  ഫോൺ നമ്പർ (Phone / WhatsApp)
+                  ഫോൺ നമ്പർ (Phone Number / WhatsApp)
                 </label>
                 <input
                   type="text"
                   value={profile.phone}
                   onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-bold focus:outline-none"
+                  placeholder="e.g. +91 9876543210"
+                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-bold focus:outline-none focus:ring-1 focus:ring-epso-orange"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  ഇമെയിൽ വിലാസം (Email Address)
+                </label>
+                <input
+                  type="email"
+                  value={profile.email || ''}
+                  onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                  placeholder="e.g. info@epsofoods.com"
+                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-epso-orange"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  സ്ഥലം / പ്രദേശം (City / Location)
+                </label>
+                <input
+                  type="text"
+                  value={profile.location || ''}
+                  onChange={(e) => setProfile({ ...profile, location: e.target.value })}
+                  placeholder="e.g. Industrial Estate, Malappuram"
+                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-epso-orange"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                പൂർണ്ണ വിലാസം (Full Address on Bill)
+              </label>
+              <input
+                type="text"
+                value={profile.address}
+                onChange={(e) => setProfile({ ...profile, address: e.target.value })}
+                placeholder="e.g. Near Industrial Estate, Malappuram, Kerala - 676505"
+                className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-epso-orange"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  GSTIN നമ്പർ (GST Number)
+                </label>
+                <input
+                  type="text"
+                  value={profile.gst || ''}
+                  onChange={(e) => setProfile({ ...profile, gst: e.target.value.toUpperCase() })}
+                  placeholder="e.g. 32AAAAA0000A1Z5"
+                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono focus:outline-none focus:ring-1 focus:ring-epso-orange"
+                />
+              </div>
+
               <div>
                 <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
                   FSSAI ലൈസൻസ് നമ്പർ
@@ -500,19 +569,8 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                   type="text"
                   value={profile.fssai}
                   onChange={(e) => setProfile({ ...profile, fssai: e.target.value })}
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                  സ്ഥലം / വിലാസം (Location)
-                </label>
-                <input
-                  type="text"
-                  value={profile.address}
-                  onChange={(e) => setProfile({ ...profile, address: e.target.value })}
-                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                  placeholder="e.g. 11322001000123"
+                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono focus:outline-none focus:ring-1 focus:ring-epso-orange"
                 />
               </div>
             </div>
@@ -525,16 +583,17 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                 type="text"
                 value={profile.billFooter}
                 onChange={(e) => setProfile({ ...profile, billFooter: e.target.value })}
-                className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                placeholder="e.g. നന്ദി! വീണ്ടും സന്ദർശിക്കുക. ശുദ്ധമായ എണ്ണയിൽ തയ്യാറാക്കിയത്."
+                className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-epso-orange"
               />
             </div>
 
             <button
               type="submit"
-              className="w-full py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-2.5 rounded-xl bg-epso-orange hover:bg-orange-600 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-black shadow-md press-apple flex items-center justify-center gap-2 cursor-pointer transition-all"
             >
-              <FiSave className="w-3.5 h-3.5" />
-              <span>വിവരങ്ങൾ സേവ് ചെയ്യുക (Save Profile)</span>
+              <FiSave className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>ബില്ലിംഗ് വിവരങ്ങൾ സേവ് ചെയ്യുക (Save Bill Details)</span>
             </button>
           </form>
         </div>

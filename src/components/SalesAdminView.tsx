@@ -13,15 +13,15 @@ import {
   FiRefreshCw,
   FiCopy,
   FiMenu,
-  FiSend,
 } from 'react-icons/fi';
-import { Product, SaleRecord } from '../types';
+import { Product, SaleRecord, FactoryProfile, DEFAULT_FACTORY_PROFILE } from '../types';
 import {
   fetchSales,
   recordSale,
   recordSalesBatch,
   deleteSale,
   fetchProductSellingPrices,
+  supabase,
 } from '../services/supabase';
 import { AnimatedNumber } from './AnimatedNumber';
 import { createPortal } from 'react-dom';
@@ -82,6 +82,50 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
   const [isBillModalOpen, setIsBillModalOpen] = useState<boolean>(false);
   const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null);
   const [billCopied, setBillCopied] = useState<boolean>(false);
+
+  // Business / Bill Profile (Synced from Settings)
+  const [billProfile, setBillProfile] = useState<FactoryProfile>(() => {
+    try {
+      const saved = localStorage.getItem('epso_factory_profile');
+      return saved ? { ...DEFAULT_FACTORY_PROFILE, ...JSON.parse(saved) } : DEFAULT_FACTORY_PROFILE;
+    } catch {
+      return DEFAULT_FACTORY_PROFILE;
+    }
+  });
+
+  // Re-sync bill profile from local storage and remote audit_logs
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('epso_factory_profile');
+      if (saved) {
+        setBillProfile((prev) => ({ ...prev, ...JSON.parse(saved) }));
+      }
+    } catch {
+      // ignore
+    }
+
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('audit_logs')
+          .select('details')
+          .eq('action', 'FACTORY_PROFILE_UPDATED')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (data && data.length > 0 && data[0].details) {
+          const remoteProfile = data[0].details;
+          setBillProfile((prev) => ({ ...prev, ...remoteProfile }));
+          localStorage.setItem(
+            'epso_factory_profile',
+            JSON.stringify({ ...DEFAULT_FACTORY_PROFILE, ...remoteProfile })
+          );
+        }
+      } catch {
+        // silent fallback
+      }
+    })();
+  }, [isBillModalOpen]);
 
   // Buyers management state
   const [buyersList, setBuyersList] = useState<BuyerInfo[]>(() => {
@@ -423,7 +467,7 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
       .map((it) => `• ${it.name} x ${it.quantity} ${it.unit} @ ₹${it.unitPrice} = ₹${it.amount.toFixed(2)}`)
       .join('\n');
 
-    const text = `🧾 *EPSO FOOD PRODUCTS - INVOICE*
+    const text = `🧾 *${(billProfile.name || 'EPSO FOOD PRODUCTS').toUpperCase()} - INVOICE*
 --------------------------------
 Invoice: ${activeBill.invoiceNo}
 Date: ${activeBill.date}
@@ -436,8 +480,7 @@ Subtotal: ₹${activeBill.subtotal.toFixed(2)}
 ${activeBill.discount > 0 ? `Discount: -₹${activeBill.discount.toFixed(2)}\n` : ''}GST: ₹${activeBill.totalGst.toFixed(2)}
 *Grand Total: ₹${activeBill.grandTotal.toFixed(2)}*
 --------------------------------
-_Thank you for your business!_
-EPSO Food Products, Kerala`;
+${billProfile.gst ? `GSTIN: ${billProfile.gst}\n` : ''}${billProfile.phone ? `Phone: ${billProfile.phone}\n` : ''}${billProfile.address ? `${billProfile.address}\n` : ''}_${billProfile.billFooter || 'Thank you for your business!'}_`;
 
     navigator.clipboard.writeText(text).then(() => {
       setBillCopied(true);
@@ -538,85 +581,85 @@ EPSO Food Products, Kerala`;
       `}</style>
 
       {/* Header Bar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap pb-1">
+      <div className="flex items-center justify-between gap-3 flex-wrap pb-1 font-malayalam">
         <div>
-          <h2 className="text-base font-black text-slate-900 dark:text-white flex items-center gap-2">
+          <h2 className="text-base sm:text-lg font-black text-stone-900 dark:text-white flex items-center gap-2">
             <span>വിൽപ്പന & ബില്ലിംഗ് (Sales & Invoicing)</span>
           </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Professional Billing Software & Invoicing Suite
+          <p className="text-xs text-stone-500 dark:text-stone-400">
+            വിൽപ്പന രേഖപ്പെടുത്തലും ഇൻവോയ്സ് പ്രിന്റിംഗും
           </p>
         </div>
 
         <button
           onClick={handleOpenNewBill}
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#1E293B] hover:bg-[#0F172A] dark:bg-emerald-600 dark:hover:bg-emerald-700 text-white font-bold text-xs shadow-sm cursor-pointer transition-all"
+          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-epso-orange hover:bg-orange-600 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-black text-xs shadow-md press-apple cursor-pointer transition-all"
         >
-          <FiPlus className="w-4 h-4" />
+          <FiPlus className="w-4 h-4 stroke-[3]" />
           <span>വിൽപ്പന രേഖപ്പെടുത്തുക (New Bill)</span>
         </button>
       </div>
 
       {/* Clean Statistics Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="p-3.5 rounded-xl bg-white dark:bg-[#151D2A] border border-slate-200 dark:border-slate-800 shadow-2xs">
-          <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">ഇന്നത്തെ വിൽപ്പന</p>
-          <p className="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
+        <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm">
+          <p className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam">ഇന്നത്തെ വിൽപ്പന</p>
+          <p className="text-xl sm:text-2xl font-black text-epso-orange dark:text-amber-400 font-mono mt-0.5">
             <AnimatedNumber value={stats.todayTotal} prefix="₹" decimals={2} />
           </p>
-          <p className="text-[10px] text-slate-400 mt-0.5 font-malayalam">ഇന്ന് ലഭിച്ച തുക</p>
+          <p className="text-[10px] text-stone-400 mt-0.5 font-malayalam">ഇന്ന് ലഭിച്ച തുക</p>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-white dark:bg-[#151D2A] border border-slate-200 dark:border-slate-800 shadow-2xs">
-          <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">ഈ മാസത്തെ വിൽപ്പന</p>
-          <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono mt-0.5">
+        <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm">
+          <p className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam">ഈ മാസത്തെ വിൽപ്പന</p>
+          <p className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white font-mono mt-0.5">
             <AnimatedNumber value={stats.monthTotal} prefix="₹" decimals={2} />
           </p>
-          <p className="text-[10px] text-slate-400 mt-0.5 font-malayalam">നടപ്പു മാസം</p>
+          <p className="text-[10px] text-stone-400 mt-0.5 font-malayalam">നടപ്പു മാസം</p>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-white dark:bg-[#151D2A] border border-slate-200 dark:border-slate-800 shadow-2xs">
-          <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">ആകെ വിറ്റ തുക</p>
-          <p className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono mt-0.5">
+        <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm">
+          <p className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam">ആകെ വിറ്റ തുക</p>
+          <p className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white font-mono mt-0.5">
             <AnimatedNumber value={stats.allTotal} prefix="₹" decimals={2} />
           </p>
-          <p className="text-[10px] text-slate-400 mt-0.5 font-malayalam">{stats.ordersCount} ബില്ലുകൾ</p>
+          <p className="text-[10px] text-stone-400 mt-0.5 font-malayalam">{stats.ordersCount} ബില്ലുകൾ</p>
         </div>
 
-        <div className="p-3.5 rounded-xl bg-white dark:bg-[#151D2A] border border-slate-200 dark:border-slate-800 shadow-2xs">
-          <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">ആകെ വിറ്റ അളവ്</p>
-          <p className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-200 font-mono mt-0.5">
+        <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm">
+          <p className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam">ആകെ വിറ്റ അളവ്</p>
+          <p className="text-xl sm:text-2xl font-black text-stone-800 dark:text-stone-200 font-mono mt-0.5">
             <AnimatedNumber value={stats.totalQty} decimals={1} />
           </p>
-          <p className="text-[10px] text-slate-400 mt-0.5 font-malayalam">പാക്കറ്റുകൾ / കിലോ</p>
+          <p className="text-[10px] text-stone-400 mt-0.5 font-malayalam">പാക്കറ്റുകൾ / കിലോ</p>
         </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="p-3 bg-white dark:bg-[#151D2A] rounded-xl border border-slate-200 dark:border-slate-800 flex flex-wrap items-center gap-2.5">
+      <div className="p-3 bg-white dark:bg-[#1E1B1B] rounded-2xl border border-stone-200 dark:border-[#2E2828] flex flex-wrap items-center gap-2.5 shadow-sm">
         <div className="relative flex-1 min-w-[200px]">
-          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
           <input
             type="text"
             placeholder="ഉൽപ്പന്നം അല്ലെങ്കിൽ ഉപഭോക്താവിനെ തിരയുക..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-[#0B0F17] text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-slate-400"
+            className="w-full pl-9 pr-3 py-2 text-xs bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white border border-stone-200 dark:border-[#2E2828] rounded-xl focus:outline-none focus:ring-1 focus:ring-epso-orange"
           />
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <FiCalendar className="w-4 h-4 text-slate-400" />
+          <FiCalendar className="w-4 h-4 text-stone-400" />
           <input
             type="date"
             value={selectedDateFilter}
             onChange={(e) => setSelectedDateFilter(e.target.value)}
-            className="px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-[#0B0F17] text-slate-900 dark:text-white border border-slate-200 dark:border-slate-800 rounded-lg font-mono focus:outline-none"
+            className="px-3 py-2 text-xs bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white border border-stone-200 dark:border-[#2E2828] rounded-xl font-mono focus:outline-none"
           />
           {selectedDateFilter && (
             <button
               onClick={() => setSelectedDateFilter('')}
-              className="text-[11px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 ml-1 cursor-pointer"
+              className="text-[11px] text-stone-400 hover:text-epso-orange dark:hover:text-amber-400 ml-1 cursor-pointer font-bold"
             >
               എല്ലാം
             </button>
@@ -625,88 +668,88 @@ EPSO Food Products, Kerala`;
       </div>
 
       {/* Sales List Table */}
-      <div className="bg-white dark:bg-[#151D2A] rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs overflow-hidden">
+      <div className="bg-white dark:bg-[#1E1B1B] rounded-2xl border border-stone-200 dark:border-[#2E2828] shadow-sm overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-            <FiRefreshCw className="w-4 h-4 animate-spin text-slate-500" />
+          <div className="p-8 text-center text-xs text-stone-400 flex items-center justify-center gap-2">
+            <FiRefreshCw className="w-4 h-4 animate-spin text-epso-orange" />
             <span>വിൽപ്പന വിവരങ്ങൾ ശേഖരിക്കുന്നു...</span>
           </div>
         ) : filteredSales.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 space-y-2">
-            <FiDollarSign className="w-8 h-8 mx-auto opacity-30" />
-            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">വിൽപ്പന റെക്കോർഡുകൾ ഒന്നും ലഭ്യമല്ല</p>
+          <div className="p-12 text-center text-stone-400 space-y-2">
+            <FiDollarSign className="w-8 h-8 mx-auto opacity-30 text-stone-400" />
+            <p className="text-sm font-bold text-stone-700 dark:text-stone-300">വിൽപ്പന റെക്കോർഡുകൾ ഒന്നും ലഭ്യമല്ല</p>
             <p className="text-xs">മുകളിലുള്ള ബട്ടൺ ഉപയോഗിച്ച് പുതിയ വിൽപ്പന ചേർക്കുക</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
+            <table className="w-full text-left text-xs border-collapse font-sans">
               <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-[#0B0F17]/60 font-semibold">
-                  <th className="py-2.5 px-3.5">തീയതി</th>
-                  <th className="py-2.5 px-3.5">ഉൽപ്പന്നം (Item)</th>
-                  <th className="py-2.5 px-3.5 text-right">അളവ് (Qty)</th>
-                  <th className="py-2.5 px-3.5 text-right">വില (Rate)</th>
-                  <th className="py-2.5 px-3.5 text-right">ആകെ തുക</th>
-                  <th className="py-2.5 px-3.5">ഉപഭോക്താവ് (Customer)</th>
-                  <th className="py-2.5 px-3.5">പേയ്‌മെന്റ്</th>
-                  <th className="py-2.5 px-3.5 text-center">ബില്ലിംഗ്</th>
-                  <th className="py-2.5 px-3.5 text-center">ഡിലീറ്റ്</th>
+                <tr className="border-b border-stone-200 dark:border-[#2E2828] text-stone-600 dark:text-stone-400 bg-stone-50/80 dark:bg-[#141212] font-bold">
+                  <th className="py-3 px-3.5">തീയതി</th>
+                  <th className="py-3 px-3.5">ഉൽപ്പന്നം (Item)</th>
+                  <th className="py-3 px-3.5 text-right">അളവ് (Qty)</th>
+                  <th className="py-3 px-3.5 text-right">വില (Rate)</th>
+                  <th className="py-3 px-3.5 text-right">ആകെ തുക</th>
+                  <th className="py-3 px-3.5">ഉപഭോക്താവ് (Customer)</th>
+                  <th className="py-3 px-3.5">പേയ്‌മെന്റ്</th>
+                  <th className="py-3 px-3.5 text-center">ബില്ലിംഗ്</th>
+                  <th className="py-3 px-3.5 text-center">ഡിലീറ്റ്</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+              <tbody className="divide-y divide-stone-100 dark:divide-[#2E2828]">
                 {filteredSales.map((sale) => (
-                  <tr key={sale.id} className="hover:bg-slate-50 dark:hover:bg-[#1A2333] transition-colors">
-                    <td className="py-2.5 px-3.5 font-mono text-slate-500 dark:text-slate-400">
+                  <tr key={sale.id} className="hover:bg-orange-50/30 dark:hover:bg-[#252020] transition-colors">
+                    <td className="py-3 px-3.5 font-mono text-stone-500 dark:text-stone-400">
                       {sale.sale_date}
                     </td>
-                    <td className="py-2.5 px-3.5 font-bold text-slate-900 dark:text-white">
+                    <td className="py-3 px-3.5 font-bold text-stone-900 dark:text-white">
                       {sale.product_name}
                       {sale.notes && (
-                        <p className="text-[10px] text-slate-400 font-normal mt-0.5">{sale.notes}</p>
+                        <p className="text-[10px] text-stone-400 font-normal mt-0.5">{sale.notes}</p>
                       )}
                     </td>
-                    <td className="py-2.5 px-3.5 text-right font-mono font-semibold text-slate-700 dark:text-slate-300">
-                      {sale.quantity} <span className="text-[10px] text-slate-400 font-sans">{sale.unit}</span>
+                    <td className="py-3 px-3.5 text-right font-mono font-bold text-stone-700 dark:text-stone-300">
+                      {sale.quantity} <span className="text-[10px] text-stone-400 font-sans">{sale.unit}</span>
                     </td>
-                    <td className="py-2.5 px-3.5 text-right font-mono text-slate-600 dark:text-slate-400">
+                    <td className="py-3 px-3.5 text-right font-mono text-stone-600 dark:text-stone-400">
                       ₹{Number(sale.unit_price).toFixed(2)}
                     </td>
-                    <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-900 dark:text-white">
+                    <td className="py-3 px-3.5 text-right font-mono font-black text-stone-900 dark:text-white">
                       ₹{Number(sale.total_amount).toFixed(2)}
                     </td>
-                    <td className="py-2.5 px-3.5 text-slate-700 dark:text-slate-300">
+                    <td className="py-3 px-3.5 text-stone-700 dark:text-stone-300 font-medium">
                       {sale.customer_name || '—'}
                     </td>
-                    <td className="py-2.5 px-3.5">
+                    <td className="py-3 px-3.5">
                       <div className="flex items-center gap-1.5">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-stone-100 dark:bg-[#252020] text-stone-700 dark:text-stone-300">
                           {sale.payment_method || 'cash'}
                         </span>
                         <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
                             sale.payment_status === 'paid'
-                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
-                              : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40'
+                              : 'bg-orange-50 dark:bg-amber-950/40 text-epso-orange dark:text-amber-300 border border-orange-200 dark:border-amber-800/40'
                           }`}
                         >
                           {sale.payment_status === 'paid' ? 'Paid' : 'Unpaid'}
                         </span>
                       </div>
                     </td>
-                    <td className="py-2.5 px-3.5 text-center">
+                    <td className="py-3 px-3.5 text-center">
                       <button
                         onClick={() => handlePreviewSingleSale(sale)}
-                        className="p-1.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors cursor-pointer"
+                        className="p-1.5 text-stone-600 dark:text-stone-300 hover:text-epso-orange dark:hover:text-amber-400 hover:bg-stone-100 dark:hover:bg-[#282323] rounded-lg transition-colors cursor-pointer"
                         title="View Sleek Bill (Print)"
                       >
                         <FiPrinter className="w-4 h-4" />
                       </button>
                     </td>
-                    <td className="py-2.5 px-3.5 text-center">
+                    <td className="py-3 px-3.5 text-center">
                       <button
                         onClick={() => handleDelete(sale.id)}
                         disabled={deletingSaleId === sale.id}
-                        className="p-1.5 text-slate-400 hover:text-red-500 transition-colors cursor-pointer disabled:opacity-50"
+                        className="p-1.5 text-stone-400 hover:text-red-500 transition-colors cursor-pointer disabled:opacity-50"
                         title="Delete Sale Record"
                       >
                         {deletingSaleId === sale.id ? (
@@ -725,16 +768,16 @@ EPSO Food Products, Kerala`;
       </div>
 
       {/* ============================================================ */}
-      {/* FULL SCREEN BILLING MODAL (DESIGNED AFTER IMAGE 1)           */}
+      {/* FULL SCREEN BILLING MODAL                                    */}
       {/* ============================================================ */}
       {isModalOpen && createPortal(
-        <div className="fixed inset-0 z-[9999] w-screen h-screen bg-[#F8FAFC] dark:bg-[#0B0F17] flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 font-sans">
+        <div className="fixed inset-0 z-[9999] w-screen h-screen bg-[#F8F9FA] dark:bg-[#141212] flex flex-col overflow-hidden text-stone-900 dark:text-stone-100 font-sans">
           {/* Top Bar: Customer, Invoice No, Action Bar */}
-          <div className="bg-white dark:bg-[#151D2A] border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between gap-4 flex-wrap shrink-0 shadow-2xs">
+          <div className="bg-white dark:bg-[#1E1B1B] border-b border-stone-200 dark:border-[#2E2828] px-4 py-3 flex items-center justify-between gap-4 flex-wrap shrink-0 shadow-xs">
             <div className="flex items-center gap-4 flex-wrap flex-1">
               {/* Customer Selector */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Customer:</span>
+                <span className="text-xs font-bold text-stone-700 dark:text-stone-300 font-malayalam">ഉപഭോക്താവ്:</span>
                 <div className="relative">
                   <input
                     type="text"
@@ -742,7 +785,7 @@ EPSO Food Products, Kerala`;
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     placeholder="e.g. Ramesh Traders"
-                    className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B0F17] text-xs font-bold text-slate-900 dark:text-white min-w-[180px] focus:outline-none focus:ring-1 focus:ring-slate-500"
+                    className="px-3 py-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-xs font-bold text-stone-900 dark:text-white min-w-[180px] focus:outline-none focus:ring-1 focus:ring-epso-orange"
                   />
                   <datalist id="invoice-buyers-list">
                     {buyersList.map((b, idx) => (
@@ -755,7 +798,7 @@ EPSO Food Products, Kerala`;
                 <button
                   type="button"
                   onClick={() => setShowAddBuyerModal(true)}
-                  className="p-1.5 rounded-lg border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
+                  className="p-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-600 dark:text-stone-300 transition-colors"
                   title="Add / Manage Buyers"
                 >
                   <FiMenu className="w-4 h-4" />
@@ -764,33 +807,33 @@ EPSO Food Products, Kerala`;
 
               {/* Invoice No */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Invoice No:</span>
+                <span className="text-xs font-bold text-stone-700 dark:text-stone-300">Invoice No:</span>
                 <input
                   type="text"
                   value={invoiceNo}
                   onChange={(e) => setInvoiceNo(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B0F17] text-xs font-mono font-bold text-slate-900 dark:text-white w-28 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  className="px-3 py-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-xs font-mono font-bold text-stone-900 dark:text-white w-28 focus:outline-none focus:ring-1 focus:ring-epso-orange"
                 />
               </div>
 
               {/* Date */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Date:</span>
+                <span className="text-xs font-bold text-stone-700 dark:text-stone-300 font-malayalam">തീയതി:</span>
                 <input
                   type="date"
                   value={invoiceDate}
                   onChange={(e) => setInvoiceDate(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B0F17] text-xs font-mono text-slate-900 dark:text-white focus:outline-none"
+                  className="px-3 py-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-xs font-mono text-stone-900 dark:text-white focus:outline-none"
                 />
               </div>
 
               {/* Payment Mode */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Mode:</span>
+                <span className="text-xs font-bold text-stone-700 dark:text-stone-300">Mode:</span>
                 <select
                   value={paymentMethod}
                   onChange={(e) => setPaymentMethod(e.target.value)}
-                  className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B0F17] text-xs font-bold text-slate-900 dark:text-white focus:outline-none"
+                  className="px-2.5 py-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-xs font-bold text-stone-900 dark:text-white focus:outline-none"
                 >
                   <option value="cash">Cash</option>
                   <option value="upi">UPI / GPay</option>
@@ -804,10 +847,10 @@ EPSO Food Products, Kerala`;
                 <button
                   type="button"
                   onClick={() => setPaymentStatus('paid')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     paymentStatus === 'paid'
-                      ? 'bg-emerald-600 text-white shadow-2xs'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-stone-100 dark:bg-[#252020] text-stone-600 dark:text-stone-300'
                   }`}
                 >
                   Paid
@@ -815,10 +858,10 @@ EPSO Food Products, Kerala`;
                 <button
                   type="button"
                   onClick={() => setPaymentStatus('unpaid')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     paymentStatus === 'unpaid'
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'
+                      ? 'bg-epso-orange text-white shadow-xs'
+                      : 'bg-stone-100 dark:bg-[#252020] text-stone-600 dark:text-stone-300'
                   }`}
                 >
                   Unpaid
@@ -829,7 +872,7 @@ EPSO Food Products, Kerala`;
             {/* Close Full Screen Modal */}
             <button
               onClick={() => setIsModalOpen(false)}
-              className="p-2 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="p-2 rounded-xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
               title="Close Full Screen"
             >
               <FiX className="w-5 h-5" />
@@ -843,21 +886,21 @@ EPSO Food Products, Kerala`;
             </div>
           )}
 
-          {/* Body: Two Column ERP Billing Layout (Image 1) */}
+          {/* Body: Two Column ERP Billing Layout */}
           <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-7xl mx-auto">
-              {/* Left Column: Items Table (Image 1 Left Side) */}
-              <div className="lg:col-span-8 bg-white dark:bg-[#151D2A] border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xs p-4 space-y-4">
+              {/* Left Column: Items Table */}
+              <div className="lg:col-span-8 bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] rounded-2xl shadow-sm p-4 space-y-4">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold bg-slate-50 dark:bg-[#0B0F17]/50">
+                      <tr className="border-b border-stone-200 dark:border-[#2E2828] text-stone-600 dark:text-stone-400 font-bold bg-stone-50/80 dark:bg-[#141212]">
                         <th className="py-2.5 px-3 w-8">
                           <input
                             type="checkbox"
                             checked={allItemsSelected}
                             onChange={(e) => handleToggleSelectAll(e.target.checked)}
-                            className="rounded border-slate-300 text-slate-900 focus:ring-0 cursor-pointer"
+                            className="rounded border-stone-300 text-epso-orange focus:ring-0 cursor-pointer"
                           />
                         </th>
                         <th className="py-2.5 px-3">Item</th>
@@ -868,27 +911,27 @@ EPSO Food Products, Kerala`;
                         <th className="py-2.5 px-2 w-8 text-center"></th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+                    <tbody className="divide-y divide-stone-100 dark:divide-[#2E2828]/60">
                       {invoiceItems.map((item) => {
                         const itemAmt = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
                         const itemGst = itemAmt * ((Number(item.gstRate) || 0) / 100);
                         const itemTotal = itemAmt + itemGst;
 
                         return (
-                          <tr key={item.id} className="hover:bg-slate-50/60 dark:hover:bg-[#1A2333]/50 transition-colors">
+                          <tr key={item.id} className="hover:bg-orange-50/30 dark:hover:bg-[#252020] transition-colors">
                             <td className="py-2.5 px-3">
                               <input
                                 type="checkbox"
                                 checked={item.selected}
                                 onChange={(e) => handleUpdateItem(item.id, { selected: e.target.checked })}
-                                className="rounded border-slate-300 text-slate-900 focus:ring-0 cursor-pointer"
+                                className="rounded border-stone-300 text-epso-orange focus:ring-0 cursor-pointer"
                               />
                             </td>
                             <td className="py-2.5 px-3">
                               <select
                                 value={item.productId}
                                 onChange={(e) => handleUpdateItem(item.id, { productId: e.target.value })}
-                                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B0F17] text-xs font-semibold text-slate-900 dark:text-white focus:outline-none"
+                                className="w-full px-2.5 py-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-xs font-semibold text-stone-900 dark:text-white focus:outline-none"
                               >
                                 {products.map((p) => {
                                   const costP = costingPrices[p.id];
@@ -907,19 +950,19 @@ EPSO Food Products, Kerala`;
                                 step="any"
                                 value={item.quantity}
                                 onChange={(e) => handleUpdateItem(item.id, { quantity: parseFloat(e.target.value) || 0 })}
-                                className="w-20 px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B0F17] text-center font-mono font-bold text-xs text-slate-900 dark:text-white focus:outline-none"
+                                className="w-20 px-2 py-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-center font-mono font-bold text-xs text-stone-900 dark:text-white focus:outline-none"
                               />
                             </td>
                             <td className="py-2.5 px-3 text-right">
                               <div className="relative inline-block w-24">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 font-mono">₹</span>
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-stone-400 font-mono">₹</span>
                                 <input
                                   type="number"
                                   min="0"
                                   step="any"
                                   value={item.unitPrice}
                                   onChange={(e) => handleUpdateItem(item.id, { unitPrice: parseFloat(e.target.value) || 0 })}
-                                  className="w-full pl-5 pr-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B0F17] text-right font-mono font-bold text-xs text-slate-900 dark:text-white focus:outline-none"
+                                  className="w-full pl-5 pr-2 py-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-right font-mono font-bold text-xs text-stone-900 dark:text-white focus:outline-none"
                                 />
                               </div>
                             </td>
@@ -927,7 +970,7 @@ EPSO Food Products, Kerala`;
                               <select
                                 value={item.gstRate}
                                 onChange={(e) => handleUpdateItem(item.id, { gstRate: parseInt(e.target.value, 10) || 0 })}
-                                className="px-2 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B0F17] text-xs font-mono font-semibold text-slate-900 dark:text-white focus:outline-none"
+                                className="px-2 py-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-xs font-mono font-semibold text-stone-900 dark:text-white focus:outline-none"
                               >
                                 <option value="0">0%</option>
                                 <option value="3">3%</option>
@@ -936,14 +979,14 @@ EPSO Food Products, Kerala`;
                                 <option value="18">18%</option>
                               </select>
                             </td>
-                            <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900 dark:text-white">
+                            <td className="py-2.5 px-3 text-right font-mono font-bold text-stone-900 dark:text-white">
                               ₹{itemTotal.toFixed(2)}
                             </td>
                             <td className="py-2.5 px-2 text-center">
                               <button
                                 type="button"
                                 onClick={() => handleRemoveItem(item.id)}
-                                className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                                className="p-1 text-stone-400 hover:text-red-500 transition-colors cursor-pointer"
                                 title="Remove Item"
                               >
                                 <FiTrash2 className="w-3.5 h-3.5" />
@@ -956,12 +999,12 @@ EPSO Food Products, Kerala`;
                   </table>
                 </div>
 
-                {/* Add Item Button (Positioned Bottom Right as in Image 1) */}
-                <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
+                {/* Add Item Button */}
+                <div className="flex justify-end pt-2 border-t border-stone-100 dark:border-[#2E2828]">
                   <button
                     type="button"
                     onClick={handleAddItemRow}
-                    className="px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                    className="px-4 py-2 rounded-xl border border-stone-300 dark:border-[#2E2828] bg-stone-50 dark:bg-[#252020] hover:bg-orange-50 hover:text-epso-orange dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 text-xs font-bold flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
                   >
                     <FiPlus className="w-3.5 h-3.5" />
                     <span>Add Item</span>
@@ -969,87 +1012,73 @@ EPSO Food Products, Kerala`;
                 </div>
               </div>
 
-              {/* Right Column: Invoice Summary & Action Buttons (Image 1 Right Side) */}
+              {/* Right Column: Invoice Summary & Action Buttons */}
               <div className="lg:col-span-4 space-y-4">
                 {/* Summary Card */}
-                <div className="rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs overflow-hidden">
-                  <div className="bg-[#1E293B] text-white p-4 font-bold text-sm tracking-wide">
+                <div className="rounded-2xl border border-stone-200 dark:border-[#2E2828] shadow-sm overflow-hidden">
+                  <div className="bg-epso-orange text-white dark:bg-amber-500 dark:text-stone-950 p-4 font-black text-sm tracking-wide">
                     Summary
                   </div>
-                  <div className="bg-white dark:bg-[#151D2A] p-4 sm:p-5 space-y-3.5 text-xs">
-                    <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 font-semibold">
+                  <div className="bg-white dark:bg-[#1E1B1B] p-4 sm:p-5 space-y-3.5 text-xs">
+                    <div className="flex items-center justify-between text-stone-600 dark:text-stone-400 font-semibold">
                       <span>Subtotal:</span>
-                      <span className="font-mono text-slate-900 dark:text-white font-bold">
+                      <span className="font-mono text-stone-900 dark:text-white font-bold">
                         ₹{invoiceCalculations.subtotal.toFixed(2)}
                       </span>
                     </div>
 
-                    <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 font-semibold">
+                    <div className="flex items-center justify-between text-stone-600 dark:text-stone-400 font-semibold">
                       <span>Discount:</span>
                       <div className="relative w-28">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 font-mono">₹</span>
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-stone-400 font-mono">₹</span>
                         <input
                           type="number"
                           min="0"
                           step="any"
                           value={discountAmount}
                           onChange={(e) => setDiscountAmount(e.target.value)}
-                          className="w-full pl-5 pr-2 py-1 rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#0B0F17] text-right font-mono font-bold text-xs text-slate-900 dark:text-white focus:outline-none"
+                          className="w-full pl-5 pr-2 py-1 rounded-lg border border-stone-300 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-right font-mono font-bold text-xs text-stone-900 dark:text-white focus:outline-none"
                           placeholder="0.00"
                         />
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between text-slate-600 dark:text-slate-400 font-semibold">
+                    <div className="flex items-center justify-between text-stone-600 dark:text-stone-400 font-semibold">
                       <span>GST:</span>
-                      <span className="font-mono text-slate-900 dark:text-white font-bold">
+                      <span className="font-mono text-stone-900 dark:text-white font-bold">
                         ₹{invoiceCalculations.totalGst.toFixed(2)}
                       </span>
                     </div>
 
-                    <div className="border-t border-slate-200 dark:border-slate-700 pt-3 flex items-center justify-between">
-                      <span className="font-bold text-slate-900 dark:text-white text-sm">Grand Total:</span>
-                      <span className="font-mono font-black text-slate-900 dark:text-white text-lg">
+                    <div className="border-t border-stone-200 dark:border-[#2E2828] pt-3 flex items-center justify-between">
+                      <span className="font-bold text-stone-900 dark:text-white text-sm">Grand Total:</span>
+                      <span className="font-mono font-black text-epso-orange dark:text-amber-400 text-xl">
                         ₹{invoiceCalculations.grandTotal.toFixed(2)}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Stacked Action Buttons (Image 1 Style) */}
+                {/* Primary Action Button (Save & Send removed as requested) */}
                 <div className="space-y-2.5">
                   <button
                     type="button"
                     onClick={() => handleSaveBill(true)}
                     disabled={isSubmitting}
-                    className="w-full py-3.5 px-4 rounded-xl bg-[#1E293B] hover:bg-[#0F172A] text-white font-bold text-xs tracking-wider uppercase shadow flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                    className="w-full py-4 px-4 rounded-xl bg-epso-orange hover:bg-orange-600 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-black text-xs tracking-wider uppercase shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50 press-apple"
                   >
                     {isSubmitting ? (
                       <FiRefreshCw className="w-4 h-4 animate-spin text-white" />
                     ) : (
-                      <FiPrinter className="w-4 h-4" />
+                      <FiPrinter className="w-4 h-4 stroke-[2.5]" />
                     )}
-                    <span>Save & Print</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleSaveBill(false)}
-                    disabled={isSubmitting}
-                    className="w-full py-3.5 px-4 rounded-xl bg-[#2563EB] hover:bg-[#1D4ED8] text-white font-bold text-xs tracking-wider uppercase shadow flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
-                  >
-                    {isSubmitting ? (
-                      <FiRefreshCw className="w-4 h-4 animate-spin text-white" />
-                    ) : (
-                      <FiSend className="w-4 h-4" />
-                    )}
-                    <span>Save & Send</span>
+                    <span>Save & Print Bill</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setIsModalOpen(false)}
-                    className="w-full py-2.5 px-4 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 font-bold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    className="w-full py-2.5 px-4 rounded-xl border border-stone-300 dark:border-[#2E2828] text-stone-700 dark:text-stone-300 font-bold text-xs hover:bg-stone-100 dark:hover:bg-[#252020] transition-colors cursor-pointer"
                   >
                     Discard / Close
                   </button>
@@ -1062,30 +1091,30 @@ EPSO Food Products, Kerala`;
       )}
 
       {/* ============================================================ */}
-      {/* SLEEK BILL RECEIPT MODAL (DESIGNED AFTER IMAGE 2)            */}
+      {/* SLEEK BILL RECEIPT MODAL (DYNAMIC FROM SETTINGS)             */}
       {/* ============================================================ */}
       {isBillModalOpen && activeBill && createPortal(
         <div className="fixed inset-0 z-[10000] w-screen h-screen min-h-screen bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="w-full max-w-md bg-stone-100 dark:bg-[#151D2A] rounded-2xl p-4 shadow-2xl border border-stone-200 dark:border-slate-800 max-h-[96vh] flex flex-col my-auto">
+          <div className="w-full max-w-md bg-stone-100 dark:bg-[#1E1B1B] rounded-2xl p-4 shadow-2xl border border-stone-200 dark:border-[#2E2828] max-h-[96vh] flex flex-col my-auto">
             {/* Modal Actions (Screen Only) */}
-            <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-slate-800 mb-3 shrink-0 no-print">
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+            <div className="flex items-center justify-between pb-3 border-b border-stone-200 dark:border-[#2E2828] mb-3 shrink-0 no-print">
+              <span className="text-xs font-bold text-stone-800 dark:text-stone-200">
                 Sleek Bill Preview ({activeBill.invoiceNo})
               </span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={handleCopyBillWhatsApp}
-                  className="px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-[#1E293B] text-slate-700 dark:text-slate-300 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
+                  className="px-2.5 py-1.5 rounded-lg border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#252020] text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer"
                 >
                   {billCopied ? (
                     <>
                       <FiCheck className="w-3.5 h-3.5 text-emerald-500" />
-                      <span className="text-emerald-600">Copied</span>
+                      <span className="text-emerald-600 font-bold">Copied</span>
                     </>
                   ) : (
                     <>
-                      <FiCopy className="w-3.5 h-3.5" />
+                      <FiCopy className="w-3.5 h-3.5 text-epso-orange dark:text-amber-400" />
                       <span>WhatsApp</span>
                     </>
                   )}
@@ -1094,7 +1123,7 @@ EPSO Food Products, Kerala`;
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="px-3.5 py-1.5 rounded-lg bg-[#0284C7] hover:bg-[#0369A1] text-white font-bold text-xs flex items-center gap-1.5 shadow transition-all cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-lg bg-epso-orange hover:bg-orange-600 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs flex items-center gap-1.5 shadow transition-all cursor-pointer"
                 >
                   <FiPrinter className="w-3.5 h-3.5" />
                   <span>Print</span>
@@ -1103,45 +1132,67 @@ EPSO Food Products, Kerala`;
                 <button
                   type="button"
                   onClick={() => setIsBillModalOpen(false)}
-                  className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 cursor-pointer"
+                  className="w-7 h-7 rounded-full flex items-center justify-center bg-stone-200 dark:bg-[#141212] text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white cursor-pointer transition-colors"
                 >
                   <FiX className="w-4 h-4" />
                 </button>
               </div>
             </div>
 
-            {/* Printable Sleek Bill Area (Exact Design of Image 2) */}
+            {/* Printable Sleek Bill Area (Dynamic from Settings) */}
             <div className="flex-1 overflow-y-auto no-scrollbar rounded-xl bg-white shadow-xs p-1">
               <div
                 id="epso-bill-print-area"
                 className="w-full bg-white text-black font-sans p-6 sm:p-7 text-xs select-text relative overflow-hidden"
                 style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}
               >
-                {/* Diagonal Ribbon: Unpaid or Paid (Image 2) */}
+                {/* Diagonal Ribbon: Unpaid or Paid */}
                 <div
-                  className={`absolute -left-12 top-6 w-44 text-white text-center font-bold text-xs py-1 shadow transform -rotate-45 select-none ${
-                    activeBill.paymentStatus === 'paid' ? 'bg-[#0284C7]' : 'bg-[#0284C7]'
+                  className={`absolute -left-12 top-6 w-44 text-center font-bold text-xs py-1 shadow transform -rotate-45 select-none ${
+                    activeBill.paymentStatus === 'paid'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-epso-orange dark:bg-amber-500 text-white dark:text-stone-950'
                   }`}
                   style={{ zIndex: 10 }}
                 >
                   {activeBill.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
                 </div>
 
-                {/* Company Header (Centered, Sleek Bill) */}
+                {/* Company Header (Dynamic from Settings) */}
                 <div className="text-center pt-2 pb-3">
                   <h1 className="text-base font-bold tracking-wider text-black uppercase">
-                    SLEEK BILL
+                    {billProfile.name || 'EPSO FOOD PRODUCTS'}
                   </h1>
-                  <p className="text-[11px] text-black mt-0.5 leading-snug">
-                    Nirmal Vijay, Panchshil Square, Tapovan Road, Camp, Amravati,<br />
-                    444602, IN
-                  </p>
-                  <p className="text-[11px] text-black mt-0.5">
-                    PHONE : +911234567890
-                  </p>
-                  <p className="text-[11px] text-black mt-0.5">
-                    GSTIN : 27AAFCV2449G1Z7
-                  </p>
+                  {billProfile.subtitle && (
+                    <p className="text-[11px] font-semibold text-black mt-0.5">
+                      {billProfile.subtitle}
+                    </p>
+                  )}
+                  {(billProfile.address || billProfile.location) && (
+                    <p className="text-[11px] text-black mt-0.5 leading-snug whitespace-pre-line">
+                      {billProfile.address || billProfile.location}
+                    </p>
+                  )}
+                  {billProfile.phone && (
+                    <p className="text-[11px] text-black mt-0.5">
+                      PHONE : {billProfile.phone}
+                    </p>
+                  )}
+                  {billProfile.email && (
+                    <p className="text-[11px] text-black mt-0.5">
+                      EMAIL : {billProfile.email}
+                    </p>
+                  )}
+                  {billProfile.gst && (
+                    <p className="text-[11px] text-black mt-0.5">
+                      GSTIN : {billProfile.gst}
+                    </p>
+                  )}
+                  {billProfile.fssai && (
+                    <p className="text-[11px] text-black mt-0.5">
+                      FSSAI : {billProfile.fssai}
+                    </p>
+                  )}
                 </div>
 
                 {/* Bill No and Date Row */}
@@ -1195,7 +1246,7 @@ EPSO Food Products, Kerala`;
                 {/* Dashed Separator */}
                 <div className="border-t border-dashed border-black my-2" />
 
-                {/* Tax Breakdown (IGST lines like Image 2) */}
+                {/* Tax Breakdown (IGST lines) */}
                 <div className="space-y-1 text-xs text-black py-1">
                   {activeBill.discount > 0 && (
                     <div className="flex items-center justify-between">
@@ -1246,9 +1297,11 @@ EPSO Food Products, Kerala`;
                 {/* Dashed Separator */}
                 <div className="border-t border-dashed border-black my-3" />
 
-                {/* Thank You Centered */}
+                {/* Footer Note (Dynamic from Settings) */}
                 <div className="text-center pt-2 pb-1">
-                  <p className="text-xs text-black font-semibold">Thank You</p>
+                  <p className="text-xs text-black font-semibold">
+                    {billProfile.billFooter || 'Thank You'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -1260,15 +1313,16 @@ EPSO Food Products, Kerala`;
       {/* Add New Buyer Modal */}
       {showAddBuyerModal && createPortal(
         <div className="fixed inset-0 z-[10001] w-screen h-screen min-h-screen bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="w-full max-w-sm bg-white dark:bg-[#151D2A] rounded-2xl p-5 border border-slate-200 dark:border-slate-800 shadow-xl my-auto">
+          <div className="w-full max-w-sm bg-white dark:bg-[#1E1B1B] rounded-2xl p-5 border border-stone-200 dark:border-[#2E2828] shadow-xl my-auto">
             <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <FiUserPlus className="w-4 h-4 text-slate-700 dark:text-slate-300" />
+              <h4 className="text-sm font-bold text-stone-900 dark:text-white flex items-center gap-2">
+                <FiUserPlus className="w-4 h-4 text-epso-orange dark:text-amber-400" />
                 <span>പുതിയ ബയറെ ചേർക്കുക</span>
               </h4>
               <button
+                type="button"
                 onClick={() => setShowAddBuyerModal(false)}
-                className="w-7 h-7 rounded-full flex items-center justify-center bg-slate-100 dark:bg-slate-800 text-slate-400"
+                className="w-7 h-7 rounded-full flex items-center justify-center bg-stone-100 dark:bg-[#141212] text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition-colors cursor-pointer"
               >
                 <FiX className="w-3.5 h-3.5" />
               </button>
@@ -1276,7 +1330,7 @@ EPSO Food Products, Kerala`;
 
             <form onSubmit={handleAddNewBuyer} className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
                   ബയറുടെ പേര് (Buyer Name) *
                 </label>
                 <input
@@ -1285,13 +1339,13 @@ EPSO Food Products, Kerala`;
                   placeholder="ഉദാ: Ramesh Traders, പ്രവീൺ..."
                   value={newBuyerName}
                   onChange={(e) => setNewBuyerName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-[#0B0F17] border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white focus:outline-none"
+                  className="w-full px-3 py-2 bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] rounded-lg text-stone-900 dark:text-white focus:outline-none focus:border-epso-orange dark:focus:border-amber-500 transition-colors"
                   autoFocus
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
                   കട / സ്ഥാപനം (Shop Name)
                 </label>
                 <input
@@ -1299,12 +1353,12 @@ EPSO Food Products, Kerala`;
                   placeholder="ഉദാ: Royal Stores, Kozhikode"
                   value={newBuyerShop}
                   onChange={(e) => setNewBuyerShop(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-[#0B0F17] border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white focus:outline-none"
+                  className="w-full px-3 py-2 bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] rounded-lg text-stone-900 dark:text-white focus:outline-none focus:border-epso-orange dark:focus:border-amber-500 transition-colors"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
                   ഫോൺ നമ്പർ (Phone)
                 </label>
                 <input
@@ -1312,7 +1366,7 @@ EPSO Food Products, Kerala`;
                   placeholder="9876543210"
                   value={newBuyerPhone}
                   onChange={(e) => setNewBuyerPhone(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-[#0B0F17] border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white font-mono focus:outline-none"
+                  className="w-full px-3 py-2 bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] rounded-lg text-stone-900 dark:text-white font-mono focus:outline-none focus:border-epso-orange dark:focus:border-amber-500 transition-colors"
                 />
               </div>
 
@@ -1320,13 +1374,13 @@ EPSO Food Products, Kerala`;
                 <button
                   type="button"
                   onClick={() => setShowAddBuyerModal(false)}
-                  className="px-3.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 font-bold"
+                  className="px-3.5 py-1.5 rounded-lg border border-stone-200 dark:border-[#2E2828] text-stone-600 dark:text-stone-400 font-bold hover:bg-stone-100 dark:hover:bg-[#141212] transition-colors cursor-pointer"
                 >
                   റദ്ദാക്കുക
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-[#1E293B] hover:bg-[#0F172A] text-white font-bold transition-colors"
+                  className="px-4 py-1.5 rounded-lg bg-epso-orange hover:bg-orange-600 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm transition-colors cursor-pointer"
                 >
                   ചേർക്കുക
                 </button>

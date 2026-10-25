@@ -681,11 +681,6 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
                     <div>
                       <strong>Total Items to Purchase:</strong> {selectedIngredients.length}
                     </div>
-                    {totalEstimatedCost > 0 && (
-                      <div>
-                        <strong>Estimated Total Cost:</strong> ₹{totalEstimatedCost.toLocaleString('en-IN')}
-                      </div>
-                    )}
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', fontSize: '11px', paddingTop: '12px', borderTop: '1px solid #dddddd' }}>
