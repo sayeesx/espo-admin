@@ -8,6 +8,7 @@ import {
   FiDollarSign,
   FiLayers,
   FiPackage,
+  FiCheck,
 } from 'react-icons/fi';
 import { saveRecipe, deleteRecipe, fetchPacketTypes } from '../services/supabase';
 import { ThemeSelect } from './ThemeSelect';
@@ -136,6 +137,48 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
         bundleQuantity: firstPkt?.bundleQuantity || 100,
       },
     ]);
+  };
+
+  const handleTogglePacketType = (pt: PacketType) => {
+    const isSelected = recipePackets.some(
+      (p) => (p.packetTypeId && p.packetTypeId === pt.id) || p.packetName === pt.name
+    );
+    if (isSelected) {
+      setRecipePackets(
+        recipePackets.filter(
+          (p) => !((p.packetTypeId && p.packetTypeId === pt.id) || p.packetName === pt.name)
+        )
+      );
+    } else {
+      setRecipePackets([
+        ...recipePackets,
+        {
+          packetTypeId: pt.id,
+          packetName: pt.name,
+          costPerPacket: pt.costPerPacket || 0,
+          bundleCost: pt.bundleCost || 0,
+          bundleQuantity: pt.bundleQuantity || 100,
+        },
+      ]);
+    }
+  };
+
+  const handleSelectAllPackets = () => {
+    const all = availablePacketTypes.map((pt) => {
+      const existing = recipePackets.find((p) => p.packetTypeId === pt.id || p.packetName === pt.name);
+      return existing || {
+        packetTypeId: pt.id,
+        packetName: pt.name,
+        costPerPacket: pt.costPerPacket || 0,
+        bundleCost: pt.bundleCost || 0,
+        bundleQuantity: pt.bundleQuantity || 100,
+      };
+    });
+    setRecipePackets(all);
+  };
+
+  const handleDeselectAllPackets = () => {
+    setRecipePackets([]);
   };
 
   const handleRemovePacketRow = (idx: number) => {
@@ -491,97 +534,129 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                 </div>
 
                 {/* Recipe Packets Section */}
-                <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] space-y-2">
-                  <div className="flex items-center justify-between">
+                <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                       <span className="font-bold text-stone-900 dark:text-white font-malayalam flex items-center gap-1.5">
                         <FiPackage className="w-4 h-4 text-epso-orange" />
                         <span>പാക്കറ്റുകൾ (Recipe Packets)</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-300">
+                          {recipePackets.length} തിരഞ്ഞെടുത്തു
+                        </span>
                       </span>
-                      <p className="text-[10px] text-stone-400 font-malayalam">
-                        ഈ ഉൽപ്പന്നത്തിന് അനുവദിച്ച പാക്കറ്റ് തരങ്ങൾ (PWA-യിൽ ഇവ മാത്രമേ കാണിക്കൂ)
+                      <p className="text-[10px] text-stone-400 font-malayalam mt-0.5">
+                        ലഭ്യമായ പാക്കറ്റ് തരങ്ങൾ താഴെ ക്ലിക്ക് ചെയ്ത് ടിക്ക് ചെയ്യുക (PWA-യിൽ ഇവ മാത്രമേ കാണിക്കൂ)
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
+                      {availablePacketTypes.length > 0 && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={handleSelectAllPackets}
+                            className="text-[10px] text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-bold hover:underline cursor-pointer"
+                          >
+                            എല്ലാം
+                          </button>
+                          <span className="text-stone-300 dark:text-stone-600 text-xs">|</span>
+                          <button
+                            type="button"
+                            onClick={handleDeselectAllPackets}
+                            className="text-[10px] text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 font-bold hover:underline cursor-pointer"
+                          >
+                            ഒഴിവാക്കുക
+                          </button>
+                        </>
+                      )}
                       <button
                         type="button"
                         onClick={() => setManagePacketsOpen(true)}
-                        className="text-[11px] text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 font-bold underline cursor-pointer"
+                        className="text-[11px] text-stone-500 hover:text-stone-700 dark:hover:text-stone-300 font-bold underline cursor-pointer ml-1"
                       >
                         പുതിയ പാക്കറ്റ് തരം
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleAddPacketRow}
-                        className="flex items-center gap-1 text-[11px] text-epso-red dark:text-amber-400 font-bold hover:underline cursor-pointer"
-                      >
-                        <FiPlus className="w-3.5 h-3.5" />
-                        <span>പാക്കറ്റ് ചേർക്കുക</span>
                       </button>
                     </div>
                   </div>
 
-                  {/* Packets list container */}
-                  {recipePackets.length > 0 ? (
-                    <div className="space-y-2 max-h-[30vh] overflow-y-auto pr-1.5 p-1 rounded-xl bg-white/60 dark:bg-[#1E1B1B]/60 border border-stone-200/60 dark:border-[#282323]">
-                      {recipePackets.map((pkt, idx) => {
-                        const pktOptions = availablePacketTypes.map((pt) => ({
-                          value: pt.id,
-                          label: pt.name,
-                          badge: `₹${(pt.costPerPacket || 0).toFixed(2)}/pkt`,
-                        }));
-
+                  {/* Available Packets Checklist / Ticks */}
+                  {availablePacketTypes.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {availablePacketTypes.map((pt) => {
+                        const isTicked = recipePackets.some(
+                          (p) => (p.packetTypeId && p.packetTypeId === pt.id) || p.packetName === pt.name
+                        );
                         return (
-                          <div
-                            key={idx}
-                            className="flex flex-col sm:flex-row sm:items-center gap-2 p-2.5 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323]"
+                          <button
+                            key={pt.id}
+                            type="button"
+                            onClick={() => handleTogglePacketType(pt)}
+                            className={`p-2 rounded-xl text-left border transition-all flex items-center justify-between gap-1.5 cursor-pointer press-apple select-none ${
+                              isTicked
+                                ? 'bg-orange-50 dark:bg-orange-950/40 border-orange-400 dark:border-orange-600 text-stone-900 dark:text-white shadow-2xs ring-1 ring-orange-400/30'
+                                : 'bg-white dark:bg-[#1E1B1B] border-stone-200 dark:border-[#282323] text-stone-600 dark:text-stone-400 hover:border-stone-300 dark:hover:border-stone-600'
+                            }`}
                           >
-                            <div className="flex-1 min-w-[160px]">
-                              <ThemeSelect
-                                value={pkt.packetTypeId || ''}
-                                onChange={(val) => handlePacketSelect(idx, val)}
-                                options={pktOptions}
-                                searchable={true}
-                                placeholder="പാക്കറ്റ് തരം തിരഞ്ഞെടുക്കുക..."
-                              />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold font-mono truncate">{pt.name}</p>
+                              <span className="text-[10px] text-stone-400 block font-mono">
+                                ₹{(pt.costPerPacket || 0).toFixed(2)}/pkt
+                              </span>
                             </div>
-
-                            <div className="flex items-center gap-2">
-                              <div className="flex items-center gap-1 bg-white dark:bg-[#1E1B1B] px-2.5 py-1.5 rounded-xl border border-stone-200 dark:border-[#2E2828]">
-                                <span className="text-[10px] text-stone-400 font-bold">₹/pkt:</span>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0"
-                                  placeholder="0.00"
-                                  value={pkt.costPerPacket === 0 ? '' : pkt.costPerPacket}
-                                  onChange={(e) => handlePacketChange(idx, 'costPerPacket', parseFloat(e.target.value) || 0)}
-                                  className="w-16 p-1 bg-transparent text-stone-900 dark:text-white text-xs font-mono font-bold text-right outline-none"
-                                />
-                              </div>
-
-                              {pkt.bundleCost && pkt.bundleQuantity ? (
-                                <span className="text-[10px] text-stone-400 font-mono hidden sm:inline" title="Bundle Cost Breakdown">
-                                  (₹{pkt.bundleCost}/{pkt.bundleQuantity})
-                                </span>
-                              ) : null}
-
-                              <button
-                                type="button"
-                                onClick={() => handleRemovePacketRow(idx)}
-                                className="p-1.5 text-red-500 hover:text-red-700 cursor-pointer"
-                                title="ഒഴിവാക്കുക"
-                              >
-                                <FiTrash2 className="w-3.5 h-3.5" />
-                              </button>
+                            <div
+                              className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 border transition-all ${
+                                isTicked
+                                  ? 'bg-orange-500 border-orange-500 text-white'
+                                  : 'border-stone-300 dark:border-stone-600 bg-transparent'
+                              }`}
+                            >
+                              {isTicked && <FiCheck className="w-3.5 h-3.5 stroke-[3]" />}
                             </div>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
                   ) : (
                     <div className="p-3 text-center rounded-xl bg-white/40 dark:bg-[#1E1B1B]/40 border border-dashed border-stone-200 dark:border-[#282323] text-stone-400 text-xs font-malayalam">
-                      പാക്കറ്റുകൾ നൽകിയിട്ടില്ല (ചേർക്കാൻ '+ പാക്കറ്റ് ചേർക്കുക' ക്ലിക്ക് ചെയ്യുക)
+                      ലഭ്യമായ പാക്കറ്റ് തരങ്ങൾ ഒന്നും ചേർത്തിട്ടില്ല ('പുതിയ പാക്കറ്റ് തരം' ക്ലിക്ക് ചെയ്ത് ചേർക്കുക)
+                    </div>
+                  )}
+
+                  {/* Selected Packets Rate Customization */}
+                  {recipePackets.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-stone-200/60 dark:border-[#282323] space-y-1.5">
+                      <span className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam block">
+                        തിരഞ്ഞെടുത്ത പാക്കറ്റുകളുടെ ചിലവ് നിരക്ക് (Custom Rate ₹/pkt):
+                      </span>
+                      <div className="flex flex-wrap gap-2 max-h-[22vh] overflow-y-auto p-1">
+                        {recipePackets.map((pkt, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#282323] shadow-2xs"
+                          >
+                            <span className="text-xs font-bold font-mono text-stone-800 dark:text-stone-200">
+                              {pkt.packetName}
+                            </span>
+                            <span className="text-[10px] text-stone-400 font-bold">₹:</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={pkt.costPerPacket === 0 ? '' : pkt.costPerPacket}
+                              onChange={(e) => handlePacketChange(idx, 'costPerPacket', parseFloat(e.target.value) || 0)}
+                              placeholder="0.00"
+                              className="w-14 p-0.5 bg-stone-50 dark:bg-[#141212] rounded border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-white text-[11px] font-mono font-bold text-right outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePacketRow(idx)}
+                              className="p-1 text-stone-400 hover:text-red-500 cursor-pointer"
+                              title="ഒഴിവാക്കുക"
+                            >
+                              <FiTrash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

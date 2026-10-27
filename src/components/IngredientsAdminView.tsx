@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Ingredient, IngredientCategory, UnitType, StockMovement, Product, PackagingItem } from '../types';
+import { Ingredient, IngredientCategory, UnitType, StockMovement, Product, PackagingItem, PacketType } from '../types';
 import {
   FiPlus,
   FiSearch,
@@ -15,6 +15,7 @@ import {
   FiShoppingBag,
   FiPackage,
   FiBox,
+  FiCheck,
 } from 'react-icons/fi';
 import {
   saveIngredient,
@@ -24,9 +25,11 @@ import {
   savePackagingItem,
   deletePackagingItem,
   adjustPackagingItemStock,
+  fetchPacketTypes,
 } from '../services/supabase';
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 import { AddPurchaseModal } from './AddPurchaseModal';
+import { ManagePacketTypesModal } from './ManagePacketTypesModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import { createPortal } from 'react-dom';
 import { ThemeSelect } from './ThemeSelect';
@@ -59,7 +62,9 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
   // Packaging / Packet Types states
   const [packagingItems, setPackagingItems] = useState<PackagingItem[]>([]);
+  const [packetTypes, setPacketTypes] = useState<PacketType[]>([]);
   const [loadingPackaging, setLoadingPackaging] = useState<boolean>(false);
+  const [managePacketsOpen, setManagePacketsOpen] = useState<boolean>(false);
   const [packetModalOpen, setPacketModalOpen] = useState(false);
   const [selectedPackagingItem, setSelectedPackagingItem] = useState<PackagingItem | null>(null);
   const [packProductId, setPackProductId] = useState<string>('');
@@ -84,14 +89,19 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     purchaseListModalOpen ||
     addPurchaseModalOpen ||
     packetModalOpen ||
-    packAdjustModalOpen
+    packAdjustModalOpen ||
+    managePacketsOpen
   );
 
   const loadPackagingItems = async () => {
     setLoadingPackaging(true);
     try {
-      const items = await fetchPackagingItems();
+      const [items, types] = await Promise.all([
+        fetchPackagingItems(),
+        fetchPacketTypes(),
+      ]);
       setPackagingItems(items);
+      setPacketTypes(types);
     } catch (err) {
       console.error('Failed to load packaging items:', err);
     } finally {
@@ -383,7 +393,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 <FiPackage className="w-4 h-4 text-epso-orange" />
                 <span>പാക്കറ്റ് തരങ്ങൾ (Packet Types & Covers)</span>
                 <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-300 font-bold">
-                  {packagingItems.length}
+                  {packetTypes.length > 0 ? packetTypes.length : packagingItems.length}
                 </span>
               </button>
 
@@ -659,15 +669,15 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
               <h2 className="text-base font-black text-stone-900 dark:text-white flex items-center gap-2">
                 <span>പാക്കറ്റ് തരങ്ങളും കവർ സ്റ്റോക്കും</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-300 font-bold">
-                  {packagingItems.length} Variants
+                  {packetTypes.length} Packet Types {packagingItems.length > 0 ? `• ${packagingItems.length} Covers` : ''}
                 </span>
               </h2>
               <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                ഓരോ ഉൽപ്പന്നത്തിനുമുള്ള പാക്കറ്റ് തരങ്ങൾ, കവറുകൾ (Pouches), കൂലി നിരക്ക്
+                പാക്കറ്റ് തരങ്ങൾ (Packet Types Catalogue), കവറുകൾ (Pouches), കൂലി നിരക്ക്
               </p>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 onClick={() => setActiveIngredientTab('ingredients')}
@@ -679,11 +689,21 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
               <button
                 type="button"
+                onClick={() => setManagePacketsOpen(true)}
+                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
+                title="പാക്കറ്റ് തരങ്ങൾ മാനേജ് ചെയ്യുക / തിരുത്തുക"
+              >
+                <FiPackage className="w-4 h-4" />
+                <span>പാക്കറ്റ് തരങ്ങൾ ({packetTypes.length})</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={openCreatePacketModal}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
+                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
               >
                 <FiPlus className="w-4 h-4" />
-                <span>New Packet Type (പുതിയ പാക്കറ്റ്)</span>
+                <span>New Cover (പുതിയ കവർ)</span>
               </button>
             </div>
           </div>
@@ -692,8 +712,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card">
               <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">പാക്കറ്റ് തരങ്ങൾ</span>
-              <span className="text-xl font-black text-stone-900 dark:text-white font-mono">{packagingItems.length}</span>
-              <span className="text-[10px] text-stone-400 block mt-0.5 font-sans">Active sizes</span>
+              <span className="text-xl font-black text-stone-900 dark:text-white font-mono">{packetTypes.length}</span>
+              <span className="text-[10px] text-stone-400 block mt-0.5 font-sans">Active packet types</span>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card">
@@ -721,7 +741,67 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
             </div>
           </div>
 
-          {/* Search Bar */}
+          {/* Packet Types Catalogue Section */}
+          <div className="p-4 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-black text-stone-900 dark:text-white flex items-center gap-2">
+                  <FiPackage className="w-4 h-4 text-epso-orange" />
+                  <span>ലഭ്യമായ പാക്കറ്റ് തരങ്ങൾ (Packet Types Catalogue)</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-300 font-bold">
+                    {packetTypes.length} തരം
+                  </span>
+                </h3>
+                <p className="text-xs text-stone-400 mt-0.5">
+                  ഈ പാക്കറ്റ് തരങ്ങൾ പ്രൊഡക്ഷൻ പാക്കിംഗിലും റെസിപ്പിയിലും ലഭ്യമാണ്
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setManagePacketsOpen(true)}
+                className="text-xs text-epso-orange hover:underline font-bold flex items-center gap-1 cursor-pointer"
+              >
+                <FiEdit2 className="w-3.5 h-3.5" />
+                <span>മാനേജ് ചെയ്യുക / തിരുത്തുക</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
+              {packetTypes.map((pt) => (
+                <div
+                  key={pt.id}
+                  onClick={() => setManagePacketsOpen(true)}
+                  className="p-3 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] hover:border-orange-400 dark:hover:border-orange-600 transition-all cursor-pointer group shadow-2xs select-none"
+                  title="ക്ലിക്ക് ചെയ്ത് തിരുത്തുക"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-[10px] text-stone-400 font-mono">
+                      ₹{(pt.costPerPacket || 0).toFixed(2)}/pkt
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-xs text-stone-900 dark:text-white truncate font-mono group-hover:text-epso-orange transition-colors">
+                    {pt.name}
+                  </h4>
+                  <span className="text-[10px] text-stone-400 block mt-0.5 font-sans">
+                    {pt.bundleCost ? `₹${pt.bundleCost}/${pt.bundleQuantity}` : 'Default'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Search Bar for Product Packaging Items */}
+          <div className="flex items-center justify-between gap-3 pt-2">
+            <h3 className="text-sm font-bold text-stone-800 dark:text-stone-200">
+              ഉൽപ്പന്ന കവർ സ്റ്റോക്ക് (Product Packaging Cover Stock)
+            </h3>
+            <span className="text-xs text-stone-400">
+              {packagingItems.length} Covers
+            </span>
+          </div>
+
           <div className="relative">
             <FiSearch className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
             <input
@@ -1459,6 +1539,13 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
         onClose={() => setAddPurchaseModalOpen(false)}
         ingredients={visibleIngredients}
         onRefresh={onRefresh}
+      />
+
+      {/* Packet Types Manager Modal */}
+      <ManagePacketTypesModal
+        isOpen={managePacketsOpen}
+        onClose={() => setManagePacketsOpen(false)}
+        onUpdated={loadPackagingItems}
       />
     </div>
   );
