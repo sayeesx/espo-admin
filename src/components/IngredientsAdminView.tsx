@@ -875,8 +875,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
           />
 
           <div className="min-h-full flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
-            <div className="w-full md:w-[70vw] md:max-w-xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto">
-              <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
+            <div className="w-full max-w-xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 sm:p-8 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal google-modal pointer-events-auto">
+              <h2 className="text-xl font-bold text-stone-900 dark:text-white font-malayalam mb-1">
                 സ്റ്റോക്ക് ക്രമീകരിക്കുക (Adjust Stock)
               </h2>
               <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4">
@@ -922,7 +922,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                     onChange={(e) => setAdjustDelta(e.target.value === '' ? '' : parseFloat(e.target.value))}
                     onFocus={(e) => e.target.select()}
                     placeholder={`0.00 ${selectedIngredient.unit}`}
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-sm font-bold text-stone-900 dark:text-white focus:outline-none"
+                    className="w-full google-input text-base font-bold"
                   />
                 </div>
 
@@ -996,8 +996,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
           />
 
           <div className="min-h-full flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
-            <div className="w-full md:w-[70vw] md:max-w-2xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto">
-              <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
+            <div className="w-full max-w-2xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 sm:p-8 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal google-modal pointer-events-auto">
+              <h2 className="text-xl font-bold text-stone-900 dark:text-white font-malayalam mb-1">
                 {selectedIngredient ? 'ചേരുവ തിരുത്തുക (Edit)' : 'പുതിയ ചേരുവ (New Ingredient)'}
               </h2>
               <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4">
@@ -1015,7 +1015,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="ഉദാ: ഓയിൽ, കറിവേപ്പില"
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-epso-red/30 font-malayalam"
+                    className="w-full google-input text-sm font-medium font-malayalam"
                   />
                 </div>
 
@@ -1061,7 +1061,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       value={minStock === 0 ? '' : minStock}
                       onChange={(e) => setMinStock(e.target.value === '' ? '' : parseFloat(e.target.value))}
                       onFocus={(e) => e.target.select()}
-                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                      className="w-full google-input text-sm font-medium"
                     />
                   </div>
 
@@ -1076,7 +1076,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       value={avgCostPerUnit === 0 ? '' : avgCostPerUnit}
                       onChange={(e) => setAvgCostPerUnit(e.target.value === '' ? '' : parseFloat(e.target.value))}
                       onFocus={(e) => e.target.select()}
-                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                      className="w-full google-input text-sm font-medium"
                     />
                   </div>
                 </div>
@@ -1090,7 +1090,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="ഉദാ: സപ്ലയർ വിവരങ്ങൾ..."
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none font-malayalam"
+                    className="w-full google-input text-sm font-medium font-malayalam"
                   />
                 </div>
 
@@ -1165,8 +1165,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
           />
 
           <div className="min-h-full flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
-            <div className="w-full md:w-[70vw] md:max-w-xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto">
-              <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
+            <div className="w-full max-w-2xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 sm:p-8 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal google-modal pointer-events-auto">
+              <h2 className="text-xl font-bold text-stone-900 dark:text-white font-malayalam mb-1">
                 {selectedPackagingItem ? 'പാക്കറ്റ് തരം തിരുത്തുക (Edit Packet)' : 'പുതിയ പാക്കറ്റ് തരം (New Packet Type)'}
               </h2>
               <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4">
@@ -1204,7 +1204,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       value={packSizeLabel}
                       onChange={(e) => setPackSizeLabel(e.target.value)}
                       placeholder="ഉദാ: 100g, 250g, 500g, 1kg"
-                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono font-bold focus:outline-none focus:ring-2 focus:ring-epso-red/30"
+                      className="w-full google-input font-mono font-bold text-sm"
                     />
                   </div>
 
@@ -1220,7 +1220,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       value={packSizeGrams === 0 ? '' : packSizeGrams}
                       onChange={(e) => setPackSizeGrams(e.target.value === '' ? '' : parseFloat(e.target.value))}
                       placeholder="100"
-                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono font-bold focus:outline-none"
+                      className="w-full google-input font-mono font-bold text-sm"
                     />
                   </div>
                 </div>
@@ -1239,7 +1239,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       value={packCurrentStock === 0 ? '' : packCurrentStock}
                       onChange={(e) => setPackCurrentStock(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                       placeholder="500"
-                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono font-bold focus:outline-none"
+                      className="w-full google-input font-mono font-bold text-sm"
                     />
                   </div>
 
@@ -1255,7 +1255,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       value={packUnitCost === 0 ? '' : packUnitCost}
                       onChange={(e) => setPackUnitCost(e.target.value === '' ? '' : parseFloat(e.target.value))}
                       placeholder="1.50"
-                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono font-bold focus:outline-none"
+                      className="w-full google-input font-mono font-bold text-sm"
                     />
                   </div>
                 </div>
@@ -1274,7 +1274,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       value={packLabourRate === 0 ? '' : packLabourRate}
                       onChange={(e) => setPackLabourRate(e.target.value === '' ? '' : parseFloat(e.target.value))}
                       placeholder="1.00"
-                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono font-bold focus:outline-none"
+                      className="w-full google-input font-mono font-bold text-sm"
                     />
                   </div>
 
@@ -1339,8 +1339,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
           />
 
           <div className="min-h-full flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
-            <div className="w-full md:w-[70vw] md:max-w-xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto">
-              <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
+            <div className="w-full max-w-xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 sm:p-8 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal google-modal pointer-events-auto">
+              <h2 className="text-xl font-bold text-stone-900 dark:text-white font-malayalam mb-1">
                 കവർ സ്റ്റോക്ക് മാറ്റുക (Adjust Cover Stock)
               </h2>
               <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4">
@@ -1388,7 +1388,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                     onChange={(e) => setPackAdjustDelta(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                     onFocus={(e) => e.target.select()}
                     placeholder="100 pcs"
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-sm font-bold text-stone-900 dark:text-white font-mono focus:outline-none"
+                    className="w-full google-input text-base font-bold font-mono"
                   />
                 </div>
 

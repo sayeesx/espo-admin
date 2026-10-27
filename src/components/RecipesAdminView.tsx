@@ -357,9 +357,9 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
           />
 
           <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
-            <div className="w-full md:w-[70vw] md:max-w-4xl max-h-[90vh] flex flex-col bg-white dark:bg-[#1E1B1B] rounded-3xl border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto overflow-hidden">
+            <div className="w-full max-w-4xl max-h-[90vh] flex flex-col bg-white dark:bg-[#1E1B1B] rounded-3xl border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal google-modal pointer-events-auto overflow-hidden">
               <div className="p-5 pb-3 border-b border-stone-200 dark:border-[#2E2828] shrink-0">
-                <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam mb-1">
+                <h2 className="text-xl font-bold text-stone-900 dark:text-white font-malayalam mb-1">
                   {editingRecipe ? 'പാചകക്കുറിപ്പ് തിരുത്തുക (Edit)' : 'പുതിയ പാചകക്കുറിപ്പ് (New Recipe)'}
                 </h2>
                 <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam">
@@ -395,7 +395,7 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                       value={baseOutputQuantity}
                       onChange={(e) => setBaseOutputQuantity(e.target.value === '' ? '' : parseFloat(e.target.value))}
                       onFocus={(e) => e.target.select()}
-                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                      className="w-full google-input font-bold text-sm"
                     />
                   </div>
 

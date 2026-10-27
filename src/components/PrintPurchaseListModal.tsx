@@ -260,7 +260,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
       {/* Screen Interactive Modal */}
       {createPortal(
         <div className="fixed inset-0 z-[9999] w-screen h-screen min-h-screen flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-md overflow-y-auto no-print-area animate-apple-backdrop">
-          <div className="relative w-full md:w-[70vw] md:max-w-6xl bg-white dark:bg-[#1E1B1B] rounded-2xl border border-stone-200 dark:border-[#2E2828] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-apple-modal my-auto">
+          <div className="relative w-full md:w-[70vw] md:max-w-6xl bg-white dark:bg-[#1E1B1B] rounded-2xl border border-stone-200 dark:border-[#2E2828] shadow-2xl overflow-hidden flex flex-col max-h-[92vh] animate-apple-modal google-modal my-auto">
           {/* Modal Header */}
           <div className="p-4 sm:p-5 border-b border-stone-200 dark:border-[#2E2828] flex items-center justify-between gap-3 bg-stone-50/50 dark:bg-[#181515]">
             <div className="flex items-center gap-3">

@@ -64,6 +64,64 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* Universal Number Input Spin Button Removal */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none !important;
+    margin: 0 !important;
+  }
+
+  input[type="number"] {
+    -moz-appearance: textfield !important;
+    appearance: textfield !important;
+  }
+
+  /* Google Material Outlined Input Style */
+  .google-input,
+  .google-modal input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+  .google-modal select,
+  .google-modal textarea {
+    width: 100%;
+    padding: 0.75rem 1rem !important;
+    font-size: 0.9375rem !important;
+    line-height: 1.5 !important;
+    border-radius: 0.75rem !important;
+    border: 1.5px solid #d1d5db !important;
+    background-color: #ffffff !important;
+    color: #111827 !important;
+    outline: none !important;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04) !important;
+  }
+
+  .google-input:focus,
+  .google-modal input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):focus,
+  .google-modal select:focus,
+  .google-modal textarea:focus {
+    border-color: #1a73e8 !important;
+    box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.2) !important;
+    background-color: #ffffff !important;
+  }
+
+  .dark .google-input,
+  .dark .google-modal input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]),
+  .dark .google-modal select,
+  .dark .google-modal textarea {
+    border-color: #3f3a3a !important;
+    background-color: #181515 !important;
+    color: #ffffff !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+  }
+
+  .dark .google-input:focus,
+  .dark .google-modal input:not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="button"]):focus,
+  .dark .google-modal select:focus,
+  .dark .google-modal textarea:focus {
+    border-color: #f59e0b !important;
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25) !important;
+    background-color: #1e1b1b !important;
+  }
+
   /* Google Material Linear Indeterminate Progress */
   @keyframes googleProgressAnim {
     0% {

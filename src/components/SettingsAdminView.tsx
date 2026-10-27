@@ -48,13 +48,24 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   const [pinLoading, setPinLoading] = useState<boolean>(false);
   const [pinMessage, setPinMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  const cleanFooter = (text?: string) => {
+    return (text || '').replace(/ശുദ്ധമായ എണ്ണയിൽ തയ്യാറാക്കിയത്\.?/g, '').trim();
+  };
+
   // ==========================================
   // 2. FACTORY PROFILE STATE
   // ==========================================
   const [profile, setProfile] = useState<FactoryProfile>(() => {
     try {
       const saved = localStorage.getItem('epso_factory_profile');
-      return saved ? { ...DEFAULT_FACTORY_PROFILE, ...JSON.parse(saved) } : DEFAULT_FACTORY_PROFILE;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.billFooter) {
+          parsed.billFooter = cleanFooter(parsed.billFooter) || 'നന്ദി! വീണ്ടും സന്ദർശിക്കുക.';
+        }
+        return { ...DEFAULT_FACTORY_PROFILE, ...parsed };
+      }
+      return DEFAULT_FACTORY_PROFILE;
     } catch {
       return DEFAULT_FACTORY_PROFILE;
     }
@@ -103,11 +114,13 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
 
         if (profileData && profileData.length > 0 && profileData[0].details) {
           const remoteProfile = profileData[0].details;
-          setProfile((prev) => ({ ...prev, ...remoteProfile }));
-          localStorage.setItem(
-            'epso_factory_profile',
-            JSON.stringify({ ...DEFAULT_FACTORY_PROFILE, ...remoteProfile })
-          );
+          if (remoteProfile.billFooter) {
+            remoteProfile.billFooter = cleanFooter(remoteProfile.billFooter) || 'നന്ദി! വീണ്ടും സന്ദർശിക്കുക.';
+          }
+          const merged = { ...DEFAULT_FACTORY_PROFILE, ...remoteProfile };
+          setProfile(merged);
+          localStorage.setItem('epso_factory_profile', JSON.stringify(merged));
+          window.dispatchEvent(new CustomEvent('epso_factory_profile_updated', { detail: merged }));
         }
       } catch {
         // silent fallback
@@ -177,15 +190,24 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   // Save Factory Profile
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    const updatedProfile = {
+      ...profile,
+      billFooter: cleanFooter(profile.billFooter) || 'നന്ദി! വീണ്ടും സന്ദർശിക്കുക.',
+    };
     try {
-      localStorage.setItem('epso_factory_profile', JSON.stringify(profile));
+      localStorage.setItem('epso_factory_profile', JSON.stringify(updatedProfile));
+      setProfile(updatedProfile);
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 2500);
+
+      // Dispatch event so Sleek Bill Preview updates immediately
+      window.dispatchEvent(new CustomEvent('epso_factory_profile_updated', { detail: updatedProfile }));
+      window.dispatchEvent(new Event('storage'));
 
       // Cloud persistence via Supabase audit_logs
       await supabase.from('audit_logs').insert({
         action: 'FACTORY_PROFILE_UPDATED',
-        details: profile,
+        details: updatedProfile,
       });
     } catch {
       // Local storage fallback already succeeded
@@ -531,7 +553,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                 type="text"
                 value={profile.billFooter}
                 onChange={(e) => setProfile({ ...profile, billFooter: e.target.value })}
-                placeholder="e.g. നന്ദി! വീണ്ടും സന്ദർശിക്കുക. ശുദ്ധമായ എണ്ണയിൽ തയ്യാറാക്കിയത്."
+                placeholder="e.g. നന്ദി! വീണ്ടും സന്ദർശിക്കുക."
                 className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-epso-orange"
               />
             </div>

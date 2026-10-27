@@ -118,7 +118,7 @@ export const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
     />
     {createPortal(
       <div className="fixed inset-0 z-[9999] w-screen h-screen min-h-screen flex items-end sm:items-center justify-center bg-black/65 backdrop-blur-md p-0 sm:p-4 overflow-y-auto animate-apple-backdrop">
-        <div className="w-full md:w-[70vw] md:max-w-5xl max-h-[92vh] sm:max-h-[85vh] bg-white dark:bg-[#181515] rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-stone-200/50 dark:border-[#2E2828] animate-apple-modal my-auto">
+        <div className="w-full md:w-[70vw] md:max-w-5xl max-h-[92vh] sm:max-h-[85vh] bg-white dark:bg-[#181515] rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-stone-200/50 dark:border-[#2E2828] animate-apple-modal google-modal my-auto">
           {/* Header */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-stone-200 dark:border-[#2E2828] shrink-0">
             <div className="flex items-center gap-3 flex-1 mr-3">

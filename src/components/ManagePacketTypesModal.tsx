@@ -163,7 +163,7 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
       />
 
       <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
-        <div className="w-full md:w-[70vw] md:max-w-3xl max-h-[90vh] flex flex-col bg-white dark:bg-[#1E1B1B] rounded-3xl border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto overflow-hidden">
+        <div className="w-full max-w-3xl max-h-[90vh] flex flex-col bg-white dark:bg-[#1E1B1B] rounded-3xl border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal google-modal pointer-events-auto overflow-hidden">
           {/* Header */}
           <div className="p-5 pb-3 border-b border-stone-200 dark:border-[#2E2828] shrink-0 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -228,7 +228,7 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
                     placeholder="e.g. 3kg HM Packet, 10 x 12 Packet"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white font-bold outline-none"
+                    className="w-full google-input text-stone-900 dark:text-white font-bold"
                   />
                 </div>
 
@@ -244,7 +244,7 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
                     placeholder="e.g. 250"
                     value={bundleCost === 0 ? '' : bundleCost}
                     onChange={(e) => handleBundleCostChange(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white font-bold font-mono outline-none"
+                    className="w-full google-input text-stone-900 dark:text-white font-bold font-mono"
                   />
                 </div>
 
@@ -260,7 +260,7 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
                     placeholder="e.g. 100"
                     value={bundleQuantity === 0 ? '' : bundleQuantity}
                     onChange={(e) => handleBundleQuantityChange(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white font-bold font-mono outline-none"
+                    className="w-full google-input text-stone-900 dark:text-white font-bold font-mono"
                   />
                 </div>
 

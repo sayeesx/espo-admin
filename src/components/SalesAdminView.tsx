@@ -83,26 +83,39 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
   const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null);
   const [billCopied, setBillCopied] = useState<boolean>(false);
 
-  // Business / Bill Profile (Synced from Settings)
-  const [billProfile, setBillProfile] = useState<FactoryProfile>(() => {
-    try {
-      const saved = localStorage.getItem('epso_factory_profile');
-      return saved ? { ...DEFAULT_FACTORY_PROFILE, ...JSON.parse(saved) } : DEFAULT_FACTORY_PROFILE;
-    } catch {
-      return DEFAULT_FACTORY_PROFILE;
-    }
-  });
+  const cleanFooter = (text?: string) => {
+    return (text || '').replace(/ശുദ്ധമായ എണ്ണയിൽ തയ്യാറാക്കിയത്\.?/g, '').trim();
+  };
 
-  // Re-sync bill profile from local storage and remote audit_logs
-  useEffect(() => {
+  const getFreshBillProfile = (): FactoryProfile => {
     try {
       const saved = localStorage.getItem('epso_factory_profile');
       if (saved) {
-        setBillProfile((prev) => ({ ...prev, ...JSON.parse(saved) }));
+        const parsed = JSON.parse(saved);
+        if (parsed.billFooter) {
+          parsed.billFooter = cleanFooter(parsed.billFooter) || 'നന്ദി! വീണ്ടും സന്ദർശിക്കുക.';
+        }
+        return { ...DEFAULT_FACTORY_PROFILE, ...parsed };
       }
     } catch {
-      // ignore
+      // fallback
     }
+    return DEFAULT_FACTORY_PROFILE;
+  };
+
+  // Business / Bill Profile (Synced from Settings)
+  const [billProfile, setBillProfile] = useState<FactoryProfile>(getFreshBillProfile);
+
+  // Re-sync bill profile from local storage, events, and remote audit_logs
+  useEffect(() => {
+    const handleSync = () => {
+      setBillProfile(getFreshBillProfile());
+    };
+
+    window.addEventListener('epso_factory_profile_updated', handleSync);
+    window.addEventListener('storage', handleSync);
+
+    handleSync();
 
     (async () => {
       try {
@@ -115,16 +128,22 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
 
         if (data && data.length > 0 && data[0].details) {
           const remoteProfile = data[0].details;
-          setBillProfile((prev) => ({ ...prev, ...remoteProfile }));
-          localStorage.setItem(
-            'epso_factory_profile',
-            JSON.stringify({ ...DEFAULT_FACTORY_PROFILE, ...remoteProfile })
-          );
+          if (remoteProfile.billFooter) {
+            remoteProfile.billFooter = cleanFooter(remoteProfile.billFooter) || 'നന്ദി! വീണ്ടും സന്ദർശിക്കുക.';
+          }
+          const merged = { ...DEFAULT_FACTORY_PROFILE, ...remoteProfile };
+          setBillProfile(merged);
+          localStorage.setItem('epso_factory_profile', JSON.stringify(merged));
         }
       } catch {
         // silent fallback
       }
     })();
+
+    return () => {
+      window.removeEventListener('epso_factory_profile_updated', handleSync);
+      window.removeEventListener('storage', handleSync);
+    };
   }, [isBillModalOpen]);
 
   // Buyers management state
@@ -420,6 +439,7 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
 
   // Convert Single SaleRecord to BillData for receipt preview
   const handlePreviewSingleSale = (sale: SaleRecord) => {
+    setBillProfile(getFreshBillProfile());
     const billData: BillData = {
       invoiceNo: sale.notes?.split(' ')[0] || `IN-${String(sale.id).slice(0, 5).toUpperCase()}`,
       date: sale.sale_date,
@@ -463,11 +483,27 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
   // Copy Bill to WhatsApp
   const handleCopyBillWhatsApp = () => {
     if (!activeBill) return;
+    const currentProfile = getFreshBillProfile();
     const itemsText = activeBill.items
       .map((it) => `• ${it.name} x ${it.quantity} ${it.unit} @ ₹${it.unitPrice} = ₹${it.amount.toFixed(2)}`)
       .join('\n');
 
-    const text = `🧾 *${(billProfile.name || 'EPSO FOOD PRODUCTS').toUpperCase()} - INVOICE*
+    const phoneEmailLine = [
+      currentProfile.phone ? `Phone: ${currentProfile.phone}` : '',
+      currentProfile.email ? `Email: ${currentProfile.email}` : '',
+    ].filter(Boolean).join(' | ');
+
+    const taxLine = [
+      currentProfile.gst ? `GSTIN: ${currentProfile.gst}` : '',
+      currentProfile.fssai ? `FSSAI: ${currentProfile.fssai}` : '',
+    ].filter(Boolean).join(' | ');
+
+    const footerText = cleanFooter(currentProfile.billFooter) || 'നന്ദി! വീണ്ടും സന്ദർശിക്കുക.';
+    const firmName = currentProfile.name && !['espo production', 'epso production'].includes(currentProfile.name.trim().toLowerCase())
+      ? currentProfile.name
+      : 'EPSO';
+
+    const text = `🧾 *${firmName.toUpperCase()} - INVOICE*
 --------------------------------
 Invoice: ${activeBill.invoiceNo}
 Date: ${activeBill.date}
@@ -480,7 +516,7 @@ Subtotal: ₹${activeBill.subtotal.toFixed(2)}
 ${activeBill.discount > 0 ? `Discount: -₹${activeBill.discount.toFixed(2)}\n` : ''}GST: ₹${activeBill.totalGst.toFixed(2)}
 *Grand Total: ₹${activeBill.grandTotal.toFixed(2)}*
 --------------------------------
-${billProfile.gst ? `GSTIN: ${billProfile.gst}\n` : ''}${billProfile.phone ? `Phone: ${billProfile.phone}\n` : ''}${billProfile.address ? `${billProfile.address}\n` : ''}_${billProfile.billFooter || 'Thank you for your business!'}_`;
+${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${currentProfile.address ? `${currentProfile.address}\n` : ''}_${footerText}_`;
 
     navigator.clipboard.writeText(text).then(() => {
       setBillCopied(true);
@@ -1160,37 +1196,58 @@ ${billProfile.gst ? `GSTIN: ${billProfile.gst}\n` : ''}${billProfile.phone ? `Ph
 
                 {/* Company Header (Dynamic from Settings) */}
                 <div className="text-center pt-2 pb-3">
-                  <h1 className="text-base font-bold tracking-wider text-black uppercase">
-                    {billProfile.name || 'EPSO FOOD PRODUCTS'}
-                  </h1>
+                  {/* Epso Brand Icon without "espo production" text */}
+                  <div className="flex justify-center mb-1.5">
+                    <img
+                      src="/epso-swirl-transparent.png"
+                      alt="Epso Logo"
+                      className="w-12 h-12 object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/favicon.png';
+                      }}
+                    />
+                  </div>
+
+                  {billProfile.name &&
+                    !['espo production', 'epso production'].includes(
+                      billProfile.name.trim().toLowerCase()
+                    ) && (
+                      <h1 className="text-base font-bold tracking-wider text-black uppercase">
+                        {billProfile.name}
+                      </h1>
+                    )}
+
                   {billProfile.subtitle && (
                     <p className="text-[11px] font-semibold text-black mt-0.5">
                       {billProfile.subtitle}
                     </p>
                   )}
+
                   {(billProfile.address || billProfile.location) && (
                     <p className="text-[11px] text-black mt-0.5 leading-snug whitespace-pre-line">
                       {billProfile.address || billProfile.location}
                     </p>
                   )}
-                  {billProfile.phone && (
-                    <p className="text-[11px] text-black mt-0.5">
-                      PHONE : {billProfile.phone}
+
+                  {/* Phone & Email in single line */}
+                  {(billProfile.phone || billProfile.email) && (
+                    <p className="text-[11px] text-black mt-0.5 font-medium">
+                      {billProfile.phone && <span>PHONE : {billProfile.phone}</span>}
+                      {billProfile.phone && billProfile.email && (
+                        <span className="mx-2 font-bold text-stone-400">|</span>
+                      )}
+                      {billProfile.email && <span>EMAIL : {billProfile.email}</span>}
                     </p>
                   )}
-                  {billProfile.email && (
-                    <p className="text-[11px] text-black mt-0.5">
-                      EMAIL : {billProfile.email}
-                    </p>
-                  )}
-                  {billProfile.gst && (
-                    <p className="text-[11px] text-black mt-0.5">
-                      GSTIN : {billProfile.gst}
-                    </p>
-                  )}
-                  {billProfile.fssai && (
-                    <p className="text-[11px] text-black mt-0.5">
-                      FSSAI : {billProfile.fssai}
+
+                  {/* GSTIN & FSSAI in single line */}
+                  {(billProfile.gst || billProfile.fssai) && (
+                    <p className="text-[11px] text-black mt-0.5 font-medium">
+                      {billProfile.gst && <span>GSTIN : {billProfile.gst}</span>}
+                      {billProfile.gst && billProfile.fssai && (
+                        <span className="mx-2 font-bold text-stone-400">|</span>
+                      )}
+                      {billProfile.fssai && <span>FSSAI : {billProfile.fssai}</span>}
                     </p>
                   )}
                 </div>
@@ -1300,7 +1357,7 @@ ${billProfile.gst ? `GSTIN: ${billProfile.gst}\n` : ''}${billProfile.phone ? `Ph
                 {/* Footer Note (Dynamic from Settings) */}
                 <div className="text-center pt-2 pb-1">
                   <p className="text-xs text-black font-semibold">
-                    {billProfile.billFooter || 'Thank You'}
+                    {cleanFooter(billProfile.billFooter) || 'നന്ദി! വീണ്ടും സന്ദർശിക്കുക.'}
                   </p>
                 </div>
               </div>
@@ -1313,24 +1370,24 @@ ${billProfile.gst ? `GSTIN: ${billProfile.gst}\n` : ''}${billProfile.phone ? `Ph
       {/* Add New Buyer Modal */}
       {showAddBuyerModal && createPortal(
         <div className="fixed inset-0 z-[10001] w-screen h-screen min-h-screen bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="w-full max-w-sm bg-white dark:bg-[#1E1B1B] rounded-2xl p-5 border border-stone-200 dark:border-[#2E2828] shadow-xl my-auto">
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-bold text-stone-900 dark:text-white flex items-center gap-2">
-                <FiUserPlus className="w-4 h-4 text-epso-orange dark:text-amber-400" />
+          <div className="w-full max-w-lg bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 sm:p-7 border border-stone-200 dark:border-[#2E2828] shadow-2xl my-auto google-modal">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-base font-bold text-stone-900 dark:text-white flex items-center gap-2">
+                <FiUserPlus className="w-5 h-5 text-epso-orange dark:text-amber-400" />
                 <span>പുതിയ ബയറെ ചേർക്കുക</span>
               </h4>
               <button
                 type="button"
                 onClick={() => setShowAddBuyerModal(false)}
-                className="w-7 h-7 rounded-full flex items-center justify-center bg-stone-100 dark:bg-[#141212] text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full flex items-center justify-center bg-stone-100 dark:bg-[#141212] text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition-colors cursor-pointer"
               >
-                <FiX className="w-3.5 h-3.5" />
+                <FiX className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleAddNewBuyer} className="space-y-3 text-xs">
+            <form onSubmit={handleAddNewBuyer} className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                <label className="block text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300 mb-1.5">
                   ബയറുടെ പേര് (Buyer Name) *
                 </label>
                 <input
@@ -1339,13 +1396,13 @@ ${billProfile.gst ? `GSTIN: ${billProfile.gst}\n` : ''}${billProfile.phone ? `Ph
                   placeholder="ഉദാ: Ramesh Traders, പ്രവീൺ..."
                   value={newBuyerName}
                   onChange={(e) => setNewBuyerName(e.target.value)}
-                  className="w-full px-3 py-2 bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] rounded-lg text-stone-900 dark:text-white focus:outline-none focus:border-epso-orange dark:focus:border-amber-500 transition-colors"
+                  className="google-input"
                   autoFocus
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                <label className="block text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300 mb-1.5">
                   കട / സ്ഥാപനം (Shop Name)
                 </label>
                 <input
@@ -1353,12 +1410,12 @@ ${billProfile.gst ? `GSTIN: ${billProfile.gst}\n` : ''}${billProfile.phone ? `Ph
                   placeholder="ഉദാ: Royal Stores, Kozhikode"
                   value={newBuyerShop}
                   onChange={(e) => setNewBuyerShop(e.target.value)}
-                  className="w-full px-3 py-2 bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] rounded-lg text-stone-900 dark:text-white focus:outline-none focus:border-epso-orange dark:focus:border-amber-500 transition-colors"
+                  className="google-input"
                 />
               </div>
 
               <div>
-                <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                <label className="block text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300 mb-1.5">
                   ഫോൺ നമ്പർ (Phone)
                 </label>
                 <input
@@ -1366,21 +1423,21 @@ ${billProfile.gst ? `GSTIN: ${billProfile.gst}\n` : ''}${billProfile.phone ? `Ph
                   placeholder="9876543210"
                   value={newBuyerPhone}
                   onChange={(e) => setNewBuyerPhone(e.target.value)}
-                  className="w-full px-3 py-2 bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] rounded-lg text-stone-900 dark:text-white font-mono focus:outline-none focus:border-epso-orange dark:focus:border-amber-500 transition-colors"
+                  className="google-input font-mono"
                 />
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="pt-3 flex justify-end gap-2.5 border-t border-stone-100 dark:border-[#2E2828]">
                 <button
                   type="button"
                   onClick={() => setShowAddBuyerModal(false)}
-                  className="px-3.5 py-1.5 rounded-lg border border-stone-200 dark:border-[#2E2828] text-stone-600 dark:text-stone-400 font-bold hover:bg-stone-100 dark:hover:bg-[#141212] transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] text-stone-600 dark:text-stone-400 font-bold hover:bg-stone-100 dark:hover:bg-[#141212] transition-colors cursor-pointer"
                 >
                   റദ്ദാക്കുക
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg bg-epso-orange hover:bg-orange-600 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm transition-colors cursor-pointer"
+                  className="px-5 py-2.5 rounded-xl bg-epso-orange hover:bg-orange-600 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm transition-colors cursor-pointer"
                 >
                   ചേർക്കുക
                 </button>

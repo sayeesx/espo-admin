@@ -592,11 +592,11 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
           />
 
           <div className="min-h-full flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
-            <div className="w-full md:w-[70vw] md:max-w-2xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto">
-              <h2 className="text-lg font-bold text-stone-900 dark:text-white mb-1">
+            <div className="w-full max-w-2xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 sm:p-8 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto google-modal">
+              <h2 className="text-xl font-bold text-stone-900 dark:text-white mb-1">
                 {editingProduct ? 'ഉൽപ്പന്നം തിരുത്തുക (Edit)' : 'പുതിയ ഉൽപ്പന്നം (New Product)'}
               </h2>
-              <p className="text-xs text-stone-500 dark:text-stone-400 mb-4">
+              <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mb-5">
                 വിലയും സ്റ്റോക്ക് വിവരങ്ങളും രേഖപ്പെടുത്തുക
               </p>
 
@@ -607,9 +607,9 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                 </div>
               )}
 
-              <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+              <form onSubmit={handleSubmit} className="space-y-4 text-xs sm:text-sm">
                 <div>
-                  <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  <label className="block text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300 mb-1.5">
                     പേര് (Product Name) *
                   </label>
                   <input
@@ -618,20 +618,20 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. മിക്സ്ചർ (Mixture)"
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                    className="google-input"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3.5">
                   <div>
-                    <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                    <label className="block text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300 mb-1.5">
                       SKU കോഡ്
                     </label>
                     <input
                       type="text"
                       value={sku}
                       onChange={(e) => setSku(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                      className="google-input font-mono"
                     />
                   </div>
 
@@ -652,7 +652,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  <label className="block text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300 mb-1.5">
                     മൊത്ത വിൽപ്പന വില (Wholesale Price ₹) *
                   </label>
                   <input
@@ -663,12 +663,12 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                     value={wholesalePrice === 0 ? '' : wholesalePrice}
                     onChange={(e) => setWholesalePrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
                     onFocus={(e) => e.target.select()}
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                    className="google-input font-mono font-bold"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  <label className="block text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300 mb-1.5">
                     നിലവിലെ ഫിനിഷ്ഡ് സ്റ്റോക്ക് (Current Stock)
                   </label>
                   <input
@@ -678,16 +678,16 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                     value={currentStock === 0 ? '' : currentStock}
                     onChange={(e) => setCurrentStock(e.target.value === '' ? '' : parseFloat(e.target.value))}
                     onFocus={(e) => e.target.select()}
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white focus:outline-none"
+                    className="google-input font-mono font-bold"
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828]">
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828]">
                   <div>
-                    <span className="font-bold text-stone-900 dark:text-white">
+                    <span className="font-bold text-sm text-stone-900 dark:text-white">
                       ഉൽപ്പാദനത്തിൽ സജീവം (Active)
                     </span>
-                    <p className="text-[10px] text-stone-400">
+                    <p className="text-xs text-stone-400 mt-0.5">
                       അടുക്കളയിൽ തിരഞ്ഞെടുക്കാൻ അനുവദിക്കുക
                     </p>
                   </div>
@@ -709,22 +709,22 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                   </button>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100 dark:border-[#2E2828]">
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-stone-100 dark:border-[#2E2828]">
                   <button
                     type="button"
                     onClick={() => setModalOpen(false)}
-                    className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold"
+                    className="px-5 py-2.5 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold cursor-pointer"
                   >
                     റദ്ദാക്കുക (Cancel)
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    className="px-6 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
                     {isSubmitting ? (
                       <>
-                        <div className="w-3.5 h-3.5 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
+                        <div className="w-4 h-4 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
                         <span>സൂക്ഷിക്കുന്നു...</span>
                       </>
                     ) : (
@@ -751,7 +751,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
           />
 
           <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
-            <div className="w-full md:w-[75vw] md:max-w-4xl max-h-[90vh] flex flex-col bg-white dark:bg-[#1E1B1B] rounded-3xl border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto overflow-hidden">
+            <div className="w-full md:w-[80vw] md:max-w-5xl max-h-[92vh] flex flex-col bg-white dark:bg-[#1E1B1B] rounded-3xl border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto overflow-hidden google-modal">
               {/* Pinned Modal Header */}
               <div className="flex items-center justify-between p-5 pb-3 border-b border-stone-200 dark:border-[#2E2828] shrink-0">
                 <div>

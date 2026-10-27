@@ -106,7 +106,7 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] w-screen h-screen min-h-screen flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-md overflow-y-auto animate-apple-backdrop">
-      <div className="w-full max-w-sm bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal my-auto">
+      <div className="w-full max-w-sm bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 sm:p-7 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal google-modal my-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2.5">
@@ -159,7 +159,7 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
               value={newPin}
               onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
               onFocus={(e) => e.target.select()}
-              className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-epso-red/30 tabular-nums"
+              className="w-full google-input text-stone-900 dark:text-white font-mono text-center text-lg tracking-widest tabular-nums"
             />
           </div>
 
@@ -177,7 +177,7 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
               value={confirmPin}
               onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
               onFocus={(e) => e.target.select()}
-              className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-epso-red/30 tabular-nums"
+              className="w-full google-input text-stone-900 dark:text-white font-mono text-center text-lg tracking-widest tabular-nums"
             />
           </div>
 

@@ -293,5 +293,5 @@ export const DEFAULT_FACTORY_PROFILE: FactoryProfile = {
   address: 'Near Industrial Estate, Malappuram, Kerala - 676505',
   gst: '32AAAAA0000A1Z5',
   fssai: '11322001000123',
-  billFooter: 'നന്ദി! വീണ്ടും സന്ദർശിക്കുക. ശുദ്ധമായ എണ്ണയിൽ തയ്യാറാക്കിയത്.',
+  billFooter: 'നന്ദി! വീണ്ടും സന്ദർശിക്കുക.',
 };
