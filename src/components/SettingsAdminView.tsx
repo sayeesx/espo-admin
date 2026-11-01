@@ -13,7 +13,7 @@ import {
   FiSave,
   FiKey,
 } from 'react-icons/fi';
-import { supabase, invalidateAdminCache } from '../services/supabase';
+import { supabase, invalidateAdminCache, resetAllStocksToZero } from '../services/supabase';
 import {
   Product,
   Ingredient,
@@ -219,10 +219,13 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
     e.preventDefault();
     setResetError('');
 
-    // PIN verification
+    // PIN verification: Accept 1234, Admin PIN 65188, or saved production PIN
     const validPin = localStorage.getItem('epso_production_pin') || currentPin || '1234';
-    if (enteredPin.trim() !== validPin && enteredPin.trim() !== '1234') {
-      setResetError('നൽകിയ പ്രൊഡക്ഷൻ പിൻ തെറ്റാണ്! (Invalid PIN)');
+    const cleanPin = enteredPin.trim();
+    const isPinCorrect = cleanPin === '1234' || cleanPin === '65188' || cleanPin === validPin;
+
+    if (!isPinCorrect) {
+      setResetError('നൽകിയ പിൻ തെറ്റാണ്! (Invalid PIN. Enter 1234 or 65188)');
       return;
     }
 
@@ -258,11 +261,12 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
         setResetSuccessNotice('ചേരുവകളുടെ സ്റ്റോക്ക് ക്രമീകരിച്ചു (Ingredient stock reset)');
       } else if (resetModalType === 'zero_all_stocks') {
         // Reset all products, ingredients, and packaging items current_stock to 0
-        await supabase.from('products').update({ current_stock: 0, updated_at: new Date().toISOString() }).neq('id', '00000000-0000-0000-0000-000000000000');
-        await supabase.from('ingredients').update({ current_stock: 0, updated_at: new Date().toISOString() }).neq('id', '00000000-0000-0000-0000-000000000000');
-        await supabase.from('packaging_items').update({ current_stock: 0, updated_at: new Date().toISOString() }).neq('id', '00000000-0000-0000-0000-000000000000');
-        invalidateAdminCache();
+        const res = await resetAllStocksToZero();
+        if (!res.success) {
+          throw new Error(res.message);
+        }
         setResetSuccessNotice('എല്ലാ ഉൽപ്പന്നങ്ങൾ, ചേരുവകൾ, പാക്കറ്റുകൾ എന്നിവയുടെ സ്റ്റോക്ക് പൂജ്യമാക്കി (0)! (All stocks reset to 0)');
+        alert('എല്ലാ ഉൽപ്പന്നങ്ങൾ, ചേരുവകൾ, പാക്കറ്റുകൾ എന്നിവയുടെ സ്റ്റോക്ക് പൂജ്യമാക്കി (0)! (All stocks reset to 0)');
       } else if (resetModalType === 'full') {
         // Full factory reset
         await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
@@ -275,19 +279,24 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
       }
 
       // Audit log
-      await supabase.from('audit_logs').insert([
-        {
-          actor: 'Super Admin',
-          action: `RESET_${(resetModalType || 'DATA').toUpperCase()}`,
-          entity_type: 'SYSTEM',
-          entity_id: 'MAINTENANCE',
-          details: { type: resetModalType, executed_at: new Date().toISOString() },
-        },
-      ]);
+      try {
+        await supabase.from('audit_logs').insert([
+          {
+            actor: 'Super Admin',
+            action: `RESET_${(resetModalType || 'DATA').toUpperCase()}`,
+            entity_type: 'SYSTEM',
+            entity_id: 'MAINTENANCE',
+            details: { type: resetModalType, executed_at: new Date().toISOString() },
+          },
+        ]);
+      } catch (logErr) {
+        console.warn('Audit log write error (non-fatal):', logErr);
+      }
 
       setResetModalType(null);
       setEnteredPin('');
       setResetConfirmationText('');
+      window.dispatchEvent(new Event('storage'));
       onRefresh();
     } catch (err: any) {
       setResetError(`റീസെറ്റ് ചെയ്യുന്നതിൽ തടസ്സം: ${err?.message || 'Error executing reset'}`);
@@ -786,16 +795,16 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
 
                 <div>
                   <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                    പ്രൊഡക്ഷൻ പിൻ (Enter 4-digit PIN) *
+                    പ്രൊഡക്ഷൻ പിൻ നൽകുക (PIN: 1234 അല്ലെങ്കിൽ Admin PIN: 65188) *
                   </label>
                   <input
                     type="password"
-                    maxLength={4}
+                    maxLength={6}
                     required
                     autoFocus
                     value={enteredPin}
                     onChange={(e) => setEnteredPin(e.target.value.replace(/\D/g, ''))}
-                    placeholder="••••"
+                    placeholder="•••••"
                     className="w-full p-3 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white font-mono font-black text-center text-lg tracking-widest focus:outline-none"
                   />
                 </div>
@@ -818,7 +827,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                   </button>
                   <button
                     type="submit"
-                    disabled={resetLoading || enteredPin.length !== 4}
+                    disabled={resetLoading || enteredPin.length < 4}
                     className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold shadow-sm press-apple flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                   >
                     {resetLoading ? (
