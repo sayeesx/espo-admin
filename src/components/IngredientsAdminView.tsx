@@ -218,7 +218,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
   // Form states
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<IngredientCategory>('basic');
+  const [category, setCategory] = useState<IngredientCategory>('other');
   const [unit, setUnit] = useState<UnitType>('kg');
   const [currentStock, setCurrentStock] = useState<number>(0);
   const [minStock, setMinStock] = useState<number | string>(0);
@@ -235,7 +235,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   const openCreateModal = () => {
     setSelectedIngredient(null);
     setName('');
-    setCategory('basic');
+    setCategory('other');
     setUnit('kg');
     setCurrentStock(0);
     setMinStock(5);
@@ -1118,8 +1118,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       value={category}
                       onChange={(val) => setCategory(val as IngredientCategory)}
                       options={[
-                        { value: 'basic', label: 'Category A (Basic)' },
                         { value: 'other', label: 'Category B (Other)' },
+                        { value: 'basic', label: 'Category A (Basic)' },
                       ]}
                     />
                   </div>

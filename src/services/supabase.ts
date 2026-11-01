@@ -1645,7 +1645,7 @@ export async function bulkPurchaseIngredients(
   const now = new Date().toISOString();
   const batchRef = `BULK-PURCHASE-${Date.now().toString().slice(-6)}`;
   const stockMovements: any[] = [];
-  const updatePromises: Promise<any>[] = [];
+  const updatePromises: PromiseLike<any>[] = [];
 
   for (const purchase of validPurchases) {
     const ing = ingMap.get(purchase.ingredientId);

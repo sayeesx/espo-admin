@@ -29,6 +29,10 @@ import {
   FiBox,
   FiRefreshCw,
   FiSearch,
+  FiActivity,
+  FiBarChart2,
+  FiPieChart,
+  FiSliders,
 } from 'react-icons/fi';
 
 interface ProductionCostingAdminViewProps {
@@ -65,6 +69,8 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   productionRuns,
   onRefresh,
 }) => {
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+
   // Available distinct production dates
   const availableDates = useMemo(() => {
     const dates = Array.from(
@@ -77,7 +83,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     return dates;
   }, [productionRuns]);
 
-  // Default to 'all' so that ALL products are shown immediately!
+  // Default to 'all' (Total Costing / All-Time Average) as explicitly requested!
   const [selectedDate, setSelectedDate] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -89,6 +95,8 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [editPriceValue, setEditPriceValue] = useState<string>('');
   const [isSavingPrice, setIsSavingPrice] = useState(false);
+  const [closingDataMap, setClosingDataMap] = useState<Record<string, any>>({});
+  const [wageDataMap, setWageDataMap] = useState<Record<string, any>>({});
 
   // Per-product detail data
   const [detailIngredients, setDetailIngredients] = useState<any[]>([]);
@@ -116,12 +124,14 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
       for (const w of wageList) {
         wageMap[w.productionDate] = w;
       }
+      setWageDataMap(wageMap);
 
       // Closing map by date
       const closingMap: Record<string, any> = {};
       for (const c of closings) {
         closingMap[c.productionDate] = c;
       }
+      setClosingDataMap(closingMap);
 
       // Completed runs
       const completedRuns = productionRuns.filter((r) => r.status === 'completed');
@@ -137,7 +147,6 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           if (dateRuns.length > 0) {
             pRuns = dateRuns;
           } else {
-            // Not produced on this specific date
             pRuns = [];
           }
         }
@@ -307,7 +316,8 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
 
   const formatCurrency = (val: number) => `₹${val.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const formatDate = (dateStr: string) => {
-    if (dateStr === 'all') return 'എല്ലാ ബാച്ചുകളും (All Batches)';
+    if (dateStr === 'all') return 'ആകെ ശരാശരി (All-Time Average / Total)';
+    if (dateStr === todayStr) return 'ഇന്ന് (Today)';
     try {
       return new Date(dateStr + 'T00:00:00').toLocaleDateString('ml-IN', { day: 'numeric', month: 'short', year: 'numeric' });
     } catch {
@@ -322,31 +332,359 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     );
   }, [productCosts, search]);
 
+  // Compute daily price fluctuation trend for selected product
+  const productDailyTrends = useMemo(() => {
+    if (!selectedProduct) return [];
+    const prodId = selectedProduct.productId;
+    const prodRuns = productionRuns.filter(
+      (r) => r.productId === prodId && r.status === 'completed' && r.productionDate
+    );
+
+    const dateMap = new Map<string, { runs: ProductionRun[]; totalKg: number }>();
+    for (const r of prodRuns) {
+      const d = r.productionDate!;
+      if (!dateMap.has(d)) {
+        dateMap.set(d, { runs: [], totalKg: 0 });
+      }
+      const entry = dateMap.get(d)!;
+      entry.runs.push(r);
+      entry.totalKg += (r.actualQuantity || 0);
+    }
+
+    const trends: {
+      date: string;
+      costPerKg: number;
+      totalKg: number;
+      ingredientCost: number;
+      manufacturingCost: number;
+    }[] = [];
+
+    const sortedDates = Array.from(dateMap.keys()).sort();
+
+    for (const d of sortedDates) {
+      const { runs, totalKg } = dateMap.get(d)!;
+      let ingCost = 0;
+      for (const r of runs) {
+        if (r.ingredientsConsumed && Array.isArray(r.ingredientsConsumed)) {
+          for (const ing of r.ingredientsConsumed) {
+            ingCost += (ing.totalCost || 0);
+          }
+        } else if (r.totalIngredientCost) {
+          ingCost += r.totalIngredientCost;
+        }
+      }
+
+      const dayAllRuns = productionRuns.filter((r) => r.status === 'completed' && r.productionDate === d);
+      const dayTotalKgAll = dayAllRuns.reduce((s, r) => s + (r.actualQuantity || 0), 0);
+      const ratio = dayTotalKgAll > 0 ? totalKg / dayTotalKgAll : 1;
+
+      const closing = closingDataMap[d];
+      const wage = wageDataMap[d];
+
+      let dayOil = 0;
+      if (closing && closing.oilConsumed > 0) {
+        dayOil = roundCurrency((closing.oilConsumed * (closing.oilCostPerKg || 150)) * ratio);
+      }
+      const dayProdWages = roundCurrency(((wage?.productionWageAmount ?? closing?.productionWages) || 0) * ratio);
+      const dayPackWages = roundCurrency((wage?.packingWageAmount || 0) * ratio);
+
+      const mfgCost = roundCurrency(ingCost + dayOil + dayProdWages + dayPackWages);
+      const costPerKg = totalKg > 0 ? roundCurrency(mfgCost / totalKg) : 0;
+
+      trends.push({
+        date: d,
+        costPerKg,
+        totalKg: roundStock(totalKg),
+        ingredientCost: roundCurrency(ingCost),
+        manufacturingCost: mfgCost,
+      });
+    }
+
+    return trends;
+  }, [selectedProduct, productionRuns, closingDataMap, wageDataMap]);
+
+  // Ingredient sensitivity breakdown: how each ingredient affects 1 kg finished product cost
+  const ingredientImpactList = useMemo(() => {
+    if (!selectedProduct || !detailIngredients.length) return [];
+    const totalProdKg = selectedProduct.totalProductionKg || 1;
+    const totalMfgCost = selectedProduct.totalManufacturingCost || 1;
+
+    return detailIngredients
+      .map((ing) => {
+        const costPerKg = roundCurrency((ing.cost || 0) / totalProdKg);
+        const percent = Number((((ing.cost || 0) / totalMfgCost) * 100).toFixed(1));
+        const qtyPerKg = Number(((ing.qty || 0) / totalProdKg).toFixed(3));
+        const tenPercentRise = roundCurrency(costPerKg * 0.1);
+
+        return {
+          name: ing.name,
+          unit: ing.unit,
+          totalQty: ing.qty,
+          totalCost: ing.cost,
+          costPerKg,
+          percent,
+          qtyPerKg,
+          tenPercentRise,
+        };
+      })
+      .sort((a, b) => b.costPerKg - a.costPerKg);
+  }, [selectedProduct, detailIngredients]);
+
   // Detail view
   if (selectedProduct) {
     const p = selectedProduct;
-    return (
-      <div className="space-y-5 pb-8 font-malayalam max-w-4xl mx-auto">
-        {/* Back Button */}
-        <button
-          onClick={() => setSelectedProduct(null)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] text-xs font-bold text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-[#282323] transition-colors cursor-pointer press-apple"
-        >
-          <FiArrowLeft className="w-4 h-4" />
-          <span>തിരികെ ലിസ്റ്റിലേക്ക്</span>
-        </button>
+    const trendValues = productDailyTrends.map((t) => t.costPerKg);
+    const minTrend = trendValues.length > 0 ? Math.min(...trendValues) : p.costPerKg;
+    const maxTrend = trendValues.length > 0 ? Math.max(...trendValues) : p.costPerKg;
+    const priceDiff = maxTrend - minTrend;
 
-        {/* Product Header */}
-        <div className="p-6 rounded-3xl bg-gradient-to-br from-stone-50 to-stone-100 dark:from-[#1A1616] dark:to-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card">
-          <h2 className="text-xl font-black text-stone-900 dark:text-white">{p.productName}</h2>
-          <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-            {formatDate(selectedDate)} · {p.batchCount} ബാച്ച് · {p.totalProductionKg.toFixed(1)} kg · {p.totalPacketsPacked} പാക്കറ്റുകൾ
-          </p>
+    return (
+      <div className="space-y-6 pb-8 font-malayalam max-w-4xl mx-auto">
+        {/* Back Button and Date Indicator */}
+        <div className="flex items-center justify-between gap-3">
+          <button
+            onClick={() => setSelectedProduct(null)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] text-xs font-bold text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-[#282323] transition-colors cursor-pointer press-apple"
+          >
+            <FiArrowLeft className="w-4 h-4" />
+            <span>തിരികെ ലിസ്റ്റിലേക്ക്</span>
+          </button>
+
+          <span className="text-xs px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold border border-amber-500/20">
+            {formatDate(selectedDate)}
+          </span>
         </div>
 
-        {/* Cost Breakdown */}
+        {/* Product Header */}
+        <div className="p-6 rounded-3xl bg-gradient-to-br from-stone-50 to-stone-100 dark:from-[#1A1616] dark:to-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-black text-stone-900 dark:text-white">{p.productName}</h2>
+            <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+              {p.batchCount} ബാച്ചുകൾ · {p.totalProductionKg.toFixed(1)} kg ആകെ ഉൽപ്പാദനം · {p.totalPacketsPacked} പാക്കറ്റുകൾ
+            </p>
+          </div>
+
+          <div className="text-left sm:text-right bg-white dark:bg-[#141212] p-3.5 rounded-2xl border border-stone-200 dark:border-[#282323] shrink-0">
+            <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">
+              {selectedDate === 'all' ? 'ശരാശരി ചെലവ് / കിലോ' : 'ചെലവ് / കിലോ'}
+            </span>
+            <span className="text-2xl font-black text-stone-900 dark:text-white font-mono">
+              {formatCurrency(p.costPerKg)}
+            </span>
+          </div>
+        </div>
+
+        {/* DAILY PRICE FLUCTUATION TREND CHART */}
+        <div className="p-5 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-stone-100 dark:border-[#282323]">
+            <div>
+              <h3 className="text-sm font-black text-stone-900 dark:text-white flex items-center gap-2">
+                <FiActivity className="w-4 h-4 text-amber-500" />
+                <span>ദിവസേനയുള്ള വില വ്യതിയാന ട്രെൻഡ് (Daily Price Fluctuation Trend)</span>
+              </h3>
+              <p className="text-xs text-stone-400 mt-0.5">
+                വിവിധ ദിവസങ്ങളിൽ ഈ ഉൽപ്പന്നത്തിന്റെ 1 കിലോഗ്രാമിന് വന്ന ഉൽപ്പാദന ചെലവ്
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-[#252020] text-stone-700 dark:text-stone-300 font-mono">
+                കുറഞ്ഞത്: {formatCurrency(minTrend)}
+              </span>
+              <span className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-[#252020] text-stone-700 dark:text-stone-300 font-mono">
+                കൂടിയത്: {formatCurrency(maxTrend)}
+              </span>
+              {priceDiff > 0 && (
+                <span className="text-[11px] font-bold px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 font-mono flex items-center gap-1">
+                  <FiTrendingUp className="w-3.5 h-3.5" />
+                  <span>±₹{priceDiff.toFixed(1)}/kg</span>
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* SVG Trend Chart */}
+          {productDailyTrends.length >= 1 ? (
+            <div className="w-full overflow-x-auto no-scrollbar pt-2">
+              <div className="min-w-[420px]">
+                <svg viewBox="0 0 520 160" className="w-full h-40 overflow-visible">
+                  <defs>
+                    <linearGradient id="costGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.35" />
+                      <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
+
+                  {/* Horizontal Guide Lines */}
+                  <line x1="40" y1="20" x2="500" y2="20" stroke="currentColor" className="text-stone-200 dark:text-stone-800" strokeDasharray="3 3" />
+                  <line x1="40" y1="75" x2="500" y2="75" stroke="currentColor" className="text-stone-200 dark:text-stone-800" strokeDasharray="3 3" />
+                  <line x1="40" y1="130" x2="500" y2="130" stroke="currentColor" className="text-stone-200 dark:text-stone-800" />
+
+                  {/* Calculate Chart Coordinates */}
+                  {(() => {
+                    const count = productDailyTrends.length;
+                    const paddingX = 50;
+                    const chartW = 500 - paddingX;
+                    const minC = Math.max(0, minTrend * 0.85);
+                    const maxC = maxTrend * 1.15 || 100;
+                    const range = Math.max(1, maxC - minC);
+
+                    const points = productDailyTrends.map((t, idx) => {
+                      const x = count === 1 ? 260 : paddingX + (idx / (count - 1)) * (chartW - paddingX);
+                      const y = 130 - ((t.costPerKg - minC) / range) * 110;
+                      return { x, y, data: t };
+                    });
+
+                    const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(' ');
+                    const areaPoints = `${points[0].x},130 ${polylinePoints} ${points[points.length - 1].x},130`;
+
+                    return (
+                      <>
+                        {/* Area Gradient */}
+                        <polygon points={areaPoints} fill="url(#costGradient)" />
+
+                        {/* Trend Curve Line */}
+                        <polyline
+                          fill="none"
+                          stroke="#f59e0b"
+                          strokeWidth="3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          points={polylinePoints}
+                        />
+
+                        {/* Points & Labels */}
+                        {points.map((pt, idx) => {
+                          const isHigh = pt.data.costPerKg === maxTrend && priceDiff > 0;
+                          const isLow = pt.data.costPerKg === minTrend && priceDiff > 0;
+
+                          return (
+                            <g key={idx} className="cursor-pointer group">
+                              {/* Vertical Drop Line */}
+                              <line
+                                x1={pt.x}
+                                y1={pt.y}
+                                x2={pt.x}
+                                y2="130"
+                                stroke="currentColor"
+                                className="text-stone-300 dark:text-stone-700/60"
+                                strokeDasharray="2 2"
+                              />
+
+                              {/* Point Dot */}
+                              <circle
+                                cx={pt.x}
+                                cy={pt.y}
+                                r={isHigh || isLow ? 6 : 5}
+                                className={isHigh ? 'fill-red-500' : isLow ? 'fill-emerald-500' : 'fill-amber-500'}
+                                stroke="white"
+                                strokeWidth="2"
+                              />
+
+                              {/* Price Label above point */}
+                              <text
+                                x={pt.x}
+                                y={pt.y - 10}
+                                textAnchor="middle"
+                                className="text-[10px] font-bold font-mono fill-stone-800 dark:fill-stone-200 select-none"
+                              >
+                                ₹{pt.data.costPerKg.toFixed(1)}
+                              </text>
+
+                              {/* Date & Qty Label below line */}
+                              <text
+                                x={pt.x}
+                                y="146"
+                                textAnchor="middle"
+                                className="text-[9px] font-semibold fill-stone-400 select-none"
+                              >
+                                {pt.data.date.slice(5)} ({pt.data.totalKg}kg)
+                              </text>
+                            </g>
+                          );
+                        })}
+                      </>
+                    );
+                  })()}
+                </svg>
+              </div>
+            </div>
+          ) : (
+            <div className="py-6 text-center text-xs text-stone-400">
+              ട്രെൻഡ് രേഖപ്പെടുത്താൻ പൂർത്തിയായ പ്രൊഡക്ഷൻ ബാച്ചുകൾ ഒന്നും ലഭ്യമല്ല.
+            </div>
+          )}
+        </div>
+
+        {/* INGREDIENT PRICE IMPACT & SENSITIVITY BREAKDOWN */}
+        <div className="p-5 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-stone-100 dark:border-[#2E2828]">
+            <div>
+              <h3 className="text-sm font-black text-stone-900 dark:text-white flex items-center gap-2">
+                <FiSliders className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>ചേരുവകളുടെ വില സ്വാധീനം (Ingredient Cost Contribution & Sensitivity)</span>
+              </h3>
+              <p className="text-xs text-stone-400 mt-0.5">
+                1 കിലോഗ്രാം സ്നാക്ക് ഉണ്ടാക്കാൻ ഓരോ ചേരുവയ്ക്കും വരുന്ന ചെലവും അതിന്റെ സ്വാധീനവും
+              </p>
+            </div>
+          </div>
+
+          {ingredientImpactList.length > 0 ? (
+            <div className="space-y-3">
+              {ingredientImpactList.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="p-3.5 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200/70 dark:border-[#282323] space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-xs sm:text-sm text-stone-900 dark:text-white">
+                        {item.name}
+                      </span>
+                      <span className="text-[11px] text-stone-400 block font-mono">
+                        1 kg-ക്ക് ആവശ്യം: {item.qtyPerKg} {item.unit}
+                      </span>
+                    </div>
+
+                    <div className="text-right">
+                      <span className="text-sm font-black text-stone-900 dark:text-white font-mono block">
+                        ₹{item.costPerKg.toFixed(2)} / kg
+                      </span>
+                      <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 font-mono">
+                        ചെലവിന്റെ {item.percent}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Impact Progress Bar */}
+                  <div className="w-full bg-stone-200 dark:bg-stone-800 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-amber-500 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(100, Math.max(5, item.percent))}%` }}
+                    />
+                  </div>
+
+                  {/* Sensitivity Calculation Note */}
+                  <div className="flex items-center justify-between text-[10px] text-stone-500 dark:text-stone-400 pt-1 border-t border-stone-200/40 dark:border-[#282323]">
+                    <span>ഈ ചേരുവയുടെ വിലയിൽ 10% വർദ്ധനവുണ്ടായാൽ:</span>
+                    <span className="font-bold font-mono text-amber-700 dark:text-amber-400">
+                      കിലോയ്ക്ക് +₹{item.tenPercentRise.toFixed(2)} കൂടും (+{(item.percent * 0.1).toFixed(2)}%)
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-4 text-center text-xs text-stone-400">
+              ചേരുവകളുടെ വിശദാംശങ്ങൾ ലഭ്യമല്ല
+            </div>
+          )}
+        </div>
+
+        {/* Cost Breakdown Strip */}
         <div className="space-y-2.5">
-          <h3 className="text-sm font-black text-stone-800 dark:text-stone-200 px-1">ചെലവ് വിതരണ കണക്ക്</h3>
+          <h3 className="text-sm font-black text-stone-800 dark:text-stone-200 px-1">ചെലവ് വിതരണ കണക്ക് (Cost Allocation)</h3>
 
           {[
             { label: 'ചേരുവകളുടെ ചെലവ്', value: p.ingredientCost, icon: FiBox, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/20' },
@@ -369,7 +707,9 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
 
           {/* Total */}
           <div className="flex items-center justify-between p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border-2 border-emerald-200 dark:border-emerald-800/50 mt-4">
-            <span className="text-xs sm:text-sm font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">ആകെ ഉൽപ്പാദന ചെലവ്</span>
+            <span className="text-xs sm:text-sm font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
+              {selectedDate === 'all' ? 'ആകെ ഉൽപ്പാദന ചെലവ് (Total Manufacturing Cost)' : 'ഇന്നത്തെ ആകെ ഉൽപ്പാദന ചെലവ്'}
+            </span>
             <span className="text-xl font-black text-emerald-700 dark:text-emerald-200 font-mono">{formatCurrency(p.totalManufacturingCost)}</span>
           </div>
         </div>
@@ -379,7 +719,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           {[
             { label: 'ആകെ ഉൽപ്പാദിപ്പിച്ചത്', value: `${p.totalProductionKg.toFixed(1)} kg` },
             { label: 'ആകെ പാക്കറ്റുകൾ', value: String(p.totalPacketsPacked) },
-            { label: 'യൂണിറ്റ് ചെലവ് / കിലോ', value: formatCurrency(p.costPerKg) },
+            { label: selectedDate === 'all' ? 'ശരാശരി ചെലവ് / കിലോ' : 'യൂണിറ്റ് ചെലവ് / കിലോ', value: formatCurrency(p.costPerKg) },
             { label: 'യൂണിറ്റ് ചെലവ് / പാക്കറ്റ്', value: p.totalPacketsPacked > 0 ? formatCurrency(p.costPerPacket) : '—' },
             { label: 'വില്പന വില / കിലോ', value: p.wholesalePricePerKg > 0 ? formatCurrency(p.wholesalePricePerKg) : 'നൽകിയിട്ടില്ല.' },
             { label: 'ലാഭം / കിലോ', value: p.wholesalePricePerKg > 0 ? formatCurrency(p.profitPerKg) : '—' },
@@ -391,10 +731,10 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           ))}
         </div>
 
-        {/* Ingredient Details */}
+        {/* Ingredient Details Table */}
         {detailIngredients.length > 0 && (
           <div className="space-y-2.5">
-            <h3 className="text-sm font-black text-stone-800 dark:text-stone-200 px-1">ഉപയോഗിച്ച ചേരുവകൾ</h3>
+            <h3 className="text-sm font-black text-stone-800 dark:text-stone-200 px-1">ഉപയോഗിച്ച ചേരുവകളുടെ ലിസ്റ്റ്</h3>
             <div className="rounded-2xl border border-stone-200 dark:border-[#2E2828] overflow-hidden shadow-sm">
               <div className="grid grid-cols-[1fr_100px_100px] gap-2 px-4 py-3 bg-stone-50 dark:bg-[#1E1B1B] text-[10px] font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider">
                 <span>ചേരുവ</span>
@@ -418,30 +758,50 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   // Dashboard view
   return (
     <div className="space-y-6 pb-8 font-malayalam">
-      {/* Top Filter and Search Bar */}
+      {/* Top Filter and Search Bar with Costing View Options */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <FiSearch className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search product..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-epso-red/30 dark:focus:ring-amber-500/30 transition-all"
-          />
-        </div>
+        {/* Costing View Options (Segmented Control) */}
+        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-stone-100 dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] overflow-x-auto no-scrollbar shrink-0">
+          <button
+            type="button"
+            onClick={() => setSelectedDate('all')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              selectedDate === 'all'
+                ? 'bg-amber-500 text-stone-950 shadow-xs'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+            }`}
+          >
+            <FiActivity className="w-3.5 h-3.5" />
+            <span>ആകെ ശരാശരി (All-Time Average)</span>
+          </button>
 
-        {/* Date Selector & Refresh */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B]">
-            <FiCalendar className="w-4 h-4 text-stone-500 dark:text-stone-400" />
+          <button
+            type="button"
+            onClick={() => setSelectedDate(todayStr)}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              selectedDate === todayStr
+                ? 'bg-amber-500 text-stone-950 shadow-xs'
+                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+            }`}
+          >
+            <FiCalendar className="w-3.5 h-3.5" />
+            <span>ഇന്നത്തെ ചെലവ് (Today)</span>
+          </button>
+
+          {/* Specific Date Dropdown */}
+          <div className="flex items-center gap-1 pl-2 border-l border-stone-200 dark:border-stone-700">
             <select
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="bg-transparent text-xs font-bold text-stone-900 dark:text-white focus:outline-none cursor-pointer"
+              value={selectedDate !== 'all' && selectedDate !== todayStr ? selectedDate : ''}
+              onChange={(e) => {
+                if (e.target.value) setSelectedDate(e.target.value);
+              }}
+              className={`bg-transparent text-xs font-bold focus:outline-none cursor-pointer py-1 px-2 rounded-lg ${
+                selectedDate !== 'all' && selectedDate !== todayStr
+                  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                  : 'text-stone-600 dark:text-stone-400'
+              }`}
             >
-              <option value="all">എല്ലാ ഉൽപ്പന്നങ്ങളും (All Products / Latest)</option>
+              <option value="" disabled>മറ്റു തീയതികൾ (Other Dates)...</option>
               {availableDates.map((d) => (
                 <option key={d} value={d}>
                   {formatDate(d)}
@@ -449,16 +809,29 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
               ))}
             </select>
           </div>
-
-          <button
-            onClick={() => loadCostingData(selectedDate)}
-            disabled={isLoading}
-            className="p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] transition-colors cursor-pointer disabled:opacity-50"
-            title="Refresh Costing"
-          >
-            <FiRefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-epso-red dark:text-amber-400' : ''}`} />
-          </button>
         </div>
+
+        {/* Search */}
+        <div className="relative flex-1 max-w-xs">
+          <FiSearch className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search product..."
+            className="w-full pl-10 pr-4 py-2 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-epso-red/30 dark:focus:ring-amber-500/30 transition-all"
+          />
+        </div>
+
+        {/* Refresh button */}
+        <button
+          onClick={() => loadCostingData(selectedDate)}
+          disabled={isLoading}
+          className="p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+          title="Refresh Costing"
+        >
+          <FiRefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-epso-red dark:text-amber-400' : ''}`} />
+        </button>
       </div>
 
       {isLoading ? (
