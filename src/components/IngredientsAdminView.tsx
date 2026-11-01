@@ -16,6 +16,7 @@ import {
   FiPackage,
   FiBox,
   FiCheck,
+  FiX,
 } from 'react-icons/fi';
 import {
   saveIngredient,
@@ -372,17 +373,18 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     <div className="space-y-6">
       {activeIngredientTab === 'ingredients' ? (
         <>
-          {/* Low Stock Notice if any */}
-          {lowStockCount > 0 && (
-            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs font-bold font-malayalam">
-              <FiAlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-              <span>{lowStockCount} ചേരുവകൾ കുറഞ്ഞ സ്റ്റോക്കിലാണ് / തീർന്നുപോയി (About to Stock Out)</span>
-            </div>
-          )}
-
-          {/* Actions Header - All buttons on the exact same line */}
+          {/* Actions Header - Stock Out notice and all 4 buttons on the exact same line */}
           <div className="flex items-center justify-between gap-2 pb-3 border-b border-stone-200 dark:border-[#2E2828] overflow-x-auto no-scrollbar">
-            <div className="flex items-center gap-2 flex-nowrap w-full justify-end">
+            {lowStockCount > 0 ? (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs font-bold font-malayalam whitespace-nowrap shrink-0">
+                <FiAlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                <span>{lowStockCount} ചേരുവകൾ കുറവാണ് (Stock Out)</span>
+              </div>
+            ) : (
+              <div />
+            )}
+
+            <div className="flex items-center gap-2 flex-nowrap shrink-0 ml-auto">
               <button
                 type="button"
                 onClick={() => setActiveIngredientTab('packets')}
@@ -703,6 +705,17 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
               >
                 <FiPlus className="w-4 h-4" />
                 <span>New Cover (പുതിയ കവർ)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveIngredientTab('ingredients')}
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#332c2c] text-stone-700 dark:text-stone-200 font-bold text-xs transition-colors cursor-pointer border border-stone-200 dark:border-stone-700 shadow-2xs ml-1"
+                title="അടച്ച് ചേരുവകളിലേക്ക് തിരികെ പോകുക (Close and go back to ingredients)"
+                aria-label="Close"
+              >
+                <FiX className="w-4 h-4" />
+                <span>അടയ്ക്കുക (Close)</span>
               </button>
             </div>
           </div>

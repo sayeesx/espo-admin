@@ -15,6 +15,8 @@ import {
   FiBookOpen,
   FiX,
   FiCheck,
+  FiArrowRight,
+  FiArrowLeft,
 } from 'react-icons/fi';
 import { saveProduct, deleteProduct, saveRecipe, deleteRecipe, fetchPacketTypes } from '../services/supabase';
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
@@ -103,6 +105,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   const [availablePacketTypes, setAvailablePacketTypes] = useState<PacketType[]>([]);
   const [isSavingRecipe, setIsSavingRecipe] = useState(false);
   const [recipeError, setRecipeError] = useState('');
+  const [recipeModalStep, setRecipeModalStep] = useState<1 | 2>(1);
 
   const loadPacketCatalog = async () => {
     try {
@@ -183,7 +186,23 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
       ]);
       setRecipePackets([]);
     }
+    setRecipeModalStep(1);
+    setRecipeError('');
     setRecipeModalOpen(true);
+  };
+
+  const handleNextToPackets = () => {
+    setRecipeError('');
+    if (!recipeItems || recipeItems.length === 0) {
+      setRecipeError('കുറഞ്ഞത് ഒരു ചേരുവയെങ്കിലും ചേർക്കുക (Add at least 1 ingredient)');
+      return;
+    }
+    const hasInvalid = recipeItems.some((it) => !it.ingredientId || Number(it.quantity) <= 0);
+    if (hasInvalid) {
+      setRecipeError('എല്ലാ ചേരുവകളുടെയും പേരും അളവും സാധുവാണെന്ന് ഉറപ്പാക്കുക (Ensure all ingredients have a name and quantity > 0)');
+      return;
+    }
+    setRecipeModalStep(2);
   };
 
   const handleAddRecipeItem = () => {
@@ -303,6 +322,10 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
 
   const handleSaveRecipeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (recipeModalStep === 1) {
+      handleNextToPackets();
+      return;
+    }
     if (!recipeProduct) return;
     if (recipeItems.length === 0) {
       setRecipeError('കുറഞ്ഞത് ഒരു ചേരുവയെങ്കിലും നൽകുക (At least one ingredient is required)');
@@ -636,12 +659,25 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
 
           <div className="min-h-full flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
             <div className="w-full max-w-2xl bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 sm:p-8 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto google-modal">
-              <h2 className="text-xl font-bold text-stone-900 dark:text-white mb-1">
-                {editingProduct ? 'ഉൽപ്പന്നം തിരുത്തുക (Edit)' : 'പുതിയ ഉൽപ്പന്നം (New Product)'}
-              </h2>
-              <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400 mb-5">
-                വിലയും സ്റ്റോക്ക് വിവരങ്ങളും രേഖപ്പെടുത്തുക
-              </p>
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-xl font-bold text-stone-900 dark:text-white mb-1">
+                    {editingProduct ? 'ഉൽപ്പന്നം തിരുത്തുക (Edit)' : 'പുതിയ ഉൽപ്പന്നം (New Product)'}
+                  </h2>
+                  <p className="text-xs sm:text-sm text-stone-500 dark:text-stone-400">
+                    വിലയും സ്റ്റോക്ക് വിവരങ്ങളും രേഖപ്പെടുത്തുക
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer shrink-0"
+                  aria-label="Close"
+                  title="അടയ്ക്കുക (Close)"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
 
               {errorMsg && (
                 <div className="p-3 mb-4 rounded-xl bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-xs flex items-center gap-2 border border-red-200 dark:border-red-900/60">
@@ -803,21 +839,28 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                       <FiBookOpen className="w-5 h-5" />
                     </span>
                     <h2 className="text-lg font-bold text-stone-900 dark:text-white">
-                      {recipeProduct.name} - ചേരുവകൾ (Recipe Ingredients)
+                      {recipeProduct.name} - {recipeModalStep === 1 ? 'ചേരുവകൾ (Recipe Ingredients)' : 'പാക്കറ്റുകളും ചിലവും (Packets & Costing)'}
                     </h2>
                   </div>
                   <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-                    ഈ ഉൽപ്പന്നത്തിനുള്ള അസംസ്കൃത ചേരുവകളുടെ അനുപാതം നൽകുക
+                    {recipeModalStep === 1
+                      ? 'ഈ ഉൽപ്പന്നത്തിനുള്ള അസംസ്കൃത ചേരുവകളുടെ അനുപാതം നൽകുക (ഘട്ടം 1 / 2)'
+                      : 'പാക്കറ്റ് തരങ്ങളും ചിലവുകളും നിർദ്ദേശങ്ങളും നൽകുക (ഘട്ടം 2 / 2)'}
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setRecipeModalOpen(false)}
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
-                >
-                  <FiX className="w-5 h-5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-full text-xs font-bold font-mono bg-stone-100 dark:bg-[#282323] text-stone-600 dark:text-stone-300">
+                    {recipeModalStep} / 2
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setRecipeModalOpen(false)}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
+                  >
+                    <FiX className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
 
               {recipeError && (
@@ -829,334 +872,370 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
 
               {/* Scrollable Form Body */}
               <form onSubmit={handleSaveRecipeSubmit} id="recipeForm" className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
-                {/* Base Batch Output */}
-                <div className="p-4 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                      ഒരു ബാച്ചിലെ ഉൽപ്പാദനം (Base Output Quantity) *
-                    </label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      required
-                      value={recipeBaseQuantity}
-                      onChange={(e) => setRecipeBaseQuantity(e.target.value)}
-                      className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white font-bold outline-none"
-                      placeholder="e.g. 10"
-                    />
-                  </div>
+                {/* STEP 1: Ingredients List & Base Batch Output */}
+                {recipeModalStep === 1 && (
+                  <div className="space-y-4">
+                    {/* Base Batch Output */}
+                    <div className="p-4 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                          ഒരു ബാച്ചിലെ ഉൽപ്പാദനം (Base Output Quantity) *
+                        </label>
+                        <input
+                          type="number"
+                          step="0.1"
+                          min="0.1"
+                          required
+                          value={recipeBaseQuantity}
+                          onChange={(e) => setRecipeBaseQuantity(e.target.value)}
+                          className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white font-bold outline-none"
+                          placeholder="e.g. 10"
+                        />
+                      </div>
 
-                  <div>
-                    <ThemeSelect
-                      label="യൂണിറ്റ് (Unit)"
-                      value={recipeBaseUnit}
-                      onChange={(val) => setRecipeBaseUnit(val)}
-                      options={[
-                        { value: 'kg', label: 'kg (കിലോഗ്രാം)' },
-                        { value: 'pkt', label: 'pkt (പാക്കറ്റ്)' },
-                        { value: 'pcs', label: 'pcs (എണ്ണം)' },
-                      ]}
-                    />
-                  </div>
-                </div>
-
-                {/* Recipe Ingredients Rows */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="font-bold text-stone-700 dark:text-stone-300">
-                      ചേരുവകൾ (Ingredients List) *
-                    </label>
-                    <button
-                      type="button"
-                      onClick={handleAddRecipeItem}
-                      className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
-                    >
-                      <FiPlus className="w-3.5 h-3.5" />
-                      <span>ചേരുവ ചേർക്കുക</span>
-                    </button>
-                  </div>
-
-                  {/* Scrollable container for ingredients list - does NOT increase modal height */}
-                  <div className="space-y-2 max-h-[36vh] sm:max-h-[40vh] overflow-y-auto pr-1.5 p-1 rounded-xl bg-stone-100/50 dark:bg-[#141212]/50 border border-stone-200/60 dark:border-[#282323]">
-                    {recipeItems.map((item, idx) => {
-                      const ing = ingredients.find((i) => i.id === item.ingredientId);
-                      const lineCost = (Number(item.quantity) || 0) * (ing?.avgCostPerUnit || 0);
-
-                      const ingOptions = recipeEligibleIngredients.map((ingItem: Ingredient) => ({
-                        value: ingItem.id,
-                        label: ingItem.name,
-                        badge: `${ingItem.unit} • ₹${ingItem.avgCostPerUnit || 0}/${ingItem.unit}`,
-                      }));
-
-                      return (
-                        <div
-                          key={idx}
-                          className="flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#282323] shadow-xs"
-                        >
-                          {/* Ingredient ThemeSelect with search */}
-                          <div className="flex-1 min-w-[140px]">
-                            <ThemeSelect
-                              value={item.ingredientId}
-                              onChange={(val) => handleRecipeItemChange(idx, 'ingredientId', val)}
-                              options={ingOptions}
-                              searchable={true}
-                              placeholder="ചേരുവ തിരഞ്ഞെടുക്കുക..."
-                            />
-                          </div>
-
-                          {/* Quantity */}
-                          <div className="w-24">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0.01"
-                              required
-                              value={item.quantity}
-                              onChange={(e) => handleRecipeItemChange(idx, 'quantity', e.target.value)}
-                              className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white text-xs font-bold outline-none text-right"
-                              placeholder="Qty"
-                            />
-                          </div>
-
-                          {/* Unit Badge */}
-                          <div className="w-12 text-center text-xs font-bold text-stone-500">
-                            {item.unit}
-                          </div>
-
-                          {/* Line Cost */}
-                          <div className="w-20 text-right font-bold text-xs text-stone-700 dark:text-stone-300">
-                            ₹{lineCost.toFixed(1)}
-                          </div>
-
-                          {/* Delete Button */}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveRecipeItem(idx)}
-                            disabled={recipeItems.length <= 1}
-                            className="p-1.5 text-stone-400 hover:text-red-600 disabled:opacity-30 transition-colors cursor-pointer"
-                          >
-                            <FiTrash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Recipe Costing Estimation Strip */}
-                <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-500/20 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-amber-800 dark:text-amber-300 block">
-                      ഏകദേശ ബാച്ച് ചെലവ് (Est. Batch Raw Material Cost):
-                    </span>
-                    <span className="font-extrabold text-base text-stone-900 dark:text-white">
-                      ₹{calculateTotalRecipeCost().toFixed(2)}
-                    </span>
-                  </div>
-
-                  <div className="text-right">
-                    <span className="text-amber-800 dark:text-amber-300 block">
-                      കിലോഗ്രാമിന് ചിലവ് (Cost / {recipeBaseUnit}):
-                    </span>
-                    <span className="font-extrabold text-base text-amber-700 dark:text-amber-400">
-                      ₹{(calculateTotalRecipeCost() / (Number(recipeBaseQuantity) || 1)).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Recipe Packets Section */}
-                <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <span className="font-bold text-stone-900 dark:text-white font-malayalam flex items-center gap-1.5">
-                        <FiPackage className="w-4 h-4 text-epso-orange" />
-                        <span>പാക്കറ്റുകൾ (Recipe Packets)</span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-300">
-                          {recipePackets.length} തിരഞ്ഞെടുത്തു
-                        </span>
-                      </span>
-                      <p className="text-[10px] text-stone-400 font-malayalam mt-0.5">
-                        ലഭ്യമായ പാക്കറ്റ് തരങ്ങൾ താഴെ ക്ലിക്ക് ചെയ്ത് ടിക്ക് ചെയ്യുക (PWA-യിൽ ഇവ മാത്രമേ കാണിക്കൂ)
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {availablePacketTypes.length > 0 && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={handleSelectAllRecipePackets}
-                            className="text-[10px] text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-bold hover:underline cursor-pointer"
-                          >
-                            എല്ലാം
-                          </button>
-                          <span className="text-stone-300 dark:text-stone-600 text-xs">|</span>
-                          <button
-                            type="button"
-                            onClick={handleDeselectAllRecipePackets}
-                            className="text-[10px] text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 font-bold hover:underline cursor-pointer"
-                          >
-                            ഒഴിവാക്കുക
-                          </button>
-                        </>
-                      )}
-                      <button
-                        type="button"
-                        onClick={handleAddRecipePacketRow}
-                        className="px-2.5 py-1 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs ml-1"
-                        title="Add custom packet"
-                      >
-                        <FiPlus className="w-3.5 h-3.5" />
-                        <span>കസ്റ്റം പാക്കറ്റ്</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Available Packets Checklist / Ticks */}
-                  {availablePacketTypes.length > 0 ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                      {availablePacketTypes.map((pt) => {
-                        const isTicked = recipePackets.some(
-                          (p) => (p.packetTypeId && p.packetTypeId === pt.id) || p.packetName === pt.name
-                        );
-                        return (
-                          <button
-                            key={pt.id}
-                            type="button"
-                            onClick={() => handleToggleRecipePacket(pt)}
-                            className={`p-2 rounded-xl text-left border transition-all flex items-center justify-between gap-1.5 cursor-pointer press-apple select-none ${
-                              isTicked
-                                ? 'bg-orange-50 dark:bg-orange-950/40 border-orange-400 dark:border-orange-600 text-stone-900 dark:text-white shadow-2xs ring-1 ring-orange-400/30'
-                                : 'bg-white dark:bg-[#1E1B1B] border-stone-200 dark:border-[#282323] text-stone-600 dark:text-stone-400 hover:border-stone-300 dark:hover:border-stone-600'
-                            }`}
-                          >
-                            <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold font-mono truncate">{pt.name}</p>
-                              <span className="text-[10px] text-stone-400 block font-mono">
-                                ₹{(pt.costPerPacket || 0).toFixed(2)}/pkt
-                              </span>
-                            </div>
-                            <div
-                              className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 border transition-all ${
-                                isTicked
-                                  ? 'bg-orange-500 border-orange-500 text-white'
-                                  : 'border-stone-300 dark:border-stone-600 bg-transparent'
-                              }`}
-                            >
-                              {isTicked && <FiCheck className="w-3.5 h-3.5 stroke-[3]" />}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="p-3 text-center rounded-xl bg-white/40 dark:bg-[#1E1B1B]/40 border border-dashed border-stone-200 dark:border-[#282323] text-stone-400 text-xs font-malayalam">
-                      ലഭ്യമായ പാക്കറ്റ് തരങ്ങൾ ഒന്നും ചേർത്തിട്ടില്ല ('കസ്റ്റം പാക്കറ്റ്' ക്ലിക്ക് ചെയ്ത് ചേർക്കുക)
-                    </div>
-                  )}
-
-                  {/* Selected Packets Rate Customization */}
-                  {recipePackets.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-stone-200/60 dark:border-[#282323] space-y-1.5">
-                      <span className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam block">
-                        തിരഞ്ഞെടുത്ത പാക്കറ്റുകളുടെ ചിലവ് നിരക്ക് (Custom Rate ₹/pkt):
-                      </span>
-                      <div className="flex flex-wrap gap-2 max-h-[22vh] overflow-y-auto p-1">
-                        {recipePackets.map((pkt, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#282323] shadow-2xs"
-                          >
-                            <span className="text-xs font-bold font-mono text-stone-800 dark:text-stone-200">
-                              {pkt.packetName}
-                            </span>
-                            <span className="text-[10px] text-stone-400 font-bold">₹:</span>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={pkt.costPerPacket === 0 ? '' : pkt.costPerPacket}
-                              onChange={(e) => handleRecipePacketChange(idx, 'costPerPacket', parseFloat(e.target.value) || 0)}
-                              placeholder="0.00"
-                              className="w-14 p-0.5 bg-stone-50 dark:bg-[#141212] rounded border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-white text-[11px] font-mono font-bold text-right outline-none"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveRecipePacketRow(idx)}
-                              className="p-1 text-stone-400 hover:text-red-500 cursor-pointer"
-                              title="ഒഴിവാക്കുക"
-                            >
-                              <FiTrash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-                        ))}
+                      <div>
+                        <ThemeSelect
+                          label="യൂണിറ്റ് (Unit)"
+                          value={recipeBaseUnit}
+                          onChange={(val) => setRecipeBaseUnit(val)}
+                          options={[
+                            { value: 'kg', label: 'kg (കിലോഗ്രാം)' },
+                            { value: 'pkt', label: 'pkt (പാക്കറ്റ്)' },
+                            { value: 'pcs', label: 'pcs (എണ്ണം)' },
+                          ]}
+                        />
                       </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Instructions / Formulation Notes */}
-                <div>
-                  <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                    പാചകക്കുറിപ്പ് നിർദ്ദേശങ്ങൾ / ഫോർമുലേഷൻ (Instructions / Method)
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={recipeInstructions}
-                    onChange={(e) => setRecipeInstructions(e.target.value)}
-                    placeholder="ഉദാ: വറുത്ത ചേരുവകൾ തണുത്ത ശേഷം മസാല ചേർക്കുക..."
-                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white text-xs focus:outline-none"
-                  />
-                </div>
+                    {/* Recipe Ingredients Rows */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-stone-700 dark:text-stone-300">
+                          ചേരുവകൾ (Ingredients List) *
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleAddRecipeItem}
+                          className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                        >
+                          <FiPlus className="w-3.5 h-3.5" />
+                          <span>ചേരുവ ചേർക്കുക</span>
+                        </button>
+                      </div>
+
+                      {/* Scrollable container for ingredients list */}
+                      <div className="space-y-2 max-h-[48vh] overflow-y-auto pr-1.5 p-1 rounded-xl bg-stone-100/50 dark:bg-[#141212]/50 border border-stone-200/60 dark:border-[#282323]">
+                        {recipeItems.map((item, idx) => {
+                          const ing = ingredients.find((i) => i.id === item.ingredientId);
+                          const lineCost = (Number(item.quantity) || 0) * (ing?.avgCostPerUnit || 0);
+
+                          const ingOptions = recipeEligibleIngredients.map((ingItem: Ingredient) => ({
+                            value: ingItem.id,
+                            label: ingItem.name,
+                            badge: `${ingItem.unit} • ₹${ingItem.avgCostPerUnit || 0}/${ingItem.unit}`,
+                          }));
+
+                          return (
+                            <div
+                              key={idx}
+                              className="flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#282323] shadow-xs"
+                            >
+                              {/* Ingredient ThemeSelect with search */}
+                              <div className="flex-1 min-w-[140px]">
+                                <ThemeSelect
+                                  value={item.ingredientId}
+                                  onChange={(val) => handleRecipeItemChange(idx, 'ingredientId', val)}
+                                  options={ingOptions}
+                                  searchable={true}
+                                  placeholder="ചേരുവ തിരഞ്ഞെടുക്കുക..."
+                                />
+                              </div>
+
+                              {/* Quantity */}
+                              <div className="w-24">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0.01"
+                                  required
+                                  value={item.quantity}
+                                  onChange={(e) => handleRecipeItemChange(idx, 'quantity', e.target.value)}
+                                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white text-xs font-bold outline-none text-right"
+                                  placeholder="Qty"
+                                />
+                              </div>
+
+                              {/* Unit Badge */}
+                              <div className="w-12 text-center text-xs font-bold text-stone-500">
+                                {item.unit}
+                              </div>
+
+                              {/* Line Cost */}
+                              <div className="w-20 text-right font-bold text-xs text-stone-700 dark:text-stone-300">
+                                ₹{lineCost.toFixed(1)}
+                              </div>
+
+                              {/* Delete Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveRecipeItem(idx)}
+                                disabled={recipeItems.length <= 1}
+                                className="p-1.5 text-stone-400 hover:text-red-600 disabled:opacity-30 transition-colors cursor-pointer"
+                              >
+                                <FiTrash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* STEP 2: Cost Estimation, Packets Checklist, Custom Rates, and Instructions */}
+                {recipeModalStep === 2 && (
+                  <div className="space-y-4">
+                    {/* Recipe Costing Estimation Strip */}
+                    <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-500/20 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-amber-800 dark:text-amber-300 block">
+                          ഏകദേശ ബാച്ച് ചെലവ് (Est. Batch Raw Material Cost):
+                        </span>
+                        <span className="font-extrabold text-base text-stone-900 dark:text-white">
+                          ₹{calculateTotalRecipeCost().toFixed(2)}
+                        </span>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-amber-800 dark:text-amber-300 block">
+                          കിലോഗ്രാമിന് ചിലവ് (Cost / {recipeBaseUnit}):
+                        </span>
+                        <span className="font-extrabold text-base text-amber-700 dark:text-amber-400">
+                          ₹{(calculateTotalRecipeCost() / (Number(recipeBaseQuantity) || 1)).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Recipe Packets Section */}
+                    <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <span className="font-bold text-stone-900 dark:text-white font-malayalam flex items-center gap-1.5">
+                            <FiPackage className="w-4 h-4 text-epso-orange" />
+                            <span>പാക്കറ്റുകൾ (Recipe Packets)</span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-300">
+                              {recipePackets.length} തിരഞ്ഞെടുത്തു
+                            </span>
+                          </span>
+                          <p className="text-[10px] text-stone-400 font-malayalam mt-0.5">
+                            ലഭ്യമായ പാക്കറ്റ് തരങ്ങൾ താഴെ ക്ലിക്ക് ചെയ്ത് ടിക്ക് ചെയ്യുക (PWA-യിൽ ഇവ മാത്രമേ കാണിക്കൂ)
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {availablePacketTypes.length > 0 && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={handleSelectAllRecipePackets}
+                                className="text-[10px] text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 font-bold hover:underline cursor-pointer"
+                              >
+                                എല്ലാം
+                              </button>
+                              <span className="text-stone-300 dark:text-stone-600 text-xs">|</span>
+                              <button
+                                type="button"
+                                onClick={handleDeselectAllRecipePackets}
+                                className="text-[10px] text-stone-400 hover:text-stone-600 dark:hover:text-stone-300 font-bold hover:underline cursor-pointer"
+                              >
+                                ഒഴിവാക്കുക
+                              </button>
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleAddRecipePacketRow}
+                            className="px-2.5 py-1 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-2xs ml-1"
+                            title="Add custom packet"
+                          >
+                            <FiPlus className="w-3.5 h-3.5" />
+                            <span>കസ്റ്റം പാക്കറ്റ്</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Available Packets Checklist / Ticks */}
+                      {availablePacketTypes.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                          {availablePacketTypes.map((pt) => {
+                            const isTicked = recipePackets.some(
+                              (p) => (p.packetTypeId && p.packetTypeId === pt.id) || p.packetName === pt.name
+                            );
+                            return (
+                              <button
+                                key={pt.id}
+                                type="button"
+                                onClick={() => handleToggleRecipePacket(pt)}
+                                className={`p-2 rounded-xl text-left border transition-all flex items-center justify-between gap-1.5 cursor-pointer press-apple select-none ${
+                                  isTicked
+                                    ? 'bg-orange-50 dark:bg-orange-950/40 border-orange-400 dark:border-orange-600 text-stone-900 dark:text-white shadow-2xs ring-1 ring-orange-400/30'
+                                    : 'bg-white dark:bg-[#1E1B1B] border-stone-200 dark:border-[#282323] text-stone-600 dark:text-stone-400 hover:border-stone-300 dark:hover:border-stone-600'
+                                }`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-bold font-mono truncate">{pt.name}</p>
+                                  <span className="text-[10px] text-stone-400 block font-mono">
+                                    ₹{(pt.costPerPacket || 0).toFixed(2)}/pkt
+                                  </span>
+                                </div>
+                                <div
+                                  className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 border transition-all ${
+                                    isTicked
+                                      ? 'bg-orange-500 border-orange-500 text-white'
+                                      : 'border-stone-300 dark:border-stone-600 bg-transparent'
+                                  }`}
+                                >
+                                  {isTicked && <FiCheck className="w-3.5 h-3.5 stroke-[3]" />}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="p-3 text-center rounded-xl bg-white/40 dark:bg-[#1E1B1B]/40 border border-dashed border-stone-200 dark:border-[#282323] text-stone-400 text-xs font-malayalam">
+                          ലഭ്യമായ പാക്കറ്റ് തരങ്ങൾ ഒന്നും ചേർത്തിട്ടില്ല ('കസ്റ്റം പാക്കറ്റ്' ക്ലിക്ക് ചെയ്ത് ചേർക്കുക)
+                        </div>
+                      )}
+
+                      {/* Selected Packets Rate Customization */}
+                      {recipePackets.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-stone-200/60 dark:border-[#282323] space-y-1.5">
+                          <span className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam block">
+                            തിരഞ്ഞെടുത്ത പാക്കറ്റുകളുടെ ചിലവ് നിരക്ക് (Custom Rate ₹/pkt):
+                          </span>
+                          <div className="flex flex-wrap gap-2 max-h-[22vh] overflow-y-auto p-1">
+                            {recipePackets.map((pkt, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#282323] shadow-2xs"
+                              >
+                                <span className="text-xs font-bold font-mono text-stone-800 dark:text-stone-200">
+                                  {pkt.packetName}
+                                </span>
+                                <span className="text-[10px] text-stone-400 font-bold">₹:</span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={pkt.costPerPacket === 0 ? '' : pkt.costPerPacket}
+                                  onChange={(e) => handleRecipePacketChange(idx, 'costPerPacket', parseFloat(e.target.value) || 0)}
+                                  placeholder="0.00"
+                                  className="w-14 p-0.5 bg-stone-50 dark:bg-[#141212] rounded border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-white text-[11px] font-mono font-bold text-right outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveRecipePacketRow(idx)}
+                                  className="p-1 text-stone-400 hover:text-red-500 cursor-pointer"
+                                  title="ഒഴിവാക്കുക"
+                                >
+                                  <FiTrash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Instructions / Formulation Notes */}
+                    <div>
+                      <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                        പാചകക്കുറിപ്പ് നിർദ്ദേശങ്ങൾ / ഫോർമുലേഷൻ (Instructions / Method)
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={recipeInstructions}
+                        onChange={(e) => setRecipeInstructions(e.target.value)}
+                        placeholder="ഉദാ: വറുത്ത ചേരുവകൾ തണുത്ത ശേഷം മസാല ചേർക്കുക..."
+                        className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white text-xs focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
               </form>
 
               {/* Pinned Modal Footer */}
               <div className="p-4 px-5 border-t border-stone-100 dark:border-[#2E2828] bg-stone-50/80 dark:bg-[#1A1616]/80 backdrop-blur-sm shrink-0 flex items-center justify-between">
-                {existingRecipe ? (
-                  <button
-                    type="button"
-                    onClick={handleDeleteRecipe}
-                    disabled={isDeletingRecipe}
-                    className="px-3 py-2 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {isDeletingRecipe ? (
-                      <>
-                        <div className="w-3.5 h-3.5 border-2 border-red-600 border-t-transparent rounded-full animate-spin shrink-0" />
-                        <span>ഒഴിവാക്കുന്നു...</span>
-                      </>
-                    ) : (
-                      <span>പാചകക്കുറിപ്പ് ഒഴിവാക്കുക</span>
-                    )}
-                  </button>
+                {recipeModalStep === 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setRecipeModalOpen(false)}
+                      className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold cursor-pointer"
+                    >
+                      റദ്ദാക്കുക (Cancel)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleNextToPackets}
+                      className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold shadow-sm press-apple cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>അടുത്തത് (Next)</span>
+                      <FiArrowRight className="w-4 h-4" />
+                    </button>
+                  </>
                 ) : (
-                  <div />
-                )}
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRecipeModalOpen(false)}
-                    disabled={isSavingRecipe}
-                    className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold cursor-pointer"
-                  >
-                    റദ്ദാക്കുക (Cancel)
-                  </button>
-                  <button
-                    type="submit"
-                    form="recipeForm"
-                    disabled={isSavingRecipe}
-                    className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                  >
-                    {isSavingRecipe ? (
-                      <>
-                        <div className="w-3.5 h-3.5 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
-                        <span>സൂക്ഷിക്കുന്നു...</span>
-                      </>
+                  <>
+                    {existingRecipe ? (
+                      <button
+                        type="button"
+                        onClick={handleDeleteRecipe}
+                        disabled={isDeletingRecipe}
+                        className="px-3 py-2 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        {isDeletingRecipe ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-red-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                            <span>ഒഴിവാക്കുന്നു...</span>
+                          </>
+                        ) : (
+                          <span>പാചകക്കുറിപ്പ് ഒഴിവാക്കുക</span>
+                        )}
+                      </button>
                     ) : (
-                      <span>പാചകക്കുറിപ്പ് സേവ് ചെയ്യുക</span>
+                      <div />
                     )}
-                  </button>
-                </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRecipeError('');
+                          setRecipeModalStep(1);
+                        }}
+                        disabled={isSavingRecipe}
+                        className="px-4 py-2 rounded-xl border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold cursor-pointer flex items-center gap-1.5"
+                      >
+                        <FiArrowLeft className="w-4 h-4" />
+                        <span>പിന്നോട്ട് (Back)</span>
+                      </button>
+                      <button
+                        type="submit"
+                        form="recipeForm"
+                        disabled={isSavingRecipe}
+                        className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        {isSavingRecipe ? (
+                          <>
+                            <div className="w-3.5 h-3.5 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
+                            <span>സൂക്ഷിക്കുന്നു...</span>
+                          </>
+                        ) : (
+                          <span>പാചകക്കുറിപ്പ് സേവ് ചെയ്യുക</span>
+                        )}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
