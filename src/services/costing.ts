@@ -154,22 +154,35 @@ export function calculateFinalProductCosting(
   const unpackedValuation = roundCurrency(unpackedKg * productionAllocation.productionCostPerKg);
 
   // Group packing by size for packet-level costing breakdown
-  const sizeMap: Record<string, { packets: number; coverCost: number; labourCost: number; totalCost: number; grams: number }> = {};
+  const sizeMap: Record<string, { packets: number; coverCost: number; labourCost: number; totalCost: number; weightKg: number }> = {};
   for (const r of packingRecords) {
     if (!sizeMap[r.packetSize]) {
-      const gramsMatch = r.packetSize.match(/(\d+)/);
-      const grams = gramsMatch ? parseInt(gramsMatch[1], 10) : 100;
-      sizeMap[r.packetSize] = { packets: 0, coverCost: 0, labourCost: 0, totalCost: 0, grams };
+      sizeMap[r.packetSize] = { packets: 0, coverCost: 0, labourCost: 0, totalCost: 0, weightKg: 0 };
     }
     sizeMap[r.packetSize].packets += r.packetsPacked;
     sizeMap[r.packetSize].coverCost += r.packagingCost;
     sizeMap[r.packetSize].labourCost += r.packingLabourCost;
     sizeMap[r.packetSize].totalCost += r.totalPackingCost;
+    sizeMap[r.packetSize].weightKg += r.weightPackedKg;
   }
 
   const packetsBySize = Object.entries(sizeMap).map(([size, item]) => {
-    // Bulk product share inside this packet: (grams / 1000) * productionCostPerKg
-    const bulkInsidePacket = roundCurrency((item.grams / 1000) * productionAllocation.productionCostPerKg);
+    // Exact weight per packet: prioritize actual recorded weight / packets, fallback to size label parse (kg vs g)
+    let kgPerPacket = 0;
+    if (item.packets > 0 && item.weightKg > 0) {
+      kgPerPacket = item.weightKg / item.packets;
+    } else if (/(\d+(?:\.\d+)?)\s*kg/i.test(size)) {
+      const match = size.match(/(\d+(?:\.\d+)?)\s*kg/i);
+      kgPerPacket = match ? parseFloat(match[1]) : 1;
+    } else if (/(\d+)\s*g/i.test(size)) {
+      const match = size.match(/(\d+)\s*g/i);
+      kgPerPacket = match ? parseInt(match[1], 10) / 1000 : 0.1;
+    } else {
+      kgPerPacket = 0.1;
+    }
+
+    // Bulk product share inside this packet: kgPerPacket * productionCostPerKg
+    const bulkInsidePacket = roundCurrency(kgPerPacket * productionAllocation.productionCostPerKg);
     const packingInsidePacket = item.packets > 0 ? roundCurrency(item.totalCost / item.packets) : 0;
     const costPerPacket = roundCurrency(bulkInsidePacket + packingInsidePacket);
 

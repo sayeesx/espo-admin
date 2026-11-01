@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { Ingredient } from '../types';
 import { FiX, FiSearch, FiSave, FiRefreshCw } from 'react-icons/fi';
 import { bulkPurchaseIngredients } from '../services/supabase';
-import { BatchSuccessAnimation } from './BatchSuccessAnimation';
 
 interface AddPurchaseModalProps {
   isOpen: boolean;
@@ -20,7 +19,6 @@ export const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
 
   // Track purchase amounts and costs for each ingredient
   const [purchaseAmounts, setPurchaseAmounts] = useState<Record<string, string>>({});
@@ -96,7 +94,7 @@ export const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
       await bulkPurchaseIngredients(purchases);
       onRefresh();
       setIsSaving(false);
-      setShowSuccess(true);
+      onClose();
     } catch (err: any) {
       alert(`പർച്ചേസ് പരാജയപ്പെട്ടു: ${err?.message || 'Unknown error'}`);
       setIsSaving(false);
@@ -107,15 +105,6 @@ export const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
 
   return (
     <>
-    <BatchSuccessAnimation
-      isVisible={showSuccess}
-      message="പർച്ചേസ് സേവ് ചെയ്തു!"
-      subMessage="Purchase recorded successfully"
-      onComplete={() => {
-        setShowSuccess(false);
-        onClose();
-      }}
-    />
     {createPortal(
       <div className="fixed inset-0 z-[9999] w-screen h-screen min-h-screen flex items-end sm:items-center justify-center bg-black/65 backdrop-blur-md p-0 sm:p-4 overflow-y-auto animate-apple-backdrop">
         <div className="w-full md:w-[70vw] md:max-w-5xl max-h-[92vh] sm:max-h-[85vh] bg-white dark:bg-[#181515] rounded-t-3xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-stone-200/50 dark:border-[#2E2828] animate-apple-modal google-modal my-auto">

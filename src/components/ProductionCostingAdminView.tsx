@@ -333,7 +333,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] text-xs font-bold text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-[#282323] transition-colors cursor-pointer press-apple"
         >
           <FiArrowLeft className="w-4 h-4" />
-          <span>← തിരികെ ലിസ്റ്റിലേക്ക്</span>
+          <span>തിരികെ ലിസ്റ്റിലേക്ക്</span>
         </button>
 
         {/* Product Header */}
@@ -498,7 +498,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
 
                       <button
                         onClick={() => handleOpenDetail(p)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-stone-100 dark:bg-[#282323] text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-[#342D2D] text-xs font-bold transition-colors cursor-pointer shrink-0 font-malayalam"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer shrink-0 font-malayalam"
                       >
                         <span>വിശദാംശങ്ങൾ →</span>
                       </button>
@@ -523,16 +523,6 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
                         </span>
                         <span className="font-bold text-stone-900 dark:text-white font-mono">
                           {formatCurrency(p.costPerKg)}
-                        </span>
-                      </div>
-
-                      {/* ചെലവ് / പാക്കറ്റ് */}
-                      <div className="flex items-center justify-between pt-1 border-t border-stone-200/60 dark:border-[#282323]">
-                        <span className="text-stone-500 dark:text-stone-400 font-semibold">
-                          ചെലവ് / പാക്കറ്റ്
-                        </span>
-                        <span className="font-bold text-stone-900 dark:text-white font-mono">
-                          {p.totalPacketsPacked > 0 ? formatCurrency(p.costPerPacket) : '—'}
                         </span>
                       </div>
 

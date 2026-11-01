@@ -25,6 +25,7 @@ import {
   fetchProductionRuns,
   fetchStockMovements,
   fetchAuditLogs,
+  invalidateAdminCache,
 } from './services/supabase';
 import { Product, Ingredient, Recipe, ProductionRun, StockMovement, AuditLog } from './types';
 
@@ -143,8 +144,11 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  const loadAllData = useCallback(async () => {
+  const loadAllData = useCallback(async (force = false) => {
     setIsRefreshing(true);
+    if (force) {
+      invalidateAdminCache();
+    }
     try {
       const [
         productsRes,
@@ -154,12 +158,12 @@ export const App: React.FC = () => {
         movementsRes,
         logsRes,
       ] = await Promise.allSettled([
-        fetchProducts(),
-        fetchIngredients(),
-        fetchRecipes(),
-        fetchProductionRuns(),
-        fetchStockMovements(),
-        fetchAuditLogs(),
+        fetchProducts(force),
+        fetchIngredients(force),
+        fetchRecipes(force),
+        fetchProductionRuns(force),
+        fetchStockMovements(force),
+        fetchAuditLogs(force),
       ]);
 
       if (productsRes.status === 'fulfilled') setProducts(productsRes.value);
@@ -238,7 +242,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] dark:bg-[#141212] text-[#141212] dark:text-[#FFFFFF] transition-colors pb-16 md:pb-12">
+    <div className="min-h-screen min-h-[100dvh] bg-[#F8F9FA] dark:bg-[#141212] text-[#141212] dark:text-[#FFFFFF] transition-colors pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-12">
       {/* Google Theme Linear Progress Loader across all navigation and data refreshes */}
       {(isRefreshing || changingTab !== null) && (
         <div className="fixed top-0 inset-x-0 z-50 h-[3px] bg-stone-200/50 dark:bg-stone-800/50 overflow-hidden pointer-events-none">

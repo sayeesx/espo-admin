@@ -372,22 +372,21 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     <div className="space-y-6">
       {activeIngredientTab === 'ingredients' ? (
         <>
-          {/* Actions & Low Stock Notice Header */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
-            {lowStockCount > 0 ? (
-              <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs font-bold font-malayalam">
-                <FiAlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-                <span>{lowStockCount} ചേരുവകൾ കുറഞ്ഞ സ്റ്റോക്കിലാണ് / തീർന്നുപോയി (About to Stock Out)</span>
-              </div>
-            ) : (
-              <div />
-            )}
+          {/* Low Stock Notice if any */}
+          {lowStockCount > 0 && (
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs font-bold font-malayalam">
+              <FiAlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+              <span>{lowStockCount} ചേരുവകൾ കുറഞ്ഞ സ്റ്റോക്കിലാണ് / തീർന്നുപോയി (About to Stock Out)</span>
+            </div>
+          )}
 
-            <div className="flex flex-wrap items-center gap-2">
+          {/* Actions Header - All buttons on the exact same line */}
+          <div className="flex items-center justify-between gap-2 pb-3 border-b border-stone-200 dark:border-[#2E2828] overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-2 flex-nowrap w-full justify-end">
               <button
                 type="button"
                 onClick={() => setActiveIngredientTab('packets')}
-                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer"
+                className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer whitespace-nowrap shrink-0"
                 title="പാക്കറ്റ് തരങ്ങൾ (Packet Types & Covers)"
               >
                 <FiPackage className="w-4 h-4 text-epso-orange" />
@@ -400,7 +399,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
               <button
                 type="button"
                 onClick={() => setAddPurchaseModalOpen(true)}
-                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
+                className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer whitespace-nowrap shrink-0"
                 title="Add purchases for ingredients in bulk"
               >
                 <FiShoppingBag className="w-4 h-4" />
@@ -410,7 +409,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
               <button
                 type="button"
                 onClick={() => setPurchaseListModalOpen(true)}
-                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer"
+                className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer whitespace-nowrap shrink-0"
                 title="Print purchase list for low stock ingredients"
               >
                 <FiPrinter className="w-4 h-4 text-epso-orange" />
@@ -424,7 +423,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
               <button
                 onClick={openCreateModal}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
+                className="flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer whitespace-nowrap shrink-0"
               >
                 <FiPlus className="w-4 h-4" />
                 <span>New Ingredient</span>

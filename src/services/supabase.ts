@@ -20,11 +20,20 @@ import {
   roundCurrency,
   roundStock,
 } from './costing';
+import { dbCache } from './dbCache';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://brskubbgvxtzvhncjnle.supabase.co';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJyc2t1YmJndnh0enZobmNqbmxlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MDI4NDIsImV4cCI6MjEwNzI3ODg0Mn0.6ewzygZiH-rBS6RPu5QegjAUVz9LvkW9ZaHtBpJGjZM';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export function invalidateAdminCache(pattern?: string): void {
+  if (pattern) {
+    dbCache.invalidate(pattern);
+  } else {
+    dbCache.invalidateAll();
+  }
+}
 
 export async function verifyAdminPin(pin: string): Promise<{ success: boolean; session_token?: string; error?: string }> {
   try {
@@ -59,26 +68,28 @@ export async function changeAdminPin(oldPin: string, newPin: string): Promise<{ 
   }
 }
 
-export async function fetchProducts(): Promise<Product[]> {
-  const { data, error } = await supabase
-    .from('products')
-    .select('*')
-    .order('name', { ascending: true });
+export async function fetchProducts(force = false): Promise<Product[]> {
+  return dbCache.wrap('admin_products', async () => {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('name', { ascending: true });
 
-  if (error) throw error;
-  return (data || []).map((row) => ({
-    id: row.id,
-    name: row.name,
-    sku: row.sku || '',
-    recipeId: row.recipe_id || '',
-    unit: row.unit || 'kg',
-    currentStock: Number(row.current_stock) || 0,
-    wholesalePrice: Number(row.wholesale_price) || 0,
-    isActive: row.is_active ?? true,
-    description: row.description || '',
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }));
+    if (error) throw error;
+    return (data || []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      sku: row.sku || '',
+      recipeId: row.recipe_id || '',
+      unit: row.unit || 'kg',
+      currentStock: Number(row.current_stock) || 0,
+      wholesalePrice: Number(row.wholesale_price) || 0,
+      isActive: row.is_active ?? true,
+      description: row.description || '',
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }, { ttl: dbCache.TTL.PRODUCTS, force });
 }
 
 export async function saveProduct(product: Partial<Product> & { name: string }): Promise<Product> {
@@ -92,6 +103,8 @@ export async function saveProduct(product: Partial<Product> & { name: string }):
     recipe_id: product.recipeId || null,
     updated_at: new Date().toISOString(),
   };
+
+  dbCache.invalidate('admin_products');
 
   if (product.id) {
     const { data, error } = await supabase
@@ -137,34 +150,58 @@ export async function saveProduct(product: Partial<Product> & { name: string }):
 }
 
 export async function deleteProduct(id: string): Promise<void> {
+  // 1. Check if product has production runs
+  const { count } = await supabase
+    .from('production_runs')
+    .select('*', { count: 'exact', head: true })
+    .eq('product_id', id);
+
+  if (count && count > 0) {
+    throw new Error(
+      'ഈ ഉൽപ്പന്നത്തിന് പ്രൊഡക്ഷൻ ബാച്ചുകൾ നിലവിലുണ്ട്. പൂർണ്ണമായി ഡിലീറ്റ് ചെയ്യാൻ കഴിയില്ല. എഡിറ്റ് ചെയ്ത് "Active" മാറ്റുക. (This product has recorded production runs and cannot be permanently deleted. Please deactivate it instead.)'
+    );
+  }
+
+  // 2. Unlink recipe_id on products to prevent circular dependency
+  await supabase.from('products').update({ recipe_id: null }).eq('id', id);
+
+  // 3. Delete recipes associated with this product
+  await supabase.from('recipes').delete().eq('product_id', id);
+
+  // 4. Delete the product
   const { error } = await supabase
     .from('products')
     .delete()
     .eq('id', id);
 
   if (error) throw error;
+
+  dbCache.invalidate('admin_products');
+  dbCache.invalidate('admin_recipes');
 }
 
-export async function fetchIngredients(): Promise<Ingredient[]> {
-  const { data, error } = await supabase
-    .from('ingredients')
-    .select('*')
-    .order('name', { ascending: true });
+export async function fetchIngredients(force = false): Promise<Ingredient[]> {
+  return dbCache.wrap('admin_ingredients', async () => {
+    const { data, error } = await supabase
+      .from('ingredients')
+      .select('*')
+      .order('name', { ascending: true });
 
-  if (error) throw error;
-  return (data || []).map((row) => ({
-    id: row.id,
-    name: row.name,
-    category: row.category || 'other',
-    unit: row.unit || 'kg',
-    currentStock: Number(row.current_stock) || 0,
-    minStock: Number(row.min_stock) || 0,
-    avgCostPerUnit: Number(row.avg_cost_per_unit) || 0,
-    isActive: row.is_active ?? true,
-    notes: row.notes || '',
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }));
+    if (error) throw error;
+    return (data || []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      category: row.category || 'other',
+      unit: row.unit || 'kg',
+      currentStock: Number(row.current_stock) || 0,
+      minStock: Number(row.min_stock) || 0,
+      avgCostPerUnit: Number(row.avg_cost_per_unit) || 0,
+      isActive: row.is_active ?? true,
+      notes: row.notes || '',
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }, { ttl: dbCache.TTL.INGREDIENTS, force });
 }
 
 export async function saveIngredient(ingredient: Partial<Ingredient> & { name: string }): Promise<Ingredient> {
@@ -178,6 +215,8 @@ export async function saveIngredient(ingredient: Partial<Ingredient> & { name: s
     notes: ingredient.notes || null,
     updated_at: new Date().toISOString(),
   };
+
+  dbCache.invalidate('admin_ingredients');
 
   if (ingredient.id) {
     const { data, error } = await supabase
@@ -257,6 +296,9 @@ export async function adjustIngredientStock(
 
   if (updateErr) throw updateErr;
 
+  dbCache.invalidate('admin_ingredients');
+  dbCache.invalidate('admin_stock_movements');
+
   // Insert stock movement record
   await supabase.from('stock_movements').insert({
     item_id: ingredientId,
@@ -276,6 +318,7 @@ export async function adjustIngredientStock(
 }
 
 export async function deleteIngredient(id: string): Promise<void> {
+  dbCache.invalidate('admin_ingredients');
   const { error } = await supabase
     .from('ingredients')
     .delete()
@@ -284,27 +327,29 @@ export async function deleteIngredient(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function fetchPacketTypes(): Promise<PacketType[]> {
-  const { data, error } = await supabase
-    .from('packet_types')
-    .select('*')
-    .order('name', { ascending: true });
+export async function fetchPacketTypes(force = false): Promise<PacketType[]> {
+  return dbCache.wrap('admin_packet_types', async () => {
+    const { data, error } = await supabase
+      .from('packet_types')
+      .select('*')
+      .order('name', { ascending: true });
 
-  if (error) {
-    console.error('Error fetching packet types:', error);
-    return [];
-  }
+    if (error) {
+      console.error('Error fetching packet types:', error);
+      return [];
+    }
 
-  return (data || []).map((row) => ({
-    id: row.id,
-    name: row.name,
-    bundleCost: Number(row.bundle_cost) || 0,
-    bundleQuantity: Number(row.bundle_quantity) || 1,
-    costPerPacket: Number(row.cost_per_packet) || 0,
-    isActive: row.is_active ?? true,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }));
+    return (data || []).map((row) => ({
+      id: row.id,
+      name: row.name,
+      bundleCost: Number(row.bundle_cost) || 0,
+      bundleQuantity: Number(row.bundle_quantity) || 1,
+      costPerPacket: Number(row.cost_per_packet) || 0,
+      isActive: row.is_active ?? true,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }, { ttl: dbCache.TTL.PACKET_TYPES, force });
 }
 
 export async function savePacketType(packet: Partial<PacketType> & { name: string }): Promise<PacketType> {
@@ -322,6 +367,9 @@ export async function savePacketType(packet: Partial<PacketType> & { name: strin
     is_active: packet.isActive ?? true,
     updated_at: new Date().toISOString(),
   };
+
+  dbCache.invalidate('admin_packet_types');
+  dbCache.invalidate('admin_recipes');
 
   if (packet.id) {
     const { data, error } = await supabase
@@ -367,6 +415,8 @@ export async function savePacketType(packet: Partial<PacketType> & { name: strin
 }
 
 export async function deletePacketType(id: string): Promise<void> {
+  dbCache.invalidate('admin_packet_types');
+  dbCache.invalidate('admin_recipes');
   const { error } = await supabase
     .from('packet_types')
     .delete()
@@ -375,85 +425,87 @@ export async function deletePacketType(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function fetchRecipes(): Promise<Recipe[]> {
-  const { data: recipesData, error: recipesErr } = await supabase
-    .from('recipes')
-    .select(`
-      *,
-      products!recipes_product_id_fkey (name)
-    `)
-    .order('created_at', { ascending: false });
+export async function fetchRecipes(force = false): Promise<Recipe[]> {
+  return dbCache.wrap('admin_recipes', async () => {
+    const { data: recipesData, error: recipesErr } = await supabase
+      .from('recipes')
+      .select(`
+        *,
+        products!recipes_product_id_fkey (name)
+      `)
+      .order('created_at', { ascending: false });
 
-  if (recipesErr) throw recipesErr;
+    if (recipesErr) throw recipesErr;
 
-  const { data: itemsData, error: itemsErr } = await supabase
-    .from('recipe_items')
-    .select(`
-      *,
-      ingredients (name, avg_cost_per_unit)
-    `);
+    const { data: itemsData, error: itemsErr } = await supabase
+      .from('recipe_items')
+      .select(`
+        *,
+        ingredients (name, avg_cost_per_unit)
+      `);
 
-  if (itemsErr) throw itemsErr;
+    if (itemsErr) throw itemsErr;
 
-  const { data: packetsData } = await supabase
-    .from('recipe_packets')
-    .select('*');
+    const { data: packetsData } = await supabase
+      .from('recipe_packets')
+      .select('*');
 
-  return (recipesData || []).map((r) => {
-    const items = (itemsData || [])
-      .filter((it) => it.recipe_id === r.id)
-      .map((it) => ({
-        id: it.id,
-        recipeId: it.recipe_id,
-        ingredientId: it.ingredient_id,
-        ingredientName: it.ingredients?.name || 'Unknown',
-        quantity: Number(it.quantity) || 0,
-        unit: it.unit || 'kg',
-        cost: (Number(it.quantity) || 0) * (Number(it.ingredients?.avg_cost_per_unit) || 0),
-      }));
-
-    let packets: RecipePacket[] = [];
-    if (packetsData && packetsData.length > 0) {
-      packets = packetsData
-        .filter((p: any) => p.recipe_id === r.id)
-        .map((p: any) => ({
-          id: p.id,
-          recipeId: p.recipe_id,
-          packetTypeId: p.packet_type_id,
-          packetName: p.packet_name,
-          costPerPacket: Number(p.cost_per_packet) || 0,
-          bundleCost: Number(p.bundle_cost) || 0,
-          bundleQuantity: Number(p.bundle_quantity) || 1,
+    return (recipesData || []).map((r) => {
+      const items = (itemsData || [])
+        .filter((it) => it.recipe_id === r.id)
+        .map((it) => ({
+          id: it.id,
+          recipeId: it.recipe_id,
+          ingredientId: it.ingredient_id,
+          ingredientName: it.ingredients?.name || 'Unknown',
+          quantity: Number(it.quantity) || 0,
+          unit: it.unit || 'kg',
+          cost: (Number(it.quantity) || 0) * (Number(it.ingredients?.avg_cost_per_unit) || 0),
         }));
-    }
-    if (packets.length === 0 && Array.isArray(r.packets) && r.packets.length > 0) {
-      packets = r.packets.map((p: any) => ({
-        id: p.id,
-        recipeId: r.id,
-        packetTypeId: p.packetTypeId,
-        packetName: p.packetName || p.name || 'Packet',
-        costPerPacket: Number(p.costPerPacket) || 0,
-        bundleCost: Number(p.bundleCost) || 0,
-        bundleQuantity: Number(p.bundleQuantity) || 1,
-      }));
-    }
 
-    return {
-      id: r.id,
-      productId: r.product_id,
-      productName: r.products?.name || 'Unknown Snack',
-      version: r.version || 1,
-      baseOutputQuantity: Number(r.base_output_quantity) || 1,
-      baseOutputUnit: r.base_output_unit || 'kg',
-      instructions: r.instructions || '',
-      notes: r.notes || '',
-      isActive: r.is_active ?? true,
-      items,
-      packets,
-      createdAt: r.created_at,
-      updatedAt: r.updated_at,
-    };
-  });
+      let packets: RecipePacket[] = [];
+      if (packetsData && packetsData.length > 0) {
+        packets = packetsData
+          .filter((p: any) => p.recipe_id === r.id)
+          .map((p: any) => ({
+            id: p.id,
+            recipeId: p.recipe_id,
+            packetTypeId: p.packet_type_id,
+            packetName: p.packet_name,
+            costPerPacket: Number(p.cost_per_packet) || 0,
+            bundleCost: Number(p.bundle_cost) || 0,
+            bundleQuantity: Number(p.bundle_quantity) || 1,
+          }));
+      }
+      if (packets.length === 0 && Array.isArray(r.packets) && r.packets.length > 0) {
+        packets = r.packets.map((p: any) => ({
+          id: p.id,
+          recipeId: r.id,
+          packetTypeId: p.packetTypeId,
+          packetName: p.packetName || p.name || 'Packet',
+          costPerPacket: Number(p.costPerPacket) || 0,
+          bundleCost: Number(p.bundleCost) || 0,
+          bundleQuantity: Number(p.bundleQuantity) || 1,
+        }));
+      }
+
+      return {
+        id: r.id,
+        productId: r.product_id,
+        productName: r.products?.name || 'Unknown Snack',
+        version: r.version || 1,
+        baseOutputQuantity: Number(r.base_output_quantity) || 1,
+        baseOutputUnit: r.base_output_unit || 'kg',
+        instructions: r.instructions || '',
+        notes: r.notes || '',
+        isActive: r.is_active ?? true,
+        items,
+        packets,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+      };
+    });
+  }, { ttl: dbCache.TTL.RECIPES, force });
 }
 
 export async function saveRecipe(
@@ -470,6 +522,9 @@ export async function saveRecipe(
     bundleCost: Number(p.bundleCost) || 0,
     bundleQuantity: Number(p.bundleQuantity) || 1,
   }));
+
+  dbCache.invalidate('admin_recipes');
+  dbCache.invalidate('admin_products');
 
   if (!recipeId) {
     const { data: newRec, error: recErr } = await supabase
@@ -554,6 +609,8 @@ export async function saveRecipe(
 }
 
 export async function deleteRecipe(id: string): Promise<void> {
+  dbCache.invalidate('admin_recipes');
+  dbCache.invalidate('admin_products');
   await supabase.from('products').update({ recipe_id: null }).eq('recipe_id', id);
   await supabase.from('recipe_items').delete().eq('recipe_id', id);
   await supabase.from('recipe_packets').delete().eq('recipe_id', id);
@@ -575,94 +632,103 @@ export async function deleteProductionRun(id: string): Promise<void> {
   await supabase.from('production_consumption').delete().eq('run_id', id);
   const { error } = await supabase.from('production_runs').delete().eq('id', id).select('id');
   if (error) throw error;
+
+  dbCache.invalidate('admin_production_runs');
+  dbCache.invalidate('admin_stock_movements');
 }
 
-export async function fetchProductionRuns(): Promise<ProductionRun[]> {
-  const { data, error } = await supabase
-    .from('production_runs')
-    .select(`
-      *,
-      products (name),
-      production_consumption (
+export async function fetchProductionRuns(force = false): Promise<ProductionRun[]> {
+  return dbCache.wrap('admin_production_runs', async () => {
+    const { data, error } = await supabase
+      .from('production_runs')
+      .select(`
         *,
-        ingredients (name)
-      )
-    `)
-    .order('created_at', { ascending: false })
-    .limit(50);
+        products (name),
+        production_consumption (
+          *,
+          ingredients (name)
+        )
+      `)
+      .order('created_at', { ascending: false })
+      .limit(50);
 
-  if (error) throw error;
-  return (data || []).map((row: any) => ({
-    id: row.id,
-    runNumber: row.run_number,
-    productId: row.product_id,
-    productName: row.products?.name || 'Snack',
-    recipeId: row.recipe_id,
-    recipeVersion: row.recipe_version,
-    productionDate: row.production_date,
-    plannedQuantity: Number(row.planned_quantity) || 0,
-    actualQuantity: Number(row.actual_quantity) || 0,
-    unit: row.unit,
-    status: row.status as any,
-    notes: row.notes,
-    operatorName: row.operator_name || 'Staff',
-    totalIngredientCost: Number(row.total_ingredient_cost) || 0,
-    ingredientsConsumed: (row.production_consumption || []).map((c: any) => ({
-      ingredientId: c.ingredient_id,
-      ingredientName: c.ingredients?.name || 'Ingredient',
-      expectedQuantity: Number(c.expected_quantity) || 0,
-      actualQuantity: Number(c.actual_quantity) || 0,
-      unit: c.unit,
-      unitCost: Number(c.unit_cost) || 0,
-      totalCost: Number(c.total_cost) || 0,
-    })),
-    createdAt: row.created_at,
-  }));
+    if (error) throw error;
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      runNumber: row.run_number,
+      productId: row.product_id,
+      productName: row.products?.name || 'Snack',
+      recipeId: row.recipe_id,
+      recipeVersion: row.recipe_version,
+      productionDate: row.production_date,
+      plannedQuantity: Number(row.planned_quantity) || 0,
+      actualQuantity: Number(row.actual_quantity) || 0,
+      unit: row.unit,
+      status: row.status as any,
+      notes: row.notes,
+      operatorName: row.operator_name || 'Staff',
+      totalIngredientCost: Number(row.total_ingredient_cost) || 0,
+      ingredientsConsumed: (row.production_consumption || []).map((c: any) => ({
+        ingredientId: c.ingredient_id,
+        ingredientName: c.ingredients?.name || 'Ingredient',
+        expectedQuantity: Number(c.expected_quantity) || 0,
+        actualQuantity: Number(c.actual_quantity) || 0,
+        unit: c.unit,
+        unitCost: Number(c.unit_cost) || 0,
+        totalCost: Number(c.total_cost) || 0,
+      })),
+      createdAt: row.created_at,
+    }));
+  }, { ttl: dbCache.TTL.PRODUCTION_RUNS, force });
 }
 
-export async function fetchStockMovements(): Promise<StockMovement[]> {
-  const { data, error } = await supabase
-    .from('stock_movements')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(100);
+export async function fetchStockMovements(force = false): Promise<StockMovement[]> {
+  return dbCache.wrap('admin_stock_movements', async () => {
+    const { data, error } = await supabase
+      .from('stock_movements')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100);
 
-  if (error) throw error;
-  return (data || []).map((row) => ({
-    id: row.id,
-    itemId: row.item_id,
-    itemType: row.item_type as any,
-    itemName: row.item_name,
-    movementType: row.movement_type as any,
-    quantity: Number(row.quantity) || 0,
-    unit: row.unit,
-    previousBalance: Number(row.previous_balance) || 0,
-    newBalance: Number(row.new_balance) || 0,
-    costPerUnit: row.cost_per_unit ? Number(row.cost_per_unit) : undefined,
-    reference: row.reference,
-    operatorName: row.operator_name,
-    reason: row.reason,
-    createdAt: row.created_at,
-  }));
+    if (error) throw error;
+    return (data || []).map((row) => ({
+      id: row.id,
+      itemId: row.item_id,
+      itemType: row.item_type as any,
+      itemName: row.item_name,
+      movementType: row.movement_type as any,
+      quantity: Number(row.quantity) || 0,
+      unit: row.unit,
+      previousBalance: Number(row.previous_balance) || 0,
+      newBalance: Number(row.new_balance) || 0,
+      costPerUnit: row.cost_per_unit ? Number(row.cost_per_unit) : undefined,
+      reference: row.reference,
+      operatorName: row.operator_name,
+      reason: row.reason,
+      createdAt: row.created_at,
+    }));
+  }, { ttl: dbCache.TTL.STOCK_MOVEMENTS, force });
 }
 
-export async function fetchAuditLogs(): Promise<AuditLog[]> {
-  const { data, error } = await supabase
-    .from('audit_logs')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(50);
+export async function fetchAuditLogs(force = false): Promise<AuditLog[]> {
+  return dbCache.wrap('admin_audit_logs', async () => {
+    const { data, error } = await supabase
+      .from('audit_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50);
 
-  if (error) throw error;
-  return (data || []).map((row) => ({
-    id: row.id,
-    actor: row.actor,
-    action: row.action,
-    entityType: row.entity_type,
-    entityId: row.entity_id,
-    details: row.details,
-    createdAt: row.created_at,
-  }));
+    if (error) throw error;
+    return (data || []).map((row) => ({
+      id: row.id,
+      actor: row.actor,
+      action: row.action,
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      details: row.details,
+      createdAt: row.created_at,
+    }));
+  }, { ttl: dbCache.TTL.AUDIT_LOGS, force });
 }
 
 // ============================================================================
@@ -699,32 +765,34 @@ export async function fetchDailyClosing(date: string): Promise<DailyClosing | nu
   };
 }
 
-export async function fetchDailyClosings(limit = 60): Promise<DailyClosing[]> {
-  const { data, error } = await supabase
-    .from('daily_closings')
-    .select('*')
-    .order('production_date', { ascending: false })
-    .limit(limit);
+export async function fetchDailyClosings(limit = 60, force = false): Promise<DailyClosing[]> {
+  return dbCache.wrap(`admin_daily_closings_${limit}`, async () => {
+    const { data, error } = await supabase
+      .from('daily_closings')
+      .select('*')
+      .order('production_date', { ascending: false })
+      .limit(limit);
 
-  if (error) throw error;
-  return (data || []).map((data) => ({
-    id: data.id,
-    productionDate: data.production_date,
-    oilOpeningBalance: Number(data.oil_opening_balance) || 0,
-    oilPurchases: Number(data.oil_purchases) || 0,
-    oilClosingBalance: Number(data.oil_closing_balance) || 0,
-    oilConsumed: Number(data.oil_consumed) || 0,
-    oilCostPerKg: Number(data.oil_cost_per_kg) || 0,
-    oilTotalExpense: Number(data.oil_total_expense) || 0,
-    productionWages: Number(data.production_wages) || 0,
-    totalSharedExpense: Number(data.total_shared_expense) || 0,
-    totalProductionKg: Number(data.total_production_kg) || 0,
-    status: data.status,
-    notes: data.notes || '',
-    closedBy: data.closed_by || 'Admin',
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
-  }));
+    if (error) throw error;
+    return (data || []).map((data) => ({
+      id: data.id,
+      productionDate: data.production_date,
+      oilOpeningBalance: Number(data.oil_opening_balance) || 0,
+      oilPurchases: Number(data.oil_purchases) || 0,
+      oilClosingBalance: Number(data.oil_closing_balance) || 0,
+      oilConsumed: Number(data.oil_consumed) || 0,
+      oilCostPerKg: Number(data.oil_cost_per_kg) || 0,
+      oilTotalExpense: Number(data.oil_total_expense) || 0,
+      productionWages: Number(data.production_wages) || 0,
+      totalSharedExpense: Number(data.total_shared_expense) || 0,
+      totalProductionKg: Number(data.total_production_kg) || 0,
+      status: data.status,
+      notes: data.notes || '',
+      closedBy: data.closed_by || 'Admin',
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    }));
+  }, { ttl: dbCache.TTL.DAILY_CLOSINGS, force });
 }
 
 export async function fetchLatestOilBalance(): Promise<{ currentStock: number; avgCost: number; lastClosingDate?: string }> {
@@ -1026,6 +1094,10 @@ export async function saveDailyClosing(params: {
     },
     created_at: new Date().toISOString(),
   });
+
+  dbCache.invalidate('admin_daily_closings');
+  dbCache.invalidate('admin_production_runs');
+  dbCache.invalidate('admin_ingredients');
 
   return {
     id: upsertedClosing.id,
@@ -1331,6 +1403,9 @@ export async function recordPacking(params: {
     created_at: new Date().toISOString(),
   });
 
+  dbCache.invalidate('admin_packing_records');
+  dbCache.invalidate('admin_production_runs');
+
   return {
     id: created.id,
     packingDate: created.packing_date,
@@ -1353,65 +1428,70 @@ export async function recordPacking(params: {
   };
 }
 
-export async function fetchPackingRecords(options?: { productId?: string; date?: string; limit?: number }): Promise<PackingRecord[]> {
-  let query = supabase.from('packing_records').select('*, products(name)').order('created_at', { ascending: false });
-  if (options?.limit) query = query.limit(options.limit);
-  if (options?.productId) query = query.eq('product_id', options.productId);
-  if (options?.date) query = query.eq('packing_date', options.date);
+export async function fetchPackingRecords(options?: { productId?: string; date?: string; limit?: number }, force = false): Promise<PackingRecord[]> {
+  const cacheKey = `admin_packing_records_${options?.productId || 'all'}_${options?.date || 'all'}_${options?.limit || 0}`;
+  return dbCache.wrap(cacheKey, async () => {
+    let query = supabase.from('packing_records').select('*, products(name)').order('created_at', { ascending: false });
+    if (options?.limit) query = query.limit(options.limit);
+    if (options?.productId) query = query.eq('product_id', options.productId);
+    if (options?.date) query = query.eq('packing_date', options.date);
 
-  const { data, error } = await query;
-  if (error) throw error;
+    const { data, error } = await query;
+    if (error) throw error;
 
-  return (data || []).map((row: any) => ({
-    id: row.id,
-    packingDate: row.packing_date,
-    productId: row.product_id,
-    productName: row.products?.name || 'Product',
-    productionRunId: row.production_run_id,
-    packagingItemId: row.packaging_item_id,
-    packetSize: row.packet_size,
-    packetsPacked: Number(row.packets_packed) || 0,
-    coversConsumed: Number(row.covers_consumed) || 0,
-    coverUnitCost: Number(row.cover_unit_cost) || 0,
-    packagingCost: Number(row.packaging_cost) || 0,
-    packingLabourRate: Number(row.packing_labour_rate) || 0,
-    packingLabourCost: Number(row.packing_labour_cost) || 0,
-    totalPackingCost: Number(row.total_packing_cost) || 0,
-    weightPackedKg: Number(row.weight_packed_kg) || 0,
-    operatorName: row.operator_name,
-    notes: row.notes,
-    createdAt: row.created_at,
-  }));
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      packingDate: row.packing_date,
+      productId: row.product_id,
+      productName: row.products?.name || 'Product',
+      productionRunId: row.production_run_id,
+      packagingItemId: row.packaging_item_id,
+      packetSize: row.packet_size,
+      packetsPacked: Number(row.packets_packed) || 0,
+      coversConsumed: Number(row.covers_consumed) || 0,
+      coverUnitCost: Number(row.cover_unit_cost) || 0,
+      packagingCost: Number(row.packaging_cost) || 0,
+      packingLabourRate: Number(row.packing_labour_rate) || 0,
+      packingLabourCost: Number(row.packing_labour_cost) || 0,
+      totalPackingCost: Number(row.total_packing_cost) || 0,
+      weightPackedKg: Number(row.weight_packed_kg) || 0,
+      operatorName: row.operator_name,
+      notes: row.notes,
+      createdAt: row.created_at,
+    }));
+  }, { ttl: dbCache.TTL.PACKING_RECORDS, force });
 }
 
 // ============================================================================
 // DAILY WAGES
 // ============================================================================
 
-export async function fetchDailyWages(limit = 60): Promise<any[]> {
-  const { data, error } = await supabase
-    .from('daily_wages')
-    .select('*')
-    .order('production_date', { ascending: false })
-    .limit(limit);
+export async function fetchDailyWages(limit = 60, force = false): Promise<any[]> {
+  return dbCache.wrap(`admin_daily_wages_${limit}`, async () => {
+    const { data, error } = await supabase
+      .from('daily_wages')
+      .select('*')
+      .order('production_date', { ascending: false })
+      .limit(limit);
 
-  if (error) throw error;
-  return (data || []).map((row: any) => ({
-    id: row.id,
-    productionDate: row.production_date,
-    totalWageBudget: Number(row.total_wage_budget) || 0,
-    numCooks: Number(row.num_cooks) || 0,
-    numPackers: Number(row.num_packers) || 0,
-    totalPacketsProduced: Number(row.total_packets_produced) || 0,
-    totalProductionKg: Number(row.total_production_kg) || 0,
-    productionWageAmount: Number(row.production_wage_amount) || 0,
-    packingWageAmount: Number(row.packing_wage_amount) || 0,
-    wagePerCook: Number(row.wage_per_cook) || 0,
-    wagePerPacker: Number(row.wage_per_packer) || 0,
-    notes: row.notes || '',
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }));
+    if (error) throw error;
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      productionDate: row.production_date,
+      totalWageBudget: Number(row.total_wage_budget) || 0,
+      numCooks: Number(row.num_cooks) || 0,
+      numPackers: Number(row.num_packers) || 0,
+      totalPacketsProduced: Number(row.total_packets_produced) || 0,
+      totalProductionKg: Number(row.total_production_kg) || 0,
+      productionWageAmount: Number(row.production_wage_amount) || 0,
+      packingWageAmount: Number(row.packing_wage_amount) || 0,
+      wagePerCook: Number(row.wage_per_cook) || 0,
+      wagePerPacker: Number(row.wage_per_packer) || 0,
+      notes: row.notes || '',
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }, { ttl: dbCache.TTL.DAILY_WAGES, force });
 }
 
 export async function fetchDailyWage(date: string): Promise<any | null> {
@@ -1470,6 +1550,8 @@ export async function saveDailyWage(params: {
     updated_at: new Date().toISOString(),
   };
 
+  dbCache.invalidate('admin_daily_wages');
+
   const { data, error } = await supabase
     .from('daily_wages')
     .upsert(payload, { onConflict: 'production_date' })
@@ -1505,22 +1587,26 @@ export async function fetchTotalProductionKgForDate(date: string): Promise<numbe
 // PRODUCT SELLING PRICES
 // ============================================================================
 
-export async function fetchProductSellingPrices(): Promise<any[]> {
-  const { data, error } = await supabase
-    .from('product_selling_prices')
-    .select('*');
+export async function fetchProductSellingPrices(force = false): Promise<any[]> {
+  return dbCache.wrap('admin_selling_prices', async () => {
+    const { data, error } = await supabase
+      .from('product_selling_prices')
+      .select('*');
 
-  if (error) throw error;
-  return (data || []).map((row: any) => ({
-    id: row.id,
-    productId: row.product_id,
-    wholesalePricePerKg: Number(row.wholesale_price_per_kg) || 0,
-    updatedAt: row.updated_at,
-    createdAt: row.created_at,
-  }));
+    if (error) throw error;
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      productId: row.product_id,
+      wholesalePricePerKg: Number(row.wholesale_price_per_kg) || 0,
+      updatedAt: row.updated_at,
+      createdAt: row.created_at,
+    }));
+  }, { ttl: dbCache.TTL.SELLING_PRICES, force });
 }
 
 export async function saveProductSellingPrice(productId: string, pricePerKg: number): Promise<any> {
+  dbCache.invalidate('admin_selling_prices');
+
   const { data, error } = await supabase
     .from('product_selling_prices')
     .upsert({
@@ -1542,16 +1628,28 @@ export async function saveProductSellingPrice(productId: string, pricePerKg: num
 export async function bulkPurchaseIngredients(
   purchases: Array<{ ingredientId: string; amount: number; costPerUnit: number }>
 ): Promise<void> {
-  for (const purchase of purchases) {
-    if (purchase.amount <= 0) continue;
+  const validPurchases = purchases.filter((p) => p.amount > 0);
+  if (validPurchases.length === 0) return;
 
-    const { data: ing, error: fetchErr } = await supabase
-      .from('ingredients')
-      .select('id, name, unit, current_stock, avg_cost_per_unit')
-      .eq('id', purchase.ingredientId)
-      .single();
+  const ids = validPurchases.map((p) => p.ingredientId);
+  const { data: ings, error: fetchErr } = await supabase
+    .from('ingredients')
+    .select('id, name, unit, current_stock, avg_cost_per_unit')
+    .in('id', ids);
 
-    if (fetchErr || !ing) continue;
+  if (fetchErr || !ings) {
+    throw new Error(fetchErr?.message || 'Failed to fetch ingredients for bulk purchase');
+  }
+
+  const ingMap = new Map(ings.map((i) => [i.id, i]));
+  const now = new Date().toISOString();
+  const batchRef = `BULK-PURCHASE-${Date.now().toString().slice(-6)}`;
+  const stockMovements: any[] = [];
+  const updatePromises: Promise<any>[] = [];
+
+  for (const purchase of validPurchases) {
+    const ing = ingMap.get(purchase.ingredientId);
+    if (!ing) continue;
 
     const prevStock = Number(ing.current_stock) || 0;
     const newStock = roundStock(prevStock + purchase.amount);
@@ -1564,18 +1662,18 @@ export async function bulkPurchaseIngredients(
       ? roundCurrency((totalOldValue + totalNewValue) / newStock)
       : purchase.costPerUnit;
 
-    const { error: updateErr } = await supabase
-      .from('ingredients')
-      .update({
-        current_stock: newStock,
-        avg_cost_per_unit: newAvgCost,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', purchase.ingredientId);
+    updatePromises.push(
+      supabase
+        .from('ingredients')
+        .update({
+          current_stock: newStock,
+          avg_cost_per_unit: newAvgCost,
+          updated_at: now,
+        })
+        .eq('id', purchase.ingredientId)
+    );
 
-    if (updateErr) continue;
-
-    await supabase.from('stock_movements').insert({
+    stockMovements.push({
       item_id: purchase.ingredientId,
       item_type: 'ingredient',
       item_name: ing.name,
@@ -1585,10 +1683,44 @@ export async function bulkPurchaseIngredients(
       previous_balance: prevStock,
       new_balance: newStock,
       cost_per_unit: purchase.costPerUnit,
-      reference: `BULK-PURCHASE-${Date.now().toString().slice(-6)}`,
+      reference: batchRef,
       operator_name: 'Admin',
       reason: 'Bulk purchase entry',
-      created_at: new Date().toISOString(),
+      created_at: now,
     });
   }
+
+  // Execute all ingredient updates in parallel
+  const updateResults = await Promise.all(updatePromises);
+  for (const res of updateResults) {
+    if (res.error) {
+      console.error('Error updating ingredient stock:', res.error);
+    }
+  }
+
+  // Batch insert all stock movements in a single round-trip
+  if (stockMovements.length > 0) {
+    const { error: smErr } = await supabase.from('stock_movements').insert(stockMovements);
+    if (smErr) {
+      console.error('Error inserting stock movements:', smErr);
+    }
+  }
+
+  dbCache.invalidate('admin_ingredients');
+  dbCache.invalidate('admin_stock_movements');
 }
+
+export async function resetAllStocksToZero(): Promise<{ success: boolean; message: string }> {
+  try {
+    const now = new Date().toISOString();
+    await supabase.from('products').update({ current_stock: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('ingredients').update({ current_stock: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabase.from('packaging_items').update({ current_stock: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
+    invalidateAdminCache();
+    return { success: true, message: 'All stocks have been reset to zero successfully.' };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Failed to reset stocks to zero.' };
+  }
+}
+
+

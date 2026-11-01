@@ -13,7 +13,7 @@ import {
   FiSave,
   FiKey,
 } from 'react-icons/fi';
-import { supabase } from '../services/supabase';
+import { supabase, invalidateAdminCache } from '../services/supabase';
 import {
   Product,
   Ingredient,
@@ -75,7 +75,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   // ==========================================
   // 3. DATA RESET MODAL & ACTION
   // ==========================================
-  type ResetActionType = 'sales' | 'batches' | 'ledger' | 'stock' | 'full';
+  type ResetActionType = 'sales' | 'batches' | 'ledger' | 'stock' | 'zero_all_stocks' | 'full';
   const [resetModalType, setResetModalType] = useState<ResetActionType | null>(null);
   const [enteredPin, setEnteredPin] = useState<string>('');
   const [resetConfirmationText, setResetConfirmationText] = useState<string>('');
@@ -254,7 +254,15 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
           const baseline = ing.category === 'basic' ? 50 : 20;
           await supabase.from('ingredients').update({ current_stock: baseline }).eq('id', ing.id);
         }
+        invalidateAdminCache();
         setResetSuccessNotice('ചേരുവകളുടെ സ്റ്റോക്ക് ക്രമീകരിച്ചു (Ingredient stock reset)');
+      } else if (resetModalType === 'zero_all_stocks') {
+        // Reset all products, ingredients, and packaging items current_stock to 0
+        await supabase.from('products').update({ current_stock: 0, updated_at: new Date().toISOString() }).neq('id', '00000000-0000-0000-0000-000000000000');
+        await supabase.from('ingredients').update({ current_stock: 0, updated_at: new Date().toISOString() }).neq('id', '00000000-0000-0000-0000-000000000000');
+        await supabase.from('packaging_items').update({ current_stock: 0, updated_at: new Date().toISOString() }).neq('id', '00000000-0000-0000-0000-000000000000');
+        invalidateAdminCache();
+        setResetSuccessNotice('എല്ലാ ഉൽപ്പന്നങ്ങൾ, ചേരുവകൾ, പാക്കറ്റുകൾ എന്നിവയുടെ സ്റ്റോക്ക് പൂജ്യമാക്കി (0)! (All stocks reset to 0)');
       } else if (resetModalType === 'full') {
         // Full factory reset
         await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
@@ -653,6 +661,29 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                 className="px-3 py-1.5 rounded-xl bg-red-100 hover:bg-red-200 dark:bg-red-950/40 dark:hover:bg-red-900/40 text-red-700 dark:text-red-300 font-bold shrink-0 press-apple cursor-pointer text-[11px]"
               >
                 Clear Ledger
+              </button>
+            </div>
+
+            {/* Reset All Stocks to Zero */}
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-950/20 border border-amber-500/30 flex items-center justify-between gap-3">
+              <div>
+                <span className="font-bold text-amber-950 dark:text-amber-200 block text-xs">
+                  ⚠️ എല്ലാ സ്റ്റോക്കും 0 ആക്കുക (Reset All Stocks to Zero)
+                </span>
+                <span className="text-[11px] text-stone-600 dark:text-stone-300 block">
+                  എല്ലാ ഉൽപ്പന്നങ്ങൾ, ചേരുവകൾ, പാക്കറ്റുകൾ എന്നിവയുടെ സ്റ്റോക്ക് 0 ആക്കുന്നു. പേരുകളും റസിപ്പികളും നിലനിൽക്കും.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setResetModalType('zero_all_stocks');
+                  setEnteredPin('');
+                  setResetError('');
+                }}
+                className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shrink-0 shadow-sm press-apple cursor-pointer text-[11px]"
+              >
+                Set to 0
               </button>
             </div>
 

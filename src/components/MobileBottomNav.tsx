@@ -29,7 +29,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   ];
 
   return (
-    <nav className="md:hidden fixed bottom-3 inset-x-3 z-40 max-w-md mx-auto select-none pointer-events-none">
+    <nav className="md:hidden fixed bottom-[calc(0.75rem+env(safe-area-inset-bottom,0px))] inset-x-3 z-40 max-w-md mx-auto select-none pointer-events-none">
       <div className="bg-white/95 dark:bg-[#1A1616]/95 backdrop-blur-2xl rounded-2xl border border-stone-200/90 dark:border-[#2E2828] shadow-[0_10px_35px_rgba(0,0,0,0.12)] dark:shadow-[0_10px_35px_rgba(0,0,0,0.5)] p-1.5 flex items-center justify-between gap-1 pointer-events-auto">
         {tabs.map((tab) => {
           const Icon = tab.icon;
