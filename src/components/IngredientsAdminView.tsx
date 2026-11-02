@@ -493,7 +493,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
       </div>
 
       {/* Ingredients Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
         {filteredIngredients.map((ing) => {
           const isLowStock = ing.isActive && ing.minStock > 0 && ing.currentStock <= ing.minStock;
 

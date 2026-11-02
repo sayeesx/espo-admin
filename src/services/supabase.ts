@@ -180,6 +180,61 @@ export async function deleteProduct(id: string): Promise<void> {
   dbCache.invalidate('admin_recipes');
 }
 
+export async function adjustProductStock(
+  productId: string,
+  delta: number,
+  reason: string,
+  operatorName = 'Admin'
+): Promise<void> {
+  const { data: prod, error: fetchErr } = await supabase
+    .from('products')
+    .select('id, name, unit, current_stock, wholesale_price')
+    .eq('id', productId)
+    .single();
+
+  if (fetchErr) throw fetchErr;
+
+  const prevStock = Number(prod.current_stock) || 0;
+  if (delta < 0 && prevStock <= 0) {
+    throw new Error('സ്റ്റോക്ക് 0 ആണ്, നെഗറ്റീവ് ആക്കാൻ കഴിയില്ല (Stock is 0, cannot deduct)');
+  }
+  if (delta < 0 && Math.abs(delta) > prevStock) {
+    throw new Error('ലഭ്യമായ സ്റ്റോക്കിനേക്കാൾ കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല (Cannot deduct more than available stock)');
+  }
+  const newStock = Math.max(0, prevStock + delta);
+
+  const { error: updateErr } = await supabase
+    .from('products')
+    .update({ current_stock: newStock, updated_at: new Date().toISOString() })
+    .eq('id', productId);
+
+  if (updateErr) throw updateErr;
+
+  dbCache.invalidate('admin_products');
+  dbCache.invalidate('admin_stock_movements');
+
+  try {
+    await supabase.from('stock_movements').insert({
+      item_id: productId,
+      item_type: 'finished',
+      item_name: prod.name,
+      movement_type: delta >= 0 ? 'in' : 'out',
+      quantity: Math.abs(delta),
+      unit: prod.unit,
+      previous_balance: prevStock,
+      new_balance: newStock,
+      cost_per_unit: prod.wholesale_price,
+      reference: `ADMIN-PRD-ADJ-${Date.now().toString().slice(-6)}`,
+      operator_name: operatorName,
+      reason,
+      created_at: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.warn('Could not record stock movement log:', err);
+  }
+}
+
+
 export async function fetchIngredients(force = false): Promise<Ingredient[]> {
   return dbCache.wrap('admin_ingredients', async () => {
     const { data, error } = await supabase

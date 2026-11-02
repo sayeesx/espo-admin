@@ -439,7 +439,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     const priceDiff = maxTrend - minTrend;
 
     return (
-      <div className="space-y-6 pb-8 font-malayalam max-w-4xl mx-auto">
+      <div className="space-y-6 pb-8 font-malayalam max-w-6xl mx-auto">
         {/* Back Button and Date Indicator */}
         <div className="flex items-center justify-between gap-3">
           <button
@@ -845,8 +845,8 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
         </div>
       ) : (
         <>
-          {/* Products Costing Grid - 3 cards in a row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Products Costing Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
             {filteredProductCosts.map((p) => {
               const isEditing = editingPriceId === p.productId;
               const hasSellingPrice = p.wholesalePricePerKg > 0;

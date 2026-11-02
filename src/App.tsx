@@ -273,8 +273,8 @@ export const App: React.FC = () => {
       />
 
       {/* Main Content Area with Desktop Sidebar Offset */}
-      <div className="md:pl-56 lg:pl-60 transition-all">
-        <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 md:pt-6">
+      <div className="md:pl-64 transition-all">
+        <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 pt-4 md:pt-6 pb-20">
           {isInitialLoading ? (
             <div className="min-h-[60vh] flex flex-col items-center justify-center">
               <LoadingSpinner size="lg" label="ഡാറ്റാബേസിൽ നിന്ന് വിവരങ്ങൾ ശേഖരിക്കുന്നു..." />

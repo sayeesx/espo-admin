@@ -17,8 +17,11 @@ import {
   FiCheck,
   FiArrowRight,
   FiArrowLeft,
+  FiSliders,
+  FiArrowUp,
+  FiArrowDown,
 } from 'react-icons/fi';
-import { saveProduct, deleteProduct, saveRecipe, deleteRecipe, fetchPacketTypes } from '../services/supabase';
+import { saveProduct, deleteProduct, saveRecipe, deleteRecipe, fetchPacketTypes, adjustProductStock } from '../services/supabase';
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import { createPortal } from 'react-dom';
@@ -107,6 +110,14 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   const [recipeError, setRecipeError] = useState('');
   const [recipeModalStep, setRecipeModalStep] = useState<1 | 2>(1);
 
+  // Stock Adjustment Modal states
+  const [stockAdjustModalOpen, setStockAdjustModalOpen] = useState(false);
+  const [stockAdjustProduct, setStockAdjustProduct] = useState<Product | null>(null);
+  const [stockAdjustDelta, setStockAdjustDelta] = useState<number | string>(10);
+  const [stockAdjustIsAdd, setStockAdjustIsAdd] = useState<boolean>(true);
+  const [stockAdjustReason, setStockAdjustReason] = useState<string>('ഉൽപ്പാദനം ചേർത്തത് (Production Stock Inward)');
+  const [isAdjustingStock, setIsAdjustingStock] = useState<boolean>(false);
+
   const loadPacketCatalog = async () => {
     try {
       const data = await fetchPacketTypes();
@@ -121,7 +132,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   }, []);
 
   // Lock scroll whenever any modal is open
-  useLockBodyScroll(modalOpen || purchaseListModalOpen || recipeModalOpen);
+  useLockBodyScroll(modalOpen || purchaseListModalOpen || recipeModalOpen || stockAdjustModalOpen);
 
   const openCreateModal = () => {
     setEditingProduct(null);
@@ -205,11 +216,23 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
     setRecipeModalStep(2);
   };
 
-  const handleAddRecipeItem = () => {
-    setRecipeItems([
-      ...recipeItems,
-      { ingredientId: recipeEligibleIngredients[0]?.id || '', quantity: 1, unit: recipeEligibleIngredients[0]?.unit || 'kg' },
-    ]);
+  const handleAddRecipeItem = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setRecipeItems((prev) => {
+      const usedIds = new Set(prev.map((item) => item.ingredientId));
+      const nextAvailable = recipeEligibleIngredients.find((ing) => !usedIds.has(ing.id)) || recipeEligibleIngredients[0];
+      return [
+        ...prev,
+        {
+          ingredientId: nextAvailable ? nextAvailable.id : '',
+          quantity: 1,
+          unit: nextAvailable ? nextAvailable.unit : 'kg',
+        },
+      ];
+    });
   };
 
   const handleRemoveRecipeItem = (index: number) => {
@@ -420,6 +443,73 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
     }
   };
 
+  const openStockAdjustModal = (p: Product) => {
+    setStockAdjustProduct(p);
+    setStockAdjustDelta(10);
+    setStockAdjustIsAdd(true);
+    setStockAdjustReason('ഉൽപ്പാദനം ചേർത്തത് (Production Stock Inward)');
+    setStockAdjustModalOpen(true);
+  };
+
+  const handleStockAdjustSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stockAdjustProduct) return;
+    const deltaAmount = Number(stockAdjustDelta) || 0;
+    if (deltaAmount <= 0) {
+      alert('സാധുവായ അളവ് നൽകുക (Please enter a valid quantity > 0)');
+      return;
+    }
+
+    if (!stockAdjustIsAdd && stockAdjustProduct.currentStock <= 0) {
+      alert('സ്റ്റോക്ക് 0 ആണ്! നെഗറ്റീവ് ആക്കാൻ കഴിയില്ല (Stock is 0, cannot reduce)');
+      return;
+    }
+
+    if (!stockAdjustIsAdd && deltaAmount > stockAdjustProduct.currentStock) {
+      alert(`ലഭ്യമായ സ്റ്റോക്കിൽ (${stockAdjustProduct.currentStock} ${stockAdjustProduct.unit}) കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല!`);
+      return;
+    }
+
+    setIsAdjustingStock(true);
+    try {
+      const delta = stockAdjustIsAdd ? deltaAmount : -deltaAmount;
+      await adjustProductStock(stockAdjustProduct.id, delta, stockAdjustReason);
+      setStockAdjustModalOpen(false);
+      onRefresh();
+    } catch (err: any) {
+      alert(`സ്റ്റോക്ക് മാറ്റുന്നതിൽ പിഴവ്: ${err?.message || 'Error updating product stock'}`);
+    } finally {
+      setIsAdjustingStock(false);
+    }
+  };
+
+  const handleClearStockToZero = async () => {
+    if (!stockAdjustProduct) return;
+    if (stockAdjustProduct.currentStock <= 0) {
+      alert('സ്റ്റോക്ക് ഇതിനകം 0 ആണ്! (Stock is already 0)');
+      return;
+    }
+    const confirmClear = window.confirm(
+      `"${stockAdjustProduct.name}" ന്റെ സ്റ്റോക്ക് (${stockAdjustProduct.currentStock} ${stockAdjustProduct.unit}) പൂർണ്ണമായി ഡിലീറ്റ് ചെയ്യണോ?\nAre you sure you want to delete/clear this stock to 0?`
+    );
+    if (!confirmClear) return;
+
+    setIsAdjustingStock(true);
+    try {
+      await adjustProductStock(
+        stockAdjustProduct.id,
+        -stockAdjustProduct.currentStock,
+        'സ്റ്റോക്ക് പൂർണ്ണമായി ഡിലീറ്റ് ചെയ്തു (Stock Cleared to 0)'
+      );
+      setStockAdjustModalOpen(false);
+      onRefresh();
+    } catch (err: any) {
+      alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Error clearing stock'}`);
+    } finally {
+      setIsAdjustingStock(false);
+    }
+  };
+
   const filteredProducts = products.filter((p) => {
     const matchSearch =
       p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -508,7 +598,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
       </div>
 
       {/* Products Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
         {filteredProducts.map((p) => {
           const totalValuation = p.currentStock * p.wholesalePrice;
           const productRecipe = recipes.find((r) => r.productId === p.id);
@@ -553,25 +643,37 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                 </div>
 
                 {/* Details Box */}
-                <div className="p-3 bg-stone-50 dark:bg-[#141212] rounded-xl border border-stone-100 dark:border-[#282323] space-y-2 my-3 text-xs">
+                <div className="p-3 bg-stone-50 dark:bg-[#141212] rounded-xl border border-stone-200/80 dark:border-[#282323] space-y-2.5 my-3 text-xs">
+                  {/* Current Inventory Stock Highlight */}
+                  <div className="flex items-center justify-between pb-1">
+                    <span className="text-stone-600 dark:text-stone-300 font-bold flex items-center gap-1.5">
+                      <FiPackage className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <span>ഇൻവെന്ററി സ്റ്റോക്ക്:</span>
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                          p.currentStock > 0
+                            ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60'
+                            : 'bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-900/60'
+                        }`}
+                      >
+                        {p.currentStock > 0 ? 'In Stock' : 'Out of Stock'}
+                      </span>
+                      <span className="font-black text-sm text-stone-900 dark:text-white font-mono">
+                        {p.currentStock} {p.unit}
+                      </span>
+                    </div>
+                  </div>
+
                   {/* Wholesale Price Highlight */}
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between pt-1 border-t border-stone-200/60 dark:border-[#282323]">
                     <span className="text-stone-500 dark:text-stone-400">
                       മൊത്തവില (Wholesale):
                     </span>
                     <span className="font-extrabold text-sm text-epso-red dark:text-amber-400">
                       ₹{p.wholesalePrice.toLocaleString('en-IN')}
                       <span className="text-[10px] font-normal text-stone-400 ml-1">/ {p.unit}</span>
-                    </span>
-                  </div>
-
-                  {/* Current Finished Stock */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-stone-500 dark:text-stone-400">
-                      സ്റ്റോക്ക് (Current Stock):
-                    </span>
-                    <span className="font-bold text-stone-900 dark:text-white">
-                      {p.currentStock} {p.unit}
                     </span>
                   </div>
 
@@ -596,11 +698,21 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                     <span className="text-stone-500 dark:text-stone-400">
                       സ്റ്റോക്ക് മൂല്യം (Valuation):
                     </span>
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                    <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
                       ₹{totalValuation.toLocaleString('en-IN')}
                     </span>
                   </div>
                 </div>
+
+                {/* Direct Quick Stock Adjust Button */}
+                <button
+                  onClick={() => openStockAdjustModal(p)}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 px-3 mb-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs font-bold border border-emerald-200/70 dark:border-emerald-800/60 press-apple transition-colors cursor-pointer shadow-2xs"
+                  title="സ്റ്റോക്ക് മാറ്റുക (+ Add / - Reduce / Clear)"
+                >
+                  <FiSliders className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>സ്റ്റോക്ക് മാറ്റുക (+ / - Stock)</span>
+                </button>
               </div>
 
               {/* Action Buttons: Set Ingredients (Recipe), Edit, Delete */}
@@ -1237,6 +1349,176 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                   </>
                 )}
               </div>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL 3: Adjust Product Stock (+ Add, - Reduce, Clear/Delete)          */}
+      {/* ===================================================================== */}
+      {stockAdjustModalOpen && stockAdjustProduct && createPortal(
+        <div className="fixed inset-0 z-[9999] overflow-y-auto">
+          <div
+            className="fixed inset-0 w-full h-full bg-black/65 backdrop-blur-md animate-apple-backdrop"
+            onClick={() => !isAdjustingStock && setStockAdjustModalOpen(false)}
+          />
+
+          <div className="min-h-full flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
+            <div className="w-full max-w-lg bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 sm:p-7 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto google-modal">
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-lg sm:text-xl font-bold text-stone-900 dark:text-white mb-1">
+                    സ്റ്റോക്ക് മാറ്റുക (Adjust Stock)
+                  </h2>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    {stockAdjustProduct.name} • നിലവിലെ സ്റ്റോക്ക്:{' '}
+                    <strong className="text-stone-900 dark:text-white font-mono">
+                      {stockAdjustProduct.currentStock} {stockAdjustProduct.unit}
+                    </strong>
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setStockAdjustModalOpen(false)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer shrink-0"
+                >
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Mode Toggle: Add Stock vs Reduce Stock */}
+              <div className="grid grid-cols-2 gap-2 p-1 bg-stone-100 dark:bg-[#141212] rounded-2xl mb-4 border border-stone-200 dark:border-[#282323]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStockAdjustIsAdd(true);
+                    setStockAdjustReason('ഉൽപ്പാദനം ചേർത്തത് (Production Stock Inward)');
+                  }}
+                  className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    stockAdjustIsAdd
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <FiArrowUp className="w-4 h-4" />
+                  <span>സ്റ്റോക്ക് കൂട്ടുക (+ Add)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStockAdjustIsAdd(false);
+                    setStockAdjustReason('മാനുവൽ കുറവ് / ഡാമേജ് (Deduction / Spoilage)');
+                  }}
+                  className={`py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    !stockAdjustIsAdd
+                      ? 'bg-amber-600 text-white shadow-sm'
+                      : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+                  }`}
+                >
+                  <FiArrowDown className="w-4 h-4" />
+                  <span>സ്റ്റോക്ക് കുറയ്ക്കുക (- Reduce)</span>
+                </button>
+              </div>
+
+              <form onSubmit={handleStockAdjustSubmit} className="space-y-4 text-xs">
+                <div>
+                  <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                    {stockAdjustIsAdd ? 'കൂട്ടേണ്ട അളവ് (Quantity to Add) *' : 'കുറയ്ക്കേണ്ട അളവ് (Quantity to Reduce) *'}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      required
+                      value={stockAdjustDelta}
+                      onChange={(e) => setStockAdjustDelta(e.target.value)}
+                      placeholder="e.g. 10"
+                      className="w-full p-3 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white font-bold outline-none font-mono text-sm"
+                    />
+                    <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 font-bold">
+                      {stockAdjustProduct.unit}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Live Preview Calculation */}
+                <div className="p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200/60 dark:border-[#282323] flex items-center justify-between font-mono text-xs">
+                  <span className="text-stone-500 dark:text-stone-400 font-sans">പുതിയ സ്റ്റോക്ക് ബാലൻസ് (New Balance):</span>
+                  <span className="font-extrabold text-stone-900 dark:text-white">
+                    {stockAdjustIsAdd
+                      ? (Number(stockAdjustProduct.currentStock) + (Number(stockAdjustDelta) || 0)).toFixed(2)
+                      : Math.max(0, Number(stockAdjustProduct.currentStock) - (Number(stockAdjustDelta) || 0)).toFixed(2)}{' '}
+                    {stockAdjustProduct.unit}
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                    കാരണം (Reason) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={stockAdjustReason}
+                    onChange={(e) => setStockAdjustReason(e.target.value)}
+                    placeholder="e.g. ഉൽപ്പാദനം ചേർത്തത്, ഡാമേജ്..."
+                    className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white outline-none"
+                  />
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {[
+                      'ഉൽപ്പാദനം ചേർത്തത് (Production Stock Inward)',
+                      'ഡാമേജ് / കേടുപാടുകൾ (Damaged / Spoilage)',
+                      'സാമ്പിൾ / നേരിട്ടുള്ള വിതരണം (Samples / Direct Sale)',
+                      'സ്റ്റോക്ക് ഓഡിറ്റ് പരിശോധന (Physical Audit Correction)',
+                    ].map((reasonStr) => (
+                      <button
+                        key={reasonStr}
+                        type="button"
+                        onClick={() => setStockAdjustReason(reasonStr)}
+                        className="px-2 py-1 rounded-lg text-[10px] bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#322c2c] text-stone-600 dark:text-stone-300 cursor-pointer transition-colors"
+                      >
+                        {reasonStr.split('(')[0].trim()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Footer Actions */}
+                <div className="pt-3 border-t border-stone-200 dark:border-[#2E2828] flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={handleClearStockToZero}
+                    disabled={isAdjustingStock || stockAdjustProduct.currentStock <= 0}
+                    className="px-3 py-2.5 rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-950/60 text-red-600 dark:text-red-400 font-bold text-xs transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="സ്റ്റോക്ക് പൂർണ്ണമായി ഡിലീറ്റ് ചെയ്യുക (Clear stock to 0)"
+                  >
+                    സ്റ്റോക്ക് ഡിലീറ്റ് (Clear 0)
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setStockAdjustModalOpen(false)}
+                      disabled={isAdjustingStock}
+                      className="px-4 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] text-stone-700 dark:text-stone-300 font-bold hover:bg-stone-50 dark:hover:bg-[#282323] transition-colors cursor-pointer"
+                    >
+                      റദ്ദാക്കുക (Cancel)
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isAdjustingStock}
+                      className={`px-5 py-2.5 rounded-xl text-white font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50 ${
+                        stockAdjustIsAdd ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-amber-600 hover:bg-amber-700'
+                      }`}
+                    >
+                      {isAdjustingStock ? 'സൂക്ഷിക്കുന്നു...' : 'സൂക്ഷിക്കുക (Save)'}
+                    </button>
+                  </div>
+                </div>
+              </form>
             </div>
           </div>
         </div>,

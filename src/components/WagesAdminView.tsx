@@ -180,7 +180,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
   const isToday = selectedDate === getTodayStr();
 
   return (
-    <div className="space-y-6 pb-12 font-malayalam max-w-5xl mx-auto">
+    <div className="space-y-6 pb-12 font-malayalam max-w-6xl xl:max-w-7xl mx-auto">
       {/* ======================================================== */}
       {/* TOP HEADER: Prominent Date Navigation & Primary Save     */}
       {/* ======================================================== */}

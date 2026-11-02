@@ -57,8 +57,17 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
+      {/* Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
+        <div>
+          <h2 className="text-lg font-black text-stone-900 dark:text-white flex items-center gap-2">
+            <span>സ്റ്റോക്ക് ലെഡ്ജർ (Stock Movement Ledger)</span>
+          </h2>
+          <p className="text-xs text-stone-400 font-malayalam mt-0.5">
+            അസംസ്കൃത വസ്തുക്കളുടെയും സ്നാക്കുകളുടെയും ഇൻ / ഔട്ട് ചരിത്രം
+          </p>
+        </div>
+
         <div className="flex items-center gap-2">
           {ingredients.length > 0 && (
             <button
@@ -94,11 +103,11 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
           />
         </div>
 
-        {/* English Status Tabs */}
+        {/* Status Tabs */}
         <div className="flex items-center gap-1.5 p-1 bg-stone-100 dark:bg-[#1E1B1B] rounded-xl border border-stone-200 dark:border-[#2E2828]">
           <button
             onClick={() => setFilterType('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               filterType === 'all'
                 ? 'bg-white dark:bg-[#282323] text-stone-900 dark:text-white shadow-sm'
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
@@ -108,7 +117,7 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
           </button>
           <button
             onClick={() => setFilterType('in')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               filterType === 'in'
                 ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 shadow-sm'
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
@@ -118,7 +127,7 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
           </button>
           <button
             onClick={() => setFilterType('out')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               filterType === 'out'
                 ? 'bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300 shadow-sm'
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
@@ -128,7 +137,7 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
           </button>
           <button
             onClick={() => setFilterType('adjust')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               filterType === 'adjust'
                 ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 shadow-sm'
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
@@ -150,13 +159,13 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
             <table className="w-full text-xs text-left">
               <thead>
                 <tr className="border-b border-stone-100 dark:border-[#2E2828] text-stone-400 font-semibold font-malayalam">
-                  <th className="py-2.5 px-3">Item</th>
-                  <th className="py-2.5 px-3">Type</th>
-                  <th className="py-2.5 px-3">Change (Qty)</th>
-                  <th className="py-2.5 px-3">Old → New</th>
-                  <th className="py-2.5 px-3">Reference / Reason</th>
-                  <th className="py-2.5 px-3">Operator</th>
-                  <th className="py-2.5 px-3">Date</th>
+                  <th className="py-3 px-4">Item</th>
+                  <th className="py-3 px-4">Type</th>
+                  <th className="py-3 px-4">Change (Qty)</th>
+                  <th className="py-3 px-4">Old → New</th>
+                  <th className="py-3 px-4">Reference / Reason</th>
+                  <th className="py-3 px-4">Operator</th>
+                  <th className="py-3 px-4">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-[#2E2828]/50">
@@ -166,7 +175,7 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
 
                   return (
                     <tr key={m.id} className="hover:bg-stone-50 dark:hover:bg-[#282323] transition-colors">
-                      <td className="py-3 px-3">
+                      <td className="py-3 px-4">
                         <span className="font-bold text-stone-900 dark:text-white font-malayalam block">
                           {m.itemName}
                         </span>
@@ -175,9 +184,9 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
                         </span>
                       </td>
 
-                      <td className="py-3 px-3">
+                      <td className="py-3 px-4">
                         <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                             isIn
                               ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-400'
                               : isOut
@@ -201,17 +210,17 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
                         </span>
                       </td>
 
-                      <td className="py-3 px-3 font-mono font-bold text-stone-900 dark:text-white">
+                      <td className="py-3 px-4 font-mono font-bold text-stone-900 dark:text-white">
                         <span className={isIn ? 'text-emerald-600 dark:text-emerald-400' : isOut ? 'text-red-600 dark:text-red-400' : ''}>
                           {isIn ? '+' : isOut ? '-' : ''}{m.quantity} {m.unit}
                         </span>
                       </td>
 
-                      <td className="py-3 px-3 font-mono text-[11px] text-stone-500 dark:text-stone-400">
+                      <td className="py-3 px-4 font-mono text-[11px] text-stone-500 dark:text-stone-400">
                         {m.previousBalance} → <span className="font-bold text-stone-900 dark:text-white">{m.newBalance}</span>
                       </td>
 
-                      <td className="py-3 px-3">
+                      <td className="py-3 px-4">
                         <span className="font-mono text-[10px] text-stone-500 dark:text-stone-400 block">
                           {m.reference}
                         </span>
@@ -222,11 +231,11 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
                         )}
                       </td>
 
-                      <td className="py-3 px-3 text-stone-600 dark:text-stone-300 font-medium">
+                      <td className="py-3 px-4 text-stone-600 dark:text-stone-300 font-medium">
                         {m.operatorName}
                       </td>
 
-                      <td className="py-3 px-3 text-stone-400 text-[11px]">
+                      <td className="py-3 px-4 text-stone-400 text-[11px]">
                         {new Date(m.createdAt).toLocaleDateString('en-IN', {
                           day: '2-digit',
                           month: 'short',

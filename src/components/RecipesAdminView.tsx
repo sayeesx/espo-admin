@@ -98,11 +98,23 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
     setModalOpen(true);
   };
 
-  const handleAddItemRow = () => {
-    setRecipeItems([
-      ...recipeItems,
-      { ingredientId: ingredients[0]?.id || '', quantity: 1, unit: ingredients[0]?.unit || 'kg' },
-    ]);
+  const handleAddItemRow = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setRecipeItems((prev) => {
+      const usedIds = new Set(prev.map((item) => item.ingredientId));
+      const nextAvailable = ingredients.find((ing) => !usedIds.has(ing.id)) || ingredients[0];
+      return [
+        ...prev,
+        {
+          ingredientId: nextAvailable ? nextAvailable.id : '',
+          quantity: 1,
+          unit: nextAvailable ? nextAvailable.unit : 'kg',
+        },
+      ];
+    });
   };
 
   const handleRemoveItemRow = (idx: number) => {

@@ -74,28 +74,28 @@ export const Header: React.FC<HeaderProps> = ({
   ];
 
   return (
-    <aside className="hidden md:flex md:w-56 lg:w-60 md:fixed md:inset-y-0 md:left-0 z-40 flex-col bg-white dark:bg-[#181515] border-r border-[#E0E2EC] dark:border-[#2E2828] transition-colors select-none">
+    <aside className="hidden md:flex md:w-64 md:fixed md:inset-y-0 md:left-0 z-40 flex-col bg-white dark:bg-[#181515] border-r border-[#E0E2EC] dark:border-[#2E2828] transition-colors select-none shadow-xs">
       {/* Brand Header */}
-      <div className="p-4 border-b border-stone-100 dark:border-[#282323]">
-        <div className="flex items-center gap-2.5">
+      <div className="px-5 py-4 border-b border-stone-100 dark:border-[#282323]">
+        <div className="flex items-center gap-3">
           <img
             src="/epso-swirl-transparent.png"
             alt="Epso Logo"
-            className="w-8 h-8 object-contain"
+            className="w-9 h-9 object-contain shrink-0"
             onError={(e) => {
               (e.target as HTMLElement).style.display = 'none';
             }}
           />
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-black text-base tracking-tight text-stone-900 dark:text-white font-sans">
+              <span className="font-black text-lg tracking-tight text-stone-900 dark:text-white font-sans">
                 EPSO
               </span>
-              <span className="px-1.5 py-0.5 text-[9px] font-black rounded-md bg-epso-red/10 text-epso-red dark:bg-amber-400/20 dark:text-amber-400 uppercase tracking-wider font-sans">
+              <span className="px-1.5 py-0.5 text-[10px] font-black rounded-md bg-epso-red/10 text-epso-red dark:bg-amber-400/20 dark:text-amber-400 uppercase tracking-wider font-sans">
                 Admin
               </span>
             </div>
-            <p className="text-[10px] font-semibold text-stone-400 dark:text-stone-500 font-malayalam leading-tight mt-0.5">
+            <p className="text-[11px] font-semibold text-stone-400 dark:text-stone-500 font-malayalam leading-tight mt-0.5">
               അഡ്മിൻ കൺസോൾ
             </p>
           </div>
@@ -103,9 +103,9 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       {/* Vertical Navigation Menu */}
-      <div className="flex-1 py-3 px-2.5 overflow-y-auto no-scrollbar space-y-1">
-        <span className="px-2.5 text-[10px] font-extrabold uppercase tracking-wider text-stone-400 dark:text-stone-500 block mb-1 font-sans">
-          മെനു
+      <div className="flex-1 py-3 px-3 overflow-y-auto no-scrollbar space-y-1">
+        <span className="px-3 text-[10px] font-extrabold uppercase tracking-wider text-stone-400 dark:text-stone-500 block mb-1.5 font-sans">
+          മെനു (NAVIGATION)
         </span>
 
         {navItems.map((item) => {
@@ -117,13 +117,13 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-full font-bold transition-all group cursor-pointer ${
+              className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold transition-all group cursor-pointer ${
                 isActive
                   ? 'bg-epso-red text-white shadow-sm dark:bg-amber-500 dark:text-stone-950 font-black'
                   : 'text-stone-700 dark:text-stone-200 hover:bg-[#F1F3F4] dark:hover:bg-[#28292A]'
               }`}
             >
-              <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex items-center gap-3 min-w-0">
                 {isCurrentChanging ? (
                   <div className={`w-4 h-4 border-2 ${isActive ? 'border-white dark:border-stone-950' : 'border-epso-red dark:border-amber-400'} border-t-transparent rounded-full animate-spin shrink-0`} />
                 ) : (
