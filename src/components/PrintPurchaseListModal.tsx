@@ -14,6 +14,7 @@ import {
   FiCheckCircle,
 } from 'react-icons/fi';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
+import { useFeedback } from '../context/FeedbackContext';
 
 interface PrintPurchaseListModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
   onClose,
   ingredients,
 }) => {
+  const { showToast } = useFeedback();
   useLockBodyScroll(isOpen);
   const [filterMode, setFilterMode] = useState<'stock_out' | 'all'>('stock_out');
   const [searchTerm, setSearchTerm] = useState('');
@@ -167,7 +169,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
 
   const handlePrint = () => {
     if (selectedIngredients.length === 0) {
-      alert('ദയവായി പ്രിന്റ് ചെയ്യുന്നതിനായി കുറഞ്ഞത് ഒരു ഇനമെങ്കിലും ടിക്ക് ചെയ്യുക.');
+      showToast('ദയവായി പ്രിന്റ് ചെയ്യുന്നതിനായി കുറഞ്ഞത് ഒരു ഇനമെങ്കിലും ടിക്ക് ചെയ്യുക.', 'warning');
       return;
     }
     window.print();

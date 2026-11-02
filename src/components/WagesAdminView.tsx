@@ -23,12 +23,14 @@ import {
 } from '../services/supabase';
 import { roundCurrency } from '../services/costing';
 import { LoadingSpinner } from './LoadingSpinner';
+import { useFeedback } from '../context/FeedbackContext';
 
 interface WagesAdminViewProps {
   onRefresh: () => void;
 }
 
 export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => {
+  const { showToast } = useFeedback();
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState<string>(getTodayStr);
   const [isLoading, setIsLoading] = useState(false);
@@ -134,7 +136,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
     const packers = Math.max(0, numPackers);
 
     if (budget <= 0) {
-      alert('ദയവായി സാധുവായ ഒരു കൂലി ബഡ്ജറ്റ് തുക നൽകുക');
+      showToast('ദയവായി സാധുവായ ഒരു കൂലി ബഡ്ജറ്റ് തുക നൽകുക', 'warning');
       return;
     }
 
@@ -156,9 +158,9 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
 
       await loadDateData(selectedDate);
       onRefresh();
-      alert('കൂലി വിവരങ്ങൾ വിജയകരമായി സേവ് ചെയ്തു!');
+      showToast('കൂലി വിവരങ്ങൾ വിജയകരമായി സേവ് ചെയ്തു!', 'success');
     } catch (err: any) {
-      alert(`സേവ് ചെയ്യുന്നതിൽ പിഴവ്: ${err?.message || 'അജ്ഞാത പിഴവ്'}`);
+      showToast(`സേവ് ചെയ്യുന്നതിൽ പിഴവ്: ${err?.message || 'അജ്ഞാത പിഴവ്'}`, 'error');
     } finally {
       setIsSaving(false);
     }

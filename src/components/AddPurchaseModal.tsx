@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Ingredient } from '../types';
 import { FiX, FiSearch, FiSave, FiRefreshCw } from 'react-icons/fi';
 import { bulkPurchaseIngredients } from '../services/supabase';
+import { useFeedback } from '../context/FeedbackContext';
 
 interface AddPurchaseModalProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ export const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
   ingredients,
   onRefresh,
 }) => {
+  const { showToast } = useFeedback();
   const [searchTerm, setSearchTerm] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -85,18 +87,19 @@ export const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
     }
 
     if (purchases.length === 0) {
-      alert('വാങ്ങിയ അളവ് നൽകിയിട്ടില്ല (No purchase amounts entered)');
+      showToast('വാങ്ങിയ അളവ് നൽകിയിട്ടില്ല (No purchase amounts entered)', 'warning');
       return;
     }
 
     setIsSaving(true);
     try {
       await bulkPurchaseIngredients(purchases);
+      showToast('പർച്ചേസ് വിജയകരമായി രേഖപ്പെടുത്തി', 'success');
       onRefresh();
       setIsSaving(false);
       onClose();
     } catch (err: any) {
-      alert(`പർച്ചേസ് പരാജയപ്പെട്ടു: ${err?.message || 'Unknown error'}`);
+      showToast(`പർച്ചേസ് പരാജയപ്പെട്ടു: ${err?.message || 'Unknown error'}`, 'error');
       setIsSaving(false);
     }
   };

@@ -34,6 +34,7 @@ import { ManagePacketTypesModal } from './ManagePacketTypesModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import { createPortal } from 'react-dom';
 import { ThemeSelect } from './ThemeSelect';
+import { useFeedback } from '../context/FeedbackContext';
 
 interface IngredientsAdminViewProps {
   ingredients: Ingredient[];
@@ -48,6 +49,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   stockMovements = [],
   onRefresh,
 }) => {
+  const { showToast, confirm } = useFeedback();
+
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState<'all' | 'basic' | 'other' | 'low_stock'>('all');
 
@@ -149,7 +152,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   const handlePacketSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!packProductId || !packSizeLabel.trim()) {
-      alert('ഉൽപ്പന്നവും പാക്കറ്റ് അളവും തിരഞ്ഞെടുക്കണം (Please select product and size)');
+      showToast('ഉൽപ്പന്നവും പാക്കറ്റ് അളവും തിരഞ്ഞെടുക്കണം (Please select product and size)', 'warning');
       return;
     }
 
@@ -165,11 +168,12 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
         packingLabourRate: Number(packLabourRate) || 1.0,
         isActive: packIsActive,
       });
+      showToast('പാക്കറ്റ് വിജയകരമായി സൂക്ഷിച്ചു', 'success');
       setPacketModalOpen(false);
       loadPackagingItems();
       onRefresh();
     } catch (err: any) {
-      alert(`പാക്കറ്റ് സേവ് ചെയ്യുന്നതിൽ പിഴവ്: ${err?.message || 'Error saving packet'}`);
+      showToast(`പാക്കറ്റ് സേവ് ചെയ്യുന്നതിൽ പിഴവ്: ${err?.message || 'Error'}`, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -181,12 +185,12 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     if (!packAdjustItem || deltaAmount <= 0) return;
 
     if (!packAdjustIsAdd && packAdjustItem.currentStock <= 0) {
-      alert('മുന്നറിയിപ്പ്: കവർ സ്റ്റോക്ക് 0 ആണ്!');
+      showToast('മുന്നറിയിപ്പ്: കവർ സ്റ്റോക്ക് 0 ആണ്!', 'warning');
       return;
     }
 
     if (!packAdjustIsAdd && deltaAmount > packAdjustItem.currentStock) {
-      alert(`മുന്നറിയിപ്പ്: ലഭ്യമായ സ്റ്റോക്കിൽ (${packAdjustItem.currentStock} pcs) കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല!`);
+      showToast(`മുന്നറിയിപ്പ്: ലഭ്യമായ സ്റ്റോക്കിൽ (${packAdjustItem.currentStock} pcs) കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല!`, 'warning');
       return;
     }
 
@@ -194,25 +198,34 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     try {
       const delta = packAdjustIsAdd ? deltaAmount : -deltaAmount;
       await adjustPackagingItemStock(packAdjustItem.id, delta, packAdjustReason);
+      showToast('കവർ സ്റ്റോക്ക് വിജയകരമായി മാറ്റി', 'success');
       setPackAdjustModalOpen(false);
       loadPackagingItems();
       onRefresh();
     } catch (err: any) {
-      alert(`കവർ സ്റ്റോക്ക് മാറ്റുന്നതിൽ പിഴവ്: ${err?.message || 'Error updating stock'}`);
+      showToast(`കവർ സ്റ്റോക്ക് മാറ്റുന്നതിൽ പിഴവ്: ${err?.message || 'Error'}`, 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDeletePackaging = async (item: PackagingItem) => {
-    const confirm = window.confirm(`"${item.productName || 'Product'} - ${item.sizeLabel}" പാക്കറ്റ് ടൈപ്പ് നീക്കം ചെയ്യണോ?`);
-    if (!confirm) return;
+    const confirmed = await confirm({
+      title: 'പാക്കറ്റ് ടൈപ്പ് നീക്കം ചെയ്യണോ?',
+      message: `"${item.productName || 'Product'} - ${item.sizeLabel}" പാക്കറ്റ് ടൈപ്പ് ഡാറ്റാബേസിൽ നിന്ന് പൂർണ്ണമായി നീക്കം ചെയ്യണോ?`,
+      confirmLabel: 'ഡിലീറ്റ് ചെയ്യുക',
+      cancelLabel: 'റദ്ദാക്കുക',
+      isDestructive: true,
+    });
+    if (!confirmed) return;
+
     try {
       await deletePackagingItem(item.id);
+      showToast('പാക്കറ്റ് ടൈപ്പ് ഡാറ്റാബേസിൽ നിന്ന് നീക്കം ചെയ്തു', 'success');
       loadPackagingItems();
       onRefresh();
     } catch (err: any) {
-      alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message}`);
+      showToast(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message}`, 'error');
     }
   };
 
@@ -283,10 +296,11 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
         notes: notes.trim() || undefined,
         isActive,
       });
+      showToast('ചേരുവ വിജയകരമായി സൂക്ഷിച്ചു', 'success');
       setFormModalOpen(false);
       onRefresh();
     } catch (err: any) {
-      alert(`ചേരുവ സൂക്ഷിക്കുന്നതിൽ പിഴവ്: ${err?.message || 'Error saving ingredient'}`);
+      showToast(`ചേരുവ സൂക്ഷിക്കുന്നതിൽ പിഴവ്: ${err?.message || 'Error'}`, 'error');
     } finally {
       setIsSubmitting(false);
     }
@@ -298,12 +312,12 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     if (!selectedIngredient || deltaAmount <= 0) return;
 
     if (!adjustIsAdd && selectedIngredient.currentStock <= 0) {
-      alert('മുന്നറിയിപ്പ്: സ്റ്റോക്ക് 0 ആണ്! നെഗറ്റീവ് ആകാൻ കഴിയില്ല.');
+      showToast('മുന്നറിയിപ്പ്: സ്റ്റോക്ക് 0 ആണ്! നെഗറ്റീവ് ആകാൻ കഴിയില്ല.', 'warning');
       return;
     }
 
     if (!adjustIsAdd && deltaAmount > selectedIngredient.currentStock) {
-      alert(`മുന്നറിയിപ്പ്: ലഭ്യമായ സ്റ്റോക്കിൽ (${selectedIngredient.currentStock} ${selectedIngredient.unit}) കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല!`);
+      showToast(`മുന്നറിയിപ്പ്: ലഭ്യമായ സ്റ്റോക്കിൽ (${selectedIngredient.currentStock} ${selectedIngredient.unit}) കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല!`, 'warning');
       return;
     }
 
@@ -311,26 +325,32 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     try {
       const delta = adjustIsAdd ? deltaAmount : -deltaAmount;
       await adjustIngredientStock(selectedIngredient.id, delta, adjustReason, 'Admin');
+      showToast('സ്റ്റോക്ക് വിജയകരമായി മാറ്റി', 'success');
       setAdjustModalOpen(false);
       onRefresh();
     } catch (err: any) {
-      alert(`സ്റ്റോക്ക് മാറ്റുന്നതിൽ പിഴവ്: ${err?.message || 'Error updating stock'}`);
+      showToast(`സ്റ്റോക്ക് മാറ്റുന്നതിൽ പിഴവ്: ${err?.message || 'Error'}`, 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (ing: Ingredient) => {
-    const confirmDelete = window.confirm(
-      `"${ing.name}" എന്ന ചേരുവ നീക്കം ചെയ്യണോ?\nAre you sure you want to delete this ingredient?`
-    );
-    if (!confirmDelete) return;
+    const confirmed = await confirm({
+      title: 'ചേരുവ ഡിലീറ്റ് ചെയ്യണോ?',
+      message: `"${ing.name}" എന്ന ചേരുവ ഡാറ്റാബേസിൽ നിന്ന് പൂർണ്ണമായി നീക്കം ചെയ്യണോ?\n(Are you sure you want to permanently delete this ingredient from the database?)`,
+      confirmLabel: 'ഡാറ്റാബേസിൽ നിന്ന് ഡിലീറ്റ് ചെയ്യുക',
+      cancelLabel: 'റദ്ദാക്കുക',
+      isDestructive: true,
+    });
+    if (!confirmed) return;
 
     try {
       await deleteIngredient(ing.id);
+      showToast(`"${ing.name}" ഡാറ്റാബേസിൽ നിന്ന് നീക്കം ചെയ്തു`, 'success');
       onRefresh();
     } catch (err: any) {
-      alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Failed to delete'}`);
+      showToast(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Failed to delete'}`, 'error');
     }
   };
 
@@ -492,8 +512,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
         </div>
       </div>
 
-      {/* Ingredients Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
+      {/* Ingredients Grid - Increased card widths for desktop */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {filteredIngredients.map((ing) => {
           const isLowStock = ing.isActive && ing.minStock > 0 && ing.currentStock <= ing.minStock;
 
@@ -649,6 +669,13 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 >
                   <FiEdit2 className="w-3.5 h-3.5" />
                   <span className="font-malayalam">തിരുത്തുക</span>
+                </button>
+                <button
+                  onClick={() => handleDelete(ing)}
+                  className="flex items-center justify-center p-2 rounded-xl text-stone-400 hover:text-red-500 hover:bg-red-500/10 border border-stone-200 dark:border-[#2E2828] hover:border-red-500/30 press-apple transition-colors"
+                  title="ഡിലീറ്റ് ചെയ്യുക (Delete from database)"
+                >
+                  <FiTrash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>

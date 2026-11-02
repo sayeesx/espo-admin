@@ -26,6 +26,7 @@ import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import { createPortal } from 'react-dom';
 import { ThemeSelect } from './ThemeSelect';
+import { useFeedback } from '../context/FeedbackContext';
 
 interface ProductsAdminViewProps {
   products: Product[];
@@ -73,6 +74,8 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   recipes = [],
   onRefresh,
 }) => {
+  const { showToast, confirm } = useFeedback();
+
   const recipeEligibleIngredients = useMemo(
     () => ingredients.filter((ing) => ing.isActive && !isExcludedRecipeIngredient(ing)),
     [ingredients]
@@ -384,15 +387,23 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
 
   const handleDeleteRecipe = async () => {
     if (!existingRecipe) return;
-    if (!window.confirm(`"${recipeProduct?.name}" ന്റെ പാചകക്കുറിപ്പ് നീക്കം ചെയ്യണോ?`)) return;
+    const confirmed = await confirm({
+      title: 'പാചകക്കുറിപ്പ് നീക്കം ചെയ്യണോ?',
+      message: `"${recipeProduct?.name}" ന്റെ പാചകക്കുറിപ്പ് നീക്കം ചെയ്യണോ?`,
+      confirmLabel: 'ഡിലീറ്റ് ചെയ്യുക',
+      cancelLabel: 'റദ്ദാക്കുക',
+      isDestructive: true,
+    });
+    if (!confirmed) return;
 
     setIsDeletingRecipe(true);
     try {
       await deleteRecipe(existingRecipe.id);
+      showToast('പാചകക്കുറിപ്പ് വിജയകരമായി നീക്കം ചെയ്തു', 'success');
       setRecipeModalOpen(false);
       onRefresh();
     } catch (err: any) {
-      alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Error deleting recipe'}`);
+      showToast(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Error deleting recipe'}`, 'error');
     } finally {
       setIsDeletingRecipe(false);
     }
@@ -417,6 +428,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
         currentStock: Number(currentStock) || 0,
         isActive,
       });
+      showToast('ഉൽപ്പന്നം വിജയകരമായി സൂക്ഷിച്ചു', 'success');
       setModalOpen(false);
       onRefresh();
     } catch (err: any) {
@@ -427,17 +439,22 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   };
 
   const handleDelete = async (p: Product) => {
-    const confirmDelete = window.confirm(
-      `"${p.name}" എന്ന ഉൽപ്പന്നം നീക്കം ചെയ്യണോ?\nAre you sure you want to delete this product?`
-    );
-    if (!confirmDelete) return;
+    const confirmed = await confirm({
+      title: 'ഉൽപ്പന്നം നീക്കം ചെയ്യണോ?',
+      message: `"${p.name}" എന്ന ഉൽപ്പന്നം ഡാറ്റാബേസിൽ നിന്ന് നീക്കം ചെയ്യണോ?`,
+      confirmLabel: 'ഡാറ്റാബേസിൽ നിന്ന് ഡിലീറ്റ് ചെയ്യുക',
+      cancelLabel: 'റദ്ദാക്കുക',
+      isDestructive: true,
+    });
+    if (!confirmed) return;
 
     setIsDeletingProductId(p.id);
     try {
       await deleteProduct(p.id);
+      showToast(`"${p.name}" ഡാറ്റാബേസിൽ നിന്ന് നീക്കം ചെയ്തു`, 'success');
       onRefresh();
     } catch (err: any) {
-      alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Error deleting product'}`);
+      showToast(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Error deleting product'}`, 'error');
     } finally {
       setIsDeletingProductId(null);
     }
@@ -456,17 +473,17 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
     if (!stockAdjustProduct) return;
     const deltaAmount = Number(stockAdjustDelta) || 0;
     if (deltaAmount <= 0) {
-      alert('സാധുവായ അളവ് നൽകുക (Please enter a valid quantity > 0)');
+      showToast('സാധുവായ അളവ് നൽകുക (Please enter a valid quantity > 0)', 'warning');
       return;
     }
 
     if (!stockAdjustIsAdd && stockAdjustProduct.currentStock <= 0) {
-      alert('സ്റ്റോക്ക് 0 ആണ്! നെഗറ്റീവ് ആക്കാൻ കഴിയില്ല (Stock is 0, cannot reduce)');
+      showToast('സ്റ്റോക്ക് 0 ആണ്! നെഗറ്റീവ് ആക്കാൻ കഴിയില്ല', 'warning');
       return;
     }
 
     if (!stockAdjustIsAdd && deltaAmount > stockAdjustProduct.currentStock) {
-      alert(`ലഭ്യമായ സ്റ്റോക്കിൽ (${stockAdjustProduct.currentStock} ${stockAdjustProduct.unit}) കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല!`);
+      showToast(`ലഭ്യമായ സ്റ്റോക്കിൽ (${stockAdjustProduct.currentStock} ${stockAdjustProduct.unit}) കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല!`, 'warning');
       return;
     }
 
@@ -474,10 +491,11 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
     try {
       const delta = stockAdjustIsAdd ? deltaAmount : -deltaAmount;
       await adjustProductStock(stockAdjustProduct.id, delta, stockAdjustReason);
+      showToast('സ്റ്റോക്ക് വിജയകരമായി പുതുക്കി', 'success');
       setStockAdjustModalOpen(false);
       onRefresh();
     } catch (err: any) {
-      alert(`സ്റ്റോക്ക് മാറ്റുന്നതിൽ പിഴവ്: ${err?.message || 'Error updating product stock'}`);
+      showToast(`സ്റ്റോക്ക് മാറ്റുന്നതിൽ പിഴവ്: ${err?.message || 'Error updating product stock'}`, 'error');
     } finally {
       setIsAdjustingStock(false);
     }
@@ -486,13 +504,17 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   const handleClearStockToZero = async () => {
     if (!stockAdjustProduct) return;
     if (stockAdjustProduct.currentStock <= 0) {
-      alert('സ്റ്റോക്ക് ഇതിനകം 0 ആണ്! (Stock is already 0)');
+      showToast('സ്റ്റോക്ക് ഇതിനകം 0 ആണ്! (Stock is already 0)', 'info');
       return;
     }
-    const confirmClear = window.confirm(
-      `"${stockAdjustProduct.name}" ന്റെ സ്റ്റോക്ക് (${stockAdjustProduct.currentStock} ${stockAdjustProduct.unit}) പൂർണ്ണമായി ഡിലീറ്റ് ചെയ്യണോ?\nAre you sure you want to delete/clear this stock to 0?`
-    );
-    if (!confirmClear) return;
+    const confirmed = await confirm({
+      title: 'സ്റ്റോക്ക് 0 ആക്കണോ?',
+      message: `"${stockAdjustProduct.name}" ന്റെ നിലവിലെ സ്റ്റോക്ക് (${stockAdjustProduct.currentStock} ${stockAdjustProduct.unit}) പൂർണ്ണമായി ഡിലീറ്റ് ചെയ്യണോ?`,
+      confirmLabel: 'സ്റ്റോക്ക് ക്ലിയർ ചെയ്യുക',
+      cancelLabel: 'റദ്ദാക്കുക',
+      isDestructive: true,
+    });
+    if (!confirmed) return;
 
     setIsAdjustingStock(true);
     try {
@@ -501,10 +523,11 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
         -stockAdjustProduct.currentStock,
         'സ്റ്റോക്ക് പൂർണ്ണമായി ഡിലീറ്റ് ചെയ്തു (Stock Cleared to 0)'
       );
+      showToast('സ്റ്റോക്ക് വിജയകരമായി ക്ലിയർ ചെയ്തു', 'success');
       setStockAdjustModalOpen(false);
       onRefresh();
     } catch (err: any) {
-      alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Error clearing stock'}`);
+      showToast(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Error clearing stock'}`, 'error');
     } finally {
       setIsAdjustingStock(false);
     }
@@ -597,8 +620,8 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
         </div>
       </div>
 
-      {/* Products Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
+      {/* Products Grid - Increased card widths for desktop */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {filteredProducts.map((p) => {
           const totalValuation = p.currentStock * p.wholesalePrice;
           const productRecipe = recipes.find((r) => r.productId === p.id);

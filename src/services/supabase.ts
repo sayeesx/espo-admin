@@ -374,6 +374,12 @@ export async function adjustIngredientStock(
 
 export async function deleteIngredient(id: string): Promise<void> {
   dbCache.invalidate('admin_ingredients');
+  dbCache.invalidate('admin_recipes');
+  try {
+    await supabase.from('recipe_items').delete().eq('ingredient_id', id);
+  } catch (e) {
+    console.warn('recipe_items cleanup note:', e);
+  }
   const { error } = await supabase
     .from('ingredients')
     .delete()

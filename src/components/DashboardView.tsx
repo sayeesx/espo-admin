@@ -41,6 +41,7 @@ import {
 } from 'recharts';
 import { useTheme } from '../context/ThemeContext';
 import { AnimatedNumber } from './AnimatedNumber';
+import { useFeedback } from '../context/FeedbackContext';
 
 interface DashboardViewProps {
   products: Product[];
@@ -143,6 +144,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onRefresh,
   onOpenAI,
 }) => {
+  const { showToast, confirm } = useFeedback();
   const { isDark } = useTheme();
   const dateScrollRef = useRef<HTMLDivElement>(null);
   const desktopDateScrollRef = useRef<HTMLDivElement>(null);
@@ -346,17 +348,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
 
   const handleDeleteBatch = async (run: ProductionRun) => {
-    const confirm = window.confirm(
-      `ബാച്ച് #${run.runNumber} (${run.productName}) ഡാറ്റാബേസിൽ നിന്നും പൂർണ്ണമായി ഒഴിവാക്കണോ?\nAre you sure you want to permanently delete this production batch?`
-    );
-    if (!confirm) return;
+    const confirmed = await confirm({
+      title: 'ബാച്ച് നീക്കം ചെയ്യണോ?',
+      message: `ബാച്ച് #${run.runNumber} (${run.productName}) ഡാറ്റാബേസിൽ നിന്നും പൂർണ്ണമായി ഒഴിവാക്കണോ?`,
+      confirmLabel: 'ഡിലീറ്റ് ചെയ്യുക',
+      cancelLabel: 'റദ്ദാക്കുക',
+      isDestructive: true,
+    });
+    if (!confirmed) return;
 
     try {
       setDeletingBatchId(run.id);
       await deleteProductionRun(run.id);
+      showToast(`ബാച്ച് #${run.runNumber} വിജയകരമായി നീക്കം ചെയ്തു`, 'success');
       onRefresh?.();
     } catch (err: any) {
-      alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Failed to delete batch'}`);
+      showToast(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Failed to delete batch'}`, 'error');
     } finally {
       setDeletingBatchId(null);
     }

@@ -22,6 +22,7 @@ import {
   FactoryProfile,
   DEFAULT_FACTORY_PROFILE,
 } from '../types';
+import { useFeedback } from '../context/FeedbackContext';
 
 interface SettingsAdminViewProps {
   products: Product[];
@@ -38,6 +39,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   stockMovements,
   onRefresh,
 }) => {
+  const { showToast } = useFeedback();
   // ==========================================
   // 1. PRODUCTION PIN STATE
   // ==========================================
@@ -266,7 +268,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
           throw new Error(res.message);
         }
         setResetSuccessNotice('എല്ലാ ഉൽപ്പന്നങ്ങൾ, ചേരുവകൾ, പാക്കറ്റുകൾ എന്നിവയുടെ സ്റ്റോക്ക് പൂജ്യമാക്കി (0)! (All stocks reset to 0)');
-        alert('എല്ലാ ഉൽപ്പന്നങ്ങൾ, ചേരുവകൾ, പാക്കറ്റുകൾ എന്നിവയുടെ സ്റ്റോക്ക് പൂജ്യമാക്കി (0)! (All stocks reset to 0)');
+        showToast('എല്ലാ ഉൽപ്പന്നങ്ങൾ, ചേരുവകൾ, പാക്കറ്റുകൾ എന്നിവയുടെ സ്റ്റോക്ക് പൂജ്യമാക്കി (0)!', 'success');
       } else if (resetModalType === 'full') {
         // Full factory reset
         await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');

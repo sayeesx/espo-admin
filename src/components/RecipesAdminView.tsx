@@ -15,6 +15,7 @@ import { ThemeSelect } from './ThemeSelect';
 import { ManagePacketTypesModal } from './ManagePacketTypesModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import { createPortal } from 'react-dom';
+import { useFeedback } from '../context/FeedbackContext';
 
 interface RecipesAdminViewProps {
   recipes: Recipe[];
@@ -29,6 +30,7 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
   ingredients,
   onRefresh,
 }) => {
+  const { showToast, confirm } = useFeedback();
   const [modalOpen, setModalOpen] = useState(false);
   const [managePacketsOpen, setManagePacketsOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
@@ -228,11 +230,11 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!productId) {
-      alert('ഉൽപ്പന്നം തിരഞ്ഞെടുക്കുക');
+      showToast('ഉൽപ്പന്നം തിരഞ്ഞെടുക്കുക', 'warning');
       return;
     }
     if (recipeItems.length === 0) {
-      alert('കുറഞ്ഞത് ഒരു ചേരുവയെങ്കിലും ചേർക്കുക');
+      showToast('കുറഞ്ഞത് ഒരു ചേരുവയെങ്കിലും ചേർക്കുക', 'warning');
       return;
     }
 
@@ -252,22 +254,32 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
         })),
         recipePackets
       );
+      showToast('പാചകക്കുറിപ്പ് വിജയകരമായി സൂക്ഷിച്ചു', 'success');
       setModalOpen(false);
       onRefresh();
     } catch (err: any) {
-      alert(`പാചകക്കുറിപ്പ് സംരക്ഷിക്കുന്നതിൽ പിഴവ്: ${err?.message || 'Error saving recipe'}`);
+      showToast(`പാചകക്കുറിപ്പ് സംരക്ഷിക്കുന്നതിൽ പിഴവ്: ${err?.message || 'Error saving recipe'}`, 'error');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleDelete = async (r: Recipe) => {
-    if (!window.confirm(`"${r.productName}" ന്റെ പാചകക്കുറിപ്പ് നീക്കം ചെയ്യണോ?`)) return;
+    const confirmed = await confirm({
+      title: 'പാചകക്കുറിപ്പ് നീക്കം ചെയ്യണോ?',
+      message: `"${r.productName}" ന്റെ പാചകക്കുറിപ്പ് നീക്കം ചെയ്യണോ? ഈ പ്രവർത്തനം പഴയപടിയാക്കാൻ കഴിയില്ല.`,
+      confirmLabel: 'ഡിലീറ്റ് ചെയ്യുക',
+      cancelLabel: 'റദ്ദാക്കുക',
+      isDestructive: true,
+    });
+    if (!confirmed) return;
+
     try {
       await deleteRecipe(r.id);
+      showToast('പാചകക്കുറിപ്പ് വിജയകരമായി നീക്കം ചെയ്തു', 'success');
       onRefresh();
     } catch (err: any) {
-      alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Error deleting recipe'}`);
+      showToast(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Error deleting recipe'}`, 'error');
     }
   };
 

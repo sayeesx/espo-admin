@@ -19,10 +19,12 @@ import {
   FiShoppingBag,
   FiCpu,
   FiSettings,
+  FiLayers,
 } from 'react-icons/fi';
 
 export type AdminTab =
   | 'dashboard'
+  | 'inventory'
   | 'insights'
   | 'sales'
   | 'wages'
@@ -63,6 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
     badge?: number;
   }[] = [
     { id: 'dashboard', labelMl: 'ഡാഷ്‌ബോർഡ്', icon: FiGrid },
+    { id: 'inventory', labelMl: 'സ്റ്റോക്ക് ഇൻവെന്ററി', icon: FiLayers },
     { id: 'insights', labelMl: 'അനലിറ്റിക്സ്', icon: FiActivity },
     { id: 'sales', labelMl: 'വിൽപ്പന', icon: FiShoppingBag },
     { id: 'wages', labelMl: 'കൂലി', icon: FiUsers },

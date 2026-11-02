@@ -25,6 +25,7 @@ import {
 } from '../services/supabase';
 import { AnimatedNumber } from './AnimatedNumber';
 import { createPortal } from 'react-dom';
+import { useFeedback } from '../context/FeedbackContext';
 
 interface SalesAdminViewProps {
   products: Product[];
@@ -70,6 +71,7 @@ export interface BillData {
 }
 
 export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
+  const { showToast, confirm } = useFeedback();
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [costingPrices, setCostingPrices] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -318,7 +320,7 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
   // Remove item row
   const handleRemoveItem = (id: string) => {
     if (invoiceItems.length <= 1) {
-      alert('കുറഞ്ഞത് ഒരു ഉൽപ്പന്നമെങ്കിലും ബില്ലിൽ ഉണ്ടായിരിക്കണം');
+      showToast('കുറഞ്ഞത് ഒരു ഉൽപ്പന്നമെങ്കിലും ബില്ലിൽ ഉണ്ടായിരിക്കണം', 'warning');
       return;
     }
     setInvoiceItems((prev) => prev.filter((item) => item.id !== id));
@@ -468,13 +470,21 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('ഈ വിൽപ്പന റെക്കോർഡ് നീക്കം ചെയ്യണോ?')) return;
+    const confirmed = await confirm({
+      title: 'വിൽപ്പന റെക്കോർഡ് നീക്കം ചെയ്യണോ?',
+      message: 'ഈ വിൽപ്പന റെക്കോർഡ് നീക്കം ചെയ്യണോ? ഈ പ്രവർത്തനം പഴയപടിയാക്കാൻ കഴിയില്ല.',
+      confirmLabel: 'ഡിലീറ്റ് ചെയ്യുക',
+      cancelLabel: 'റദ്ദാക്കുക',
+      isDestructive: true,
+    });
+    if (!confirmed) return;
     try {
       setDeletingSaleId(id);
       await deleteSale(id);
       setSales((prev) => prev.filter((s) => s.id !== id));
-    } catch (err) {
-      alert('ഡിലീറ്റ് ചെയ്യാനായില്ല');
+      showToast('വിൽപ്പന റെക്കോർഡ് വിജയകരമായി നീക്കം ചെയ്തു', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'ഡിലീറ്റ് ചെയ്യാനായില്ല', 'error');
     } finally {
       setDeletingSaleId(null);
     }

@@ -14,6 +14,7 @@ import {
 } from '../services/supabase';
 import { roundCurrency, roundStock } from '../services/costing';
 import { LoadingSpinner } from './LoadingSpinner';
+import { useFeedback } from '../context/FeedbackContext';
 import {
   FiCalendar,
   FiArrowLeft,
@@ -69,6 +70,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   productionRuns,
   onRefresh,
 }) => {
+  const { showToast } = useFeedback();
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
 
   // Available distinct production dates
@@ -306,9 +308,10 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
       await saveProductSellingPrice(productId, price);
       setSellingPrices((prev) => ({ ...prev, [productId]: price }));
       setEditingPriceId(null);
+      showToast('വില വിജയകരമായി സേവ് ചെയ്തു', 'success');
       await loadCostingData(selectedDate);
     } catch (err: any) {
-      alert(`വില സേവ് ചെയ്യാനായില്ല: ${err?.message || 'Unknown error'}`);
+      showToast(`വില സേവ് ചെയ്യാനായില്ല: ${err?.message || 'Unknown error'}`, 'error');
     } finally {
       setIsSavingPrice(false);
     }

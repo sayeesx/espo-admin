@@ -18,6 +18,7 @@ import { SalesAdminView } from './components/SalesAdminView';
 import { WagesAdminView } from './components/WagesAdminView';
 import { AIAdminAssistant } from './components/AIAdminAssistant';
 import { SettingsAdminView } from './components/SettingsAdminView';
+import { InventoryStockAdminView } from './components/InventoryStockAdminView';
 import {
   fetchProducts,
   fetchIngredients,
@@ -42,6 +43,7 @@ export const App: React.FC = () => {
       const tabParam = params.get('tab') as AdminTab;
       const validTabs: AdminTab[] = [
         'dashboard',
+        'inventory',
         'insights',
         'sales',
         'wages',
@@ -289,6 +291,13 @@ export const App: React.FC = () => {
                   onNavigateTab={handleTabChange}
                   onRefresh={loadAllData}
                   onOpenAI={() => setIsAIOpen(true)}
+                />
+              )}
+
+              {activeTab === 'inventory' && (
+                <InventoryStockAdminView
+                  products={products}
+                  onRefresh={loadAllData}
                 />
               )}
 

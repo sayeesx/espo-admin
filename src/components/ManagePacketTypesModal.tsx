@@ -18,6 +18,7 @@ import {
 } from 'react-icons/fi';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import { createPortal } from 'react-dom';
+import { useFeedback } from '../context/FeedbackContext';
 
 interface ManagePacketTypesModalProps {
   isOpen: boolean;
@@ -30,6 +31,7 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
   onClose,
   onUpdated,
 }) => {
+  const { showToast, confirm } = useFeedback();
   useLockBodyScroll(isOpen);
 
   const [packetTypes, setPacketTypes] = useState<PacketType[]>([]);
@@ -142,13 +144,22 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
   };
 
   const handleDelete = async (id: string, pktName: string) => {
-    if (!window.confirm(`"${pktName}" പാക്കറ്റ് തരം നീക്കം ചെയ്യണോ?`)) return;
+    const confirmed = await confirm({
+      title: 'പാക്കറ്റ് തരം നീക്കം ചെയ്യണോ?',
+      message: `"${pktName}" പാക്കറ്റ് തരം നീക്കം ചെയ്യണോ?`,
+      confirmLabel: 'ഡിലീറ്റ് ചെയ്യുക',
+      cancelLabel: 'റദ്ദാക്കുക',
+      isDestructive: true,
+    });
+    if (!confirmed) return;
+
     try {
       await deletePacketType(id);
+      showToast('പാക്കറ്റ് തരം വിജയകരമായി നീക്കം ചെയ്തു', 'success');
       await loadData();
       if (onUpdated) onUpdated();
     } catch (err: any) {
-      alert(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Error deleting packet type'}`);
+      showToast(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Error deleting packet type'}`, 'error');
     }
   };
 
