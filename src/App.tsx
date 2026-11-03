@@ -1,3 +1,8 @@
+// Canonical Domain Enforcement: redirect typo domain espo-admin.vercel.app to epso-admin.vercel.app
+if (typeof window !== 'undefined' && window.location.hostname === 'espo-admin.vercel.app') {
+  window.location.replace('https://epso-admin.vercel.app' + window.location.pathname + window.location.search + window.location.hash);
+}
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from './context/AuthContext';
 import { PinGate } from './components/PinGate';
@@ -86,11 +91,49 @@ export const App: React.FC = () => {
     try {
       localStorage.setItem(ACTIVE_TAB_KEY, newTab);
       const url = new URL(window.location.href);
-      url.searchParams.set('tab', newTab);
-      window.history.replaceState({}, '', url.toString());
+      if (url.searchParams.get('tab') !== newTab) {
+        url.searchParams.set('tab', newTab);
+        window.history.pushState({ tab: newTab }, '', url.toString());
+      }
     } catch {
       // ignore
     }
+  }, []);
+
+  // Browser Back/Forward navigation support so user never drops out of epso-admin.vercel.app
+  useEffect(() => {
+    const handlePopState = () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const tabParam = params.get('tab') as AdminTab;
+        const validTabs: AdminTab[] = [
+          'dashboard',
+          'inventory',
+          'insights',
+          'sales',
+          'wages',
+          'costing',
+          'ai',
+          'notifications',
+          'products',
+          'ingredients',
+          'movements',
+          'settings',
+        ];
+        if (tabParam && validTabs.includes(tabParam)) {
+          setActiveTab(tabParam);
+          localStorage.setItem(ACTIVE_TAB_KEY, tabParam);
+        } else {
+          setActiveTab('dashboard');
+          localStorage.setItem(ACTIVE_TAB_KEY, 'dashboard');
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   const [products, setProducts] = useState<Product[]>([]);

@@ -13,6 +13,8 @@ import {
   FiRefreshCw,
   FiCopy,
   FiMenu,
+  FiArrowLeft,
+  FiShoppingBag,
 } from 'react-icons/fi';
 import { Product, SaleRecord, FactoryProfile, DEFAULT_FACTORY_PROFILE } from '../types';
 import {
@@ -75,7 +77,28 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [costingPrices, setCostingPrices] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'list' | 'new_bill'>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('sub') === 'new_bill' ? 'new_bill' : 'list';
+    } catch {
+      return 'list';
+    }
+  });
+
+  // Sync sub-view with browser history so Back button returns to Sales list instead of leaving the site
+  useEffect(() => {
+    const handleSubPopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('sub') === 'new_bill') {
+        setViewMode('new_bill');
+      } else {
+        setViewMode('list');
+      }
+    };
+    window.addEventListener('popstate', handleSubPopState);
+    return () => window.removeEventListener('popstate', handleSubPopState);
+  }, []);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedDateFilter, setSelectedDateFilter] = useState<string>('');
 
@@ -275,7 +298,29 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
     setDiscountAmount('0');
     setInvoiceItems([initialItem]);
     setErrorMsg('');
-    setIsModalOpen(true);
+    setViewMode('new_bill');
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('sub') !== 'new_bill') {
+        url.searchParams.set('sub', 'new_bill');
+        window.history.pushState({ tab: 'sales', sub: 'new_bill' }, '', url.toString());
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleCloseNewBill = () => {
+    setViewMode('list');
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('sub') === 'new_bill') {
+        url.searchParams.delete('sub');
+        window.history.pushState({ tab: 'sales' }, '', url.toString());
+      }
+    } catch {
+      // ignore
+    }
   };
 
   // Add Item Row
@@ -424,7 +469,12 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
         gstBreakdown: invoiceCalculations.gstBreakdown,
       };
 
-      setIsModalOpen(false);
+      setViewMode('list');
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('sub');
+        window.history.replaceState({ tab: 'sales' }, '', url.toString());
+      } catch {}
       await loadData();
 
       if (shouldPrint) {
@@ -509,7 +559,7 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
     ].filter(Boolean).join(' | ');
 
     const footerText = cleanFooter(currentProfile.billFooter) || 'നന്ദി! വീണ്ടും സന്ദർശിക്കുക.';
-    const firmName = currentProfile.name && !['espo production', 'epso production'].includes(currentProfile.name.trim().toLowerCase())
+    const firmName = currentProfile.name && !['epso production'].includes(currentProfile.name.trim().toLowerCase())
       ? currentProfile.name
       : 'EPSO';
 
@@ -626,8 +676,8 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
         }
       `}</style>
 
-      {/* Header Bar */}
-      <div className="flex items-center justify-between gap-3 flex-wrap pb-1 font-malayalam">
+      {/* Header Bar with Sub-Tab Switcher */}
+      <div className="flex items-center justify-between gap-3 flex-wrap pb-3 border-b border-stone-200/80 dark:border-[#2E2828] font-malayalam">
         <div>
           <h2 className="text-base sm:text-lg font-black text-stone-900 dark:text-white flex items-center gap-2">
             <span>വിൽപ്പന & ബില്ലിംഗ് (Sales & Invoicing)</span>
@@ -637,15 +687,35 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
           </p>
         </div>
 
-        <button
-          onClick={handleOpenNewBill}
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-2xl bg-epso-orange hover:bg-orange-600 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-black text-xs shadow-md press-apple cursor-pointer transition-all"
-        >
-          <FiPlus className="w-4 h-4 stroke-[3]" />
-          <span>വിൽപ്പന രേഖപ്പെടുത്തുക (New Bill)</span>
-        </button>
+        <div className="flex items-center gap-2 bg-stone-100 dark:bg-[#1E1B1B] p-1.5 rounded-2xl border border-stone-200 dark:border-[#2E2828]">
+          <button
+            type="button"
+            onClick={handleCloseNewBill}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer font-malayalam ${
+              viewMode === 'list'
+                ? 'bg-white dark:bg-[#252020] text-stone-900 dark:text-white shadow-xs font-black'
+                : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-300'
+            }`}
+          >
+            വിൽപ്പന ലിസ്റ്റ് (Sales List)
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenNewBill}
+            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer font-malayalam ${
+              viewMode === 'new_bill'
+                ? 'bg-epso-orange text-white dark:bg-amber-500 dark:text-stone-950 shadow-xs font-black'
+                : 'text-stone-700 dark:text-stone-300 hover:text-epso-orange'
+            }`}
+          >
+            <FiPlus className="w-3.5 h-3.5 stroke-[3]" />
+            <span>+ വിൽപ്പന രേഖപ്പെടുത്തുക (New Bill)</span>
+          </button>
+        </div>
       </div>
 
+{viewMode === 'list' && (
+  <div className="space-y-4 font-sans animate-fade-in">
       {/* Clean Statistics Strip */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm">
@@ -813,14 +883,57 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
         )}
       </div>
 
+
+  </div>
+)}
       {/* ============================================================ */}
-      {/* FULL SCREEN BILLING MODAL                                    */}
+      {/* INLINE NEW BILL TAB VIEW (SAME TAB, PRESERVES APP SHELL)      */}
       {/* ============================================================ */}
-      {isModalOpen && createPortal(
-        <div className="fixed inset-0 z-[9999] w-screen h-screen bg-[#F8F9FA] dark:bg-[#141212] flex flex-col overflow-hidden text-stone-900 dark:text-stone-100 font-sans">
-          {/* Top Bar: Customer, Invoice No, Action Bar */}
-          <div className="bg-white dark:bg-[#1E1B1B] border-b border-stone-200 dark:border-[#2E2828] px-4 py-3 flex items-center justify-between gap-4 flex-wrap shrink-0 shadow-xs">
-            <div className="flex items-center gap-4 flex-wrap flex-1">
+      {viewMode === 'new_bill' && (
+        <div className="space-y-4 font-sans animate-fade-in">
+          {/* Top Bar: Return to list & Fast Action */}
+          <div className="bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] rounded-2xl p-4 flex items-center justify-between gap-4 flex-wrap shadow-xs">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleCloseNewBill}
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#252020] dark:hover:bg-[#2d2727] text-stone-800 dark:text-stone-200 text-xs font-bold transition-all cursor-pointer font-malayalam press-apple"
+              >
+                <FiArrowLeft className="w-4 h-4" />
+                <span>← വിൽപ്പന ലിസ്റ്റിലേക്ക് മടങ്ങുക (Back to Sales List)</span>
+              </button>
+              <span className="text-xs font-black text-stone-900 dark:text-white font-malayalam border-l border-stone-200 dark:border-[#2E2828] pl-3 hidden sm:inline-block">
+                പുതിയ വിൽപ്പന രേഖപ്പെടുത്തൽ (New Bill)
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCloseNewBill}
+                className="px-3.5 py-2 rounded-xl border border-stone-200 dark:border-[#2E2828] text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] text-xs font-bold transition-colors cursor-pointer font-malayalam"
+              >
+                റദ്ദാക്കുക (Discard)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveBill(true)}
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-epso-orange hover:bg-orange-600 dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-black text-xs shadow-md transition-all cursor-pointer press-apple disabled:opacity-50 font-malayalam"
+              >
+                {isSubmitting ? (
+                  <FiRefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <FiPrinter className="w-3.5 h-3.5 stroke-[2.5]" />
+                )}
+                <span>സേവ് & പ്രിന്റ് (Save & Print)</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Settings Ribbon: Customer, Invoice No, Date, Payment Mode */}
+          <div className="bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] rounded-2xl p-4 shadow-xs">
+            <div className="flex items-center gap-4 flex-wrap">
               {/* Customer Selector */}
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-stone-700 dark:text-stone-300 font-malayalam">ഉപഭോക്താവ്:</span>
@@ -844,7 +957,7 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                 <button
                   type="button"
                   onClick={() => setShowAddBuyerModal(true)}
-                  className="p-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-600 dark:text-stone-300 transition-colors"
+                  className="p-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-600 dark:text-stone-300 transition-colors cursor-pointer"
                   title="Add / Manage Buyers"
                 >
                   <FiMenu className="w-4 h-4" />
@@ -914,27 +1027,17 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                 </button>
               </div>
             </div>
-
-            {/* Close Full Screen Modal */}
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="p-2 rounded-xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
-              title="Close Full Screen"
-            >
-              <FiX className="w-5 h-5" />
-            </button>
           </div>
 
           {errorMsg && (
-            <div className="mx-6 mt-3 p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 rounded-xl text-xs flex items-center gap-2">
+            <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 rounded-xl text-xs flex items-center gap-2">
               <FiAlertCircle className="w-4 h-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {/* Body: Two Column ERP Billing Layout */}
-          <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               {/* Left Column: Items Table */}
               <div className="lg:col-span-8 bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] rounded-2xl shadow-sm p-4 space-y-4">
                 <div className="overflow-x-auto">
@@ -1123,17 +1226,15 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
 
                   <button
                     type="button"
-                    onClick={() => setIsModalOpen(false)}
-                    className="w-full py-2.5 px-4 rounded-xl border border-stone-300 dark:border-[#2E2828] text-stone-700 dark:text-stone-300 font-bold text-xs hover:bg-stone-100 dark:hover:bg-[#252020] transition-colors cursor-pointer"
+                    onClick={handleCloseNewBill}
+                    className="w-full py-2.5 px-4 rounded-xl border border-stone-300 dark:border-[#2E2828] text-stone-700 dark:text-stone-300 font-bold text-xs hover:bg-stone-100 dark:hover:bg-[#252020] transition-colors cursor-pointer font-malayalam"
                   >
-                    Discard / Close
+                    ലിസ്റ്റിലേക്ക് മടങ്ങുക (Discard / Back)
                   </button>
                 </div>
               </div>
             </div>
           </div>
-        </div>,
-        document.body
       )}
 
       {/* ============================================================ */}
@@ -1219,7 +1320,7 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                   </div>
 
                   {billProfile.name &&
-                    !['espo production', 'epso production'].includes(
+                    !['epso production'].includes(
                       billProfile.name.trim().toLowerCase()
                     ) && (
                       <h1 className="text-base font-bold tracking-wider text-black uppercase">

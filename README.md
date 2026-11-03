@@ -1,4 +1,4 @@
-# espo-admin
+# epso-admin
 
 Epso Production & Pantry Management - Super Admin Web Application (PWA).
 

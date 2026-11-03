@@ -16,6 +16,12 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Anek+Malayalam:wght@400;500;600;700;800&family=Manjari:wght@400;700&family=Noto+Sans+Malayalam:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script>
+      // Canonical Domain Enforcement: redirect typo domain espo-admin.vercel.app to epso-admin.vercel.app
+      if (window.location.hostname === 'espo-admin.vercel.app') {
+        window.location.replace('https://epso-admin.vercel.app' + window.location.pathname + window.location.search + window.location.hash);
+      }
+    </script>
   </head>
   <body class="bg-canvas dark:bg-canvas-dark text-charcoal dark:text-charcoal-text min-h-screen">
     <div id="root"></div>

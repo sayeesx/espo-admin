@@ -965,7 +965,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => onNavigateTab('sales')}
+              onClick={() => {
+                onNavigateTab('sales');
+                try {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('tab', 'sales');
+                  url.searchParams.set('sub', 'new_bill');
+                  window.history.pushState({ tab: 'sales', sub: 'new_bill' }, '', url.toString());
+                  window.dispatchEvent(new PopStateEvent('popstate'));
+                } catch {}
+              }}
               className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all shadow-2xs"
               title="Record Sale"
             >
