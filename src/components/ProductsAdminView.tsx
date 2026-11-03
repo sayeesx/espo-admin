@@ -348,13 +348,14 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
 
   const handleSaveRecipeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (recipeModalStep === 1) {
-      handleNextToPackets();
+    if (!recipeProduct) return;
+    if (!recipeItems || recipeItems.length === 0) {
+      setRecipeError('കുറഞ്ഞത് ഒരു ചേരുവയെങ്കിലും നൽകുക (At least one ingredient is required)');
       return;
     }
-    if (!recipeProduct) return;
-    if (recipeItems.length === 0) {
-      setRecipeError('കുറഞ്ഞത് ഒരു ചേരുവയെങ്കിലും നൽകുക (At least one ingredient is required)');
+    const hasInvalid = recipeItems.some((it) => !it.ingredientId || Number(it.quantity) <= 0);
+    if (hasInvalid) {
+      setRecipeError('എല്ലാ ചേരുവകളുടെയും പേരും അളവും സാധുവാണെന്ന് ഉറപ്പാക്കുക (Ensure all ingredients have a name and quantity > 0)');
       return;
     }
 
@@ -974,20 +975,15 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                       <FiBookOpen className="w-5 h-5" />
                     </span>
                     <h2 className="text-lg font-bold text-stone-900 dark:text-white">
-                      {recipeProduct.name} - {recipeModalStep === 1 ? 'ചേരുവകൾ (Recipe Ingredients)' : 'പാക്കറ്റുകളും ചിലവും (Packets & Costing)'}
+                      {recipeProduct.name} - ചേരുവകൾ (Recipe Ingredients)
                     </h2>
                   </div>
                   <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-                    {recipeModalStep === 1
-                      ? 'ഈ ഉൽപ്പന്നത്തിനുള്ള അസംസ്കൃത ചേരുവകളുടെ അനുപാതം നൽകുക (ഘട്ടം 1 / 2)'
-                      : 'പാക്കറ്റ് തരങ്ങളും ചിലവുകളും നിർദ്ദേശങ്ങളും നൽകുക (ഘട്ടം 2 / 2)'}
+                    ഈ ഉൽപ്പന്നത്തിനുള്ള അസംസ്കൃത ചേരുവകളുടെ അനുപാതം നൽകുക
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 rounded-full text-xs font-bold font-mono bg-stone-100 dark:bg-[#282323] text-stone-600 dark:text-stone-300">
-                    {recipeModalStep} / 2
-                  </span>
                   <button
                     type="button"
                     onClick={() => setRecipeModalOpen(false)}
@@ -1127,133 +1123,55 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                   </div>
                 )}
 
-                {/* STEP 2: Cost Estimation, Packets Checklist, Custom Rates, and Instructions */}
-                {recipeModalStep === 2 && (
-                  <div className="space-y-4">
-                    {/* Recipe Costing Estimation Strip */}
-                    <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-500/20 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="text-amber-800 dark:text-amber-300 block">
-                          ഏകദേശ ബാച്ച് ചെലവ് (Est. Batch Raw Material Cost):
-                        </span>
-                        <span className="font-extrabold text-base text-stone-900 dark:text-white">
-                          ₹{calculateTotalRecipeCost().toFixed(2)}
-                        </span>
-                      </div>
-
-                      <div className="text-right">
-                        <span className="text-amber-800 dark:text-amber-300 block">
-                          കിലോഗ്രാമിന് ചിലവ് (Cost / {recipeBaseUnit}):
-                        </span>
-                        <span className="font-extrabold text-base text-amber-700 dark:text-amber-400">
-                          ₹{(calculateTotalRecipeCost() / (Number(recipeBaseQuantity) || 1)).toFixed(2)}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Universal Packets Notice (Not fixed to recipe) */}
-                    <div className="p-3.5 rounded-2xl bg-amber-500/10 dark:bg-amber-950/20 border border-amber-500/20 text-xs">
-                      <div className="flex items-center gap-2">
-                        <FiPackage className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                        <span className="font-bold text-stone-900 dark:text-white font-malayalam">
-                          പാക്കറ്റുകൾ (Universal Packets)
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-stone-600 dark:text-stone-300 font-malayalam mt-1">
-                        പാക്കറ്റുകൾ റെസിപ്പിയിൽ ഫിക്സ് ചെയ്ത് വെക്കേണ്ടതില്ല. പ്രൊഡക്ഷൻ സമയത്ത് കുക്കിന് കാറ്റലോഗിലെ ഏത് പാക്കറ്റും തിരഞ്ഞെടുക്കാം.
-                      </p>
-                    </div>
-
-                    {/* Instructions / Formulation Notes */}
-                    <div>
-                      <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                        പാചകക്കുറിപ്പ് നിർദ്ദേശങ്ങൾ / ഫോർമുലേഷൻ (Instructions / Method)
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={recipeInstructions}
-                        onChange={(e) => setRecipeInstructions(e.target.value)}
-                        placeholder="ഉദാ: വറുത്ത ചേരുവകൾ തണുത്ത ശേഷം മസാല ചേർക്കുക..."
-                        className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white text-xs focus:outline-none"
-                      />
-                    </div>
-                  </div>
-                )}
               </form>
 
               {/* Pinned Modal Footer */}
               <div className="p-4 px-5 border-t border-stone-100 dark:border-[#2E2828] bg-stone-50/80 dark:bg-[#1A1616]/80 backdrop-blur-sm shrink-0 flex items-center justify-between">
-                {recipeModalStep === 1 ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setRecipeModalOpen(false)}
-                      className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold cursor-pointer"
-                    >
-                      റദ്ദാക്കുക (Cancel)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleNextToPackets}
-                      className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold shadow-sm press-apple cursor-pointer flex items-center gap-1.5"
-                    >
-                      <span>അടുത്തത് (Next)</span>
-                      <FiArrowRight className="w-4 h-4" />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {existingRecipe ? (
-                      <button
-                        type="button"
-                        onClick={handleDeleteRecipe}
-                        disabled={isDeletingRecipe}
-                        className="px-3 py-2 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                      >
-                        {isDeletingRecipe ? (
-                          <>
-                            <div className="w-3.5 h-3.5 border-2 border-red-600 border-t-transparent rounded-full animate-spin shrink-0" />
-                            <span>ഒഴിവാക്കുന്നു...</span>
-                          </>
-                        ) : (
-                          <span>പാചകക്കുറിപ്പ് ഒഴിവാക്കുക</span>
-                        )}
-                      </button>
+                {existingRecipe ? (
+                  <button
+                    type="button"
+                    onClick={handleDeleteRecipe}
+                    disabled={isDeletingRecipe}
+                    className="px-3 py-2 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {isDeletingRecipe ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-red-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                        <span>ഒഴിവാക്കുന്നു...</span>
+                      </>
                     ) : (
-                      <div />
+                      <span>പാചകക്കുറിപ്പ് ഒഴിവാക്കുക</span>
                     )}
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRecipeError('');
-                          setRecipeModalStep(1);
-                        }}
-                        disabled={isSavingRecipe}
-                        className="px-4 py-2 rounded-xl border border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold cursor-pointer flex items-center gap-1.5"
-                      >
-                        <FiArrowLeft className="w-4 h-4" />
-                        <span>പിന്നോട്ട് (Back)</span>
-                      </button>
-                      <button
-                        type="submit"
-                        form="recipeForm"
-                        disabled={isSavingRecipe}
-                        className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                      >
-                        {isSavingRecipe ? (
-                          <>
-                            <div className="w-3.5 h-3.5 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
-                            <span>സൂക്ഷിക്കുന്നു...</span>
-                          </>
-                        ) : (
-                          <span>പാചകക്കുറിപ്പ് സേവ് ചെയ്യുക</span>
-                        )}
-                      </button>
-                    </div>
-                  </>
+                  </button>
+                ) : (
+                  <div />
                 )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRecipeModalOpen(false)}
+                    disabled={isSavingRecipe}
+                    className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold cursor-pointer"
+                  >
+                    റദ്ദാക്കുക (Cancel)
+                  </button>
+                  <button
+                    type="submit"
+                    form="recipeForm"
+                    disabled={isSavingRecipe}
+                    className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                  >
+                    {isSavingRecipe ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white dark:border-stone-950 border-t-transparent rounded-full animate-spin shrink-0" />
+                        <span>സൂക്ഷിക്കുന്നു...</span>
+                      </>
+                    ) : (
+                      <span>പാചകക്കുറിപ്പ് സേവ് ചെയ്യുക</span>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

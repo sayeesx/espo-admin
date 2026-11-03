@@ -11,7 +11,7 @@ interface ProductionPinModalProps {
 
 export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, onClose }) => {
   useLockBodyScroll(isOpen);
-  const [currentPin, setCurrentPin] = useState<string>('1234');
+  const [currentPin, setCurrentPin] = useState<string>('5678');
   const [newPin, setNewPin] = useState<string>('');
   const [confirmPin, setConfirmPin] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -26,7 +26,7 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
       setSuccessMsg('');
       // Load current production pin
       const cached = localStorage.getItem('epso_production_pin');
-      if (cached) setCurrentPin(cached);
+      if (cached && /^\d{4}$/.test(cached)) setCurrentPin(cached);
 
       (async () => {
         try {
@@ -38,8 +38,11 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
             .limit(1);
 
           if (data && data.length > 0 && data[0].details?.pin) {
-            setCurrentPin(String(data[0].details.pin));
-            localStorage.setItem('epso_production_pin', String(data[0].details.pin));
+            const pinVal = String(data[0].details.pin);
+            if (/^\d{4}$/.test(pinVal)) {
+              setCurrentPin(pinVal);
+              localStorage.setItem('epso_production_pin', pinVal);
+            }
           }
         } catch {
           // ignore error
@@ -117,7 +120,7 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
               <h3 className="text-base font-black text-stone-900 dark:text-white font-malayalam">
                 പ്രൊഡക്ഷൻ പാസ്‌കോഡ്
               </h3>
-              <p className="text-[11px] text-stone-500 dark:text-stone-400 font-sans">Set Kitchen PWA PIN (4 Digits)</p>
+              <p className="text-[11px] text-stone-500 dark:text-stone-400 font-sans">Set PWA Pantry Management PIN (4 Digits)</p>
             </div>
           </div>
           <button

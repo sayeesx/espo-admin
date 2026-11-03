@@ -43,7 +43,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   // ==========================================
   // 1. PRODUCTION PIN STATE
   // ==========================================
-  const [currentPin, setCurrentPin] = useState<string>('1234');
+  const [currentPin, setCurrentPin] = useState<string>('5678');
   const [showCurrentPin, setShowCurrentPin] = useState<boolean>(false);
   const [newPin, setNewPin] = useState<string>('');
   const [confirmPin, setConfirmPin] = useState<string>('');
@@ -88,7 +88,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   // Load PIN and Factory Profile from cache and audit logs
   useEffect(() => {
     const cached = localStorage.getItem('epso_production_pin');
-    if (cached) setCurrentPin(cached);
+    if (cached && /^\d{4}$/.test(cached)) setCurrentPin(cached);
 
     (async () => {
       try {
@@ -102,8 +102,10 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
 
         if (pinData && pinData.length > 0 && pinData[0].details?.pin) {
           const pinVal = String(pinData[0].details.pin);
-          setCurrentPin(pinVal);
-          localStorage.setItem('epso_production_pin', pinVal);
+          if (/^\d{4}$/.test(pinVal)) {
+            setCurrentPin(pinVal);
+            localStorage.setItem('epso_production_pin', pinVal);
+          }
         }
 
         // Fetch Factory / Bill Profile
@@ -221,13 +223,12 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
     e.preventDefault();
     setResetError('');
 
-    // PIN verification: Accept 1234, Admin PIN 65188, or saved production PIN
-    const validPin = localStorage.getItem('epso_production_pin') || currentPin || '1234';
+    // PIN verification: strictly verify 5-digit Admin PIN 98096
     const cleanPin = enteredPin.trim();
-    const isPinCorrect = cleanPin === '1234' || cleanPin === '65188' || cleanPin === validPin;
+    const isPinCorrect = cleanPin === '98096';
 
     if (!isPinCorrect) {
-      setResetError('നൽകിയ പിൻ തെറ്റാണ്! (Invalid PIN. Enter 1234 or 65188)');
+      setResetError('നൽകിയ അഡ്മിൻ പിൻ തെറ്റാണ്! (Invalid Admin PIN. Enter 98096)');
       return;
     }
 
@@ -343,10 +344,10 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
               </div>
               <div>
                 <h2 className="text-base font-bold text-stone-900 dark:text-white font-malayalam">
-                  പ്രൊഡക്ഷൻ പിൻ (Production PIN)
+                  PWA പാൻട്രി / പ്രൊഡക്ഷൻ പിൻ (Pantry PIN)
                 </h2>
                 <p className="text-xs text-stone-400 font-malayalam">
-                  അടുക്കള ജീവനക്കാർക്ക് ബാച്ച് തുടങ്ങാൻ ആവശ്യമായ 4-അക്ക സെക്യൂരിറ്റി കോഡ്
+                  അടുക്കള ജീവനക്കാർക്ക് PWA പാൻട്രി മാനേജ്‌മെന്റിനായി ആവശ്യമായ 4-അക്ക സെക്യൂരിറ്റി കോഡ്
                 </p>
               </div>
             </div>
@@ -797,11 +798,11 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
 
                 <div>
                   <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                    പ്രൊഡക്ഷൻ പിൻ നൽകുക (PIN: 1234 അല്ലെങ്കിൽ Admin PIN: 65188) *
+                    അഡ്മിൻ പിൻ നൽകുക (Admin PIN: 98096) *
                   </label>
                   <input
                     type="password"
-                    maxLength={6}
+                    maxLength={5}
                     required
                     autoFocus
                     value={enteredPin}
@@ -829,7 +830,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                   </button>
                   <button
                     type="submit"
-                    disabled={resetLoading || enteredPin.length < 4}
+                    disabled={resetLoading || enteredPin.length !== 5}
                     className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold shadow-sm press-apple flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                   >
                     {resetLoading ? (

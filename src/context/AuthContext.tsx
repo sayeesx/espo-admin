@@ -35,8 +35,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: true };
       }
 
-      // Offline resilient fallback specifically for PIN 65188 if network issue occurs
-      if (pin === '65188') {
+      // Offline resilient fallback specifically for Admin PIN 98096
+      if (pin === '98096') {
         sessionStorage.setItem('epso_admin_session', 'offline_fallback_session');
         setIsAuthenticated(true);
         return { success: true };
@@ -44,7 +44,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { success: false, error: res.error || 'Incorrect PIN entered.' };
     } catch (err: any) {
-      if (pin === '65188') {
+      if (pin === '98096') {
         sessionStorage.setItem('epso_admin_session', 'offline_fallback_session');
         setIsAuthenticated(true);
         return { success: true };
