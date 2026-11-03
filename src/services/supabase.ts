@@ -691,23 +691,142 @@ export async function deleteRecipe(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function deleteProductionRun(id: string): Promise<void> {
-  const { data: run } = await supabase
+export interface DeleteProductionRunOptions {
+  restoreIngredients?: boolean;
+  operatorName?: string;
+  reason?: string;
+}
+
+export async function deleteProductionRun(
+  id: string,
+  options?: DeleteProductionRunOptions
+): Promise<void> {
+  const { data: run, error: fetchErr } = await supabase
     .from('production_runs')
-    .select('run_number')
+    .select(`
+      id,
+      run_number,
+      product_id,
+      actual_quantity,
+      unit,
+      production_consumption (
+        ingredient_id,
+        actual_quantity,
+        unit
+      )
+    `)
     .eq('id', id)
     .maybeSingle();
 
-  if (run?.run_number) {
-    await supabase.from('stock_movements').delete().ilike('reference', `%${run.run_number}%`);
+  if (fetchErr) throw fetchErr;
+  if (!run) return;
+
+  // 1. Deduct produced product quantity from product stock
+  if (run.product_id && Number(run.actual_quantity) > 0) {
+    const { data: prod } = await supabase
+      .from('products')
+      .select('id, name, current_stock, unit')
+      .eq('id', run.product_id)
+      .maybeSingle();
+
+    if (prod) {
+      const prevStock = Number(prod.current_stock) || 0;
+      const deductQty = Number(run.actual_quantity) || 0;
+      const newStock = Math.max(0, Number((prevStock - deductQty).toFixed(3)));
+
+      const { error: pUpdateErr } = await supabase
+        .from('products')
+        .update({ current_stock: newStock, updated_at: new Date().toISOString() })
+        .eq('id', run.product_id);
+
+      if (pUpdateErr) throw pUpdateErr;
+
+      try {
+        await supabase.from('stock_movements').insert({
+          item_id: run.product_id,
+          item_type: 'product',
+          item_name: prod.name,
+          movement_type: 'adjustment',
+          quantity: -deductQty,
+          unit: prod.unit,
+          previous_balance: prevStock,
+          new_balance: newStock,
+          reference: `Del Run ${run.run_number}`,
+          operator_name: options?.operatorName || 'Admin',
+          reason: options?.reason || `Batch #${run.run_number} deleted: -${deductQty} ${prod.unit} removed from stock`,
+          created_at: new Date().toISOString(),
+        });
+      } catch (smErr) {
+        console.warn('Stock movement insert failed:', smErr);
+      }
+    }
   }
 
-  await supabase.from('production_consumption').delete().eq('run_id', id);
-  const { error } = await supabase.from('production_runs').delete().eq('id', id).select('id');
-  if (error) throw error;
+  // 2. Restore consumed ingredients back to ingredient stock (if requested)
+  if (options?.restoreIngredients && run.production_consumption && run.production_consumption.length > 0) {
+    for (const item of run.production_consumption) {
+      const ingId = item.ingredient_id;
+      const qtyToRestore = Number(item.actual_quantity) || 0;
+      if (ingId && qtyToRestore > 0) {
+        const { data: ing } = await supabase
+          .from('ingredients')
+          .select('id, name, current_stock, unit')
+          .eq('id', ingId)
+          .maybeSingle();
 
-  dbCache.invalidate('admin_production_runs');
-  dbCache.invalidate('admin_stock_movements');
+        if (ing) {
+          const prevIngStock = Number(ing.current_stock) || 0;
+          const newIngStock = Number((prevIngStock + qtyToRestore).toFixed(3));
+
+          await supabase
+            .from('ingredients')
+            .update({ current_stock: newIngStock, updated_at: new Date().toISOString() })
+            .eq('id', ingId);
+
+          try {
+            await supabase.from('stock_movements').insert({
+              item_id: ingId,
+              item_type: 'ingredient',
+              item_name: ing.name,
+              movement_type: 'adjustment',
+              quantity: qtyToRestore,
+              unit: ing.unit,
+              previous_balance: prevIngStock,
+              new_balance: newIngStock,
+              reference: `Del Run ${run.run_number} Reversal`,
+              operator_name: options?.operatorName || 'Admin',
+              reason: `Batch #${run.run_number} deleted: +${qtyToRestore} ${ing.unit} restored to stock`,
+              created_at: new Date().toISOString(),
+            });
+          } catch (smErr) {
+            console.warn('Stock movement insert failed:', smErr);
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Unlink any packing records referencing this run
+  try {
+    await supabase
+      .from('packing_records')
+      .update({ production_run_id: null })
+      .eq('production_run_id', id);
+  } catch (packErr) {
+    console.warn('Unlink packing records non-fatal:', packErr);
+  }
+
+  // 4. Delete consumption and production run
+  await supabase.from('production_consumption').delete().eq('run_id', id);
+  const { error: delErr } = await supabase.from('production_runs').delete().eq('id', id);
+  if (delErr) throw delErr;
+
+  // 5. Invalidate caches
+  invalidateAdminCache('admin_products');
+  invalidateAdminCache('admin_ingredients');
+  invalidateAdminCache('admin_production_runs');
+  invalidateAdminCache('admin_stock_movements');
+  invalidateAdminCache();
 }
 
 export async function fetchProductionRuns(force = false): Promise<ProductionRun[]> {
@@ -1802,9 +1921,12 @@ export async function bulkPurchaseIngredients(
 export async function resetAllStocksToZero(): Promise<{ success: boolean; message: string }> {
   try {
     const now = new Date().toISOString();
-    await supabase.from('products').update({ current_stock: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('ingredients').update({ current_stock: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabase.from('packaging_items').update({ current_stock: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
+    const { error: pErr } = await supabase.from('products').update({ current_stock: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
+    if (pErr) throw pErr;
+    const { error: iErr } = await supabase.from('ingredients').update({ current_stock: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
+    if (iErr) throw iErr;
+    const { error: packErr } = await supabase.from('packaging_items').update({ current_stock: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
+    if (packErr) throw packErr;
     invalidateAdminCache();
     return { success: true, message: 'All stocks have been reset to zero successfully.' };
   } catch (err: any) {

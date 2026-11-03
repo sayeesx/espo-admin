@@ -300,6 +300,7 @@ export const App: React.FC = () => {
               {activeTab === 'inventory' && (
                 <InventoryStockAdminView
                   products={products}
+                  productionRuns={productionRuns}
                   onRefresh={loadAllData}
                 />
               )}

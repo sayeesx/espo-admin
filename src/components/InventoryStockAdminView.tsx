@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { Product } from '../types';
+import { Product, ProductionRun } from '../types';
+import { useFullCostStockValuation } from '../hooks/useFullCostStockValuation';
 import {
   FiPackage,
   FiSearch,
@@ -22,11 +23,13 @@ import { createPortal } from 'react-dom';
 
 interface InventoryStockAdminViewProps {
   products: Product[];
+  productionRuns?: ProductionRun[];
   onRefresh: () => void;
 }
 
 export const InventoryStockAdminView: React.FC<InventoryStockAdminViewProps> = ({
   products,
+  productionRuns = [],
   onRefresh,
 }) => {
   const { showToast, confirm } = useFeedback();
@@ -49,10 +52,19 @@ export const InventoryStockAdminView: React.FC<InventoryStockAdminViewProps> = (
 
   useLockBodyScroll(adjustModalOpen || setStockModalOpen);
 
-  // Summary Metrics
+  // Full-cost per kg map & valuation (from production costing calculations)
+  const { costPerKgMap } = useFullCostStockValuation(products, productionRuns);
+
+  // Summary Metrics: uses wholesale price if set, otherwise falls back to full production cost per kg
   const totalValuation = useMemo(() => {
-    return products.reduce((acc, p) => acc + (p.currentStock || 0) * (p.wholesalePrice || 0), 0);
-  }, [products]);
+    return products.reduce((acc, p) => {
+      const stock = p.currentStock || 0;
+      if (stock <= 0) return acc;
+      const costPrice = costPerKgMap[p.id] || 0;
+      const effectivePrice = p.wholesalePrice && p.wholesalePrice > 0 ? p.wholesalePrice : costPrice;
+      return acc + Math.round(stock * effectivePrice);
+    }, 0);
+  }, [products, costPerKgMap]);
 
   const totalQuantityKg = useMemo(() => {
     return products.reduce((acc, p) => acc + (p.currentStock || 0), 0);
@@ -254,7 +266,7 @@ export const InventoryStockAdminView: React.FC<InventoryStockAdminViewProps> = (
           <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
             <AnimatedNumber value={totalValuation} prefix="₹" />
           </div>
-          <p className="text-[10px] text-stone-400 mt-1 font-malayalam">മൊത്തവില അടിസ്ഥാനത്തിൽ</p>
+          <p className="text-[10px] text-stone-400 mt-1 font-malayalam">ഉൽപ്പാദന ചെലവ് / മൊത്തവില അടിസ്ഥാനത്തിൽ</p>
         </div>
 
         {/* Total Quantity */}
@@ -356,8 +368,9 @@ export const InventoryStockAdminView: React.FC<InventoryStockAdminViewProps> = (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredProducts.map((p) => {
             const stock = p.currentStock || 0;
-            const price = p.wholesalePrice || 0;
-            const valuation = stock * price;
+            const costPrice = costPerKgMap[p.id] || 0;
+            const effectivePrice = p.wholesalePrice && p.wholesalePrice > 0 ? p.wholesalePrice : costPrice;
+            const valuation = Math.round(stock * effectivePrice);
             const isZero = stock <= 0;
 
             return (
@@ -443,7 +456,7 @@ export const InventoryStockAdminView: React.FC<InventoryStockAdminViewProps> = (
 
                     {/* Wholesale Rate note */}
                     <div className="flex items-center justify-between text-[11px] pt-2 border-t border-stone-200/60 dark:border-[#282323] text-stone-500 font-mono">
-                      <span>മൊത്തവില (Rate): ₹{price} / {p.unit}</span>
+                      <span>{p.wholesalePrice && p.wholesalePrice > 0 ? `മൊത്തവില: ₹${p.wholesalePrice} / ${p.unit}` : `ചെലവ് / കിലോ: ₹${costPrice.toFixed(2)} / ${p.unit}`}</span>
                       {isZero ? (
                         <span className="text-red-500 font-bold font-malayalam">സ്റ്റോക്ക് തീർന്നു</span>
                       ) : (

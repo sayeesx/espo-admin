@@ -241,44 +241,136 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
     try {
       if (resetModalType === 'sales') {
         // Clear sales
-        await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        const { error: sErr } = await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (sErr) throw sErr;
+        invalidateAdminCache();
         setResetSuccessNotice('വിൽപ്പന രേഖകൾ പൂർണ്ണമായി റീസെറ്റ് ചെയ്തു (Sales cleared)');
+        showToast('വിൽപ്പന രേഖകൾ പൂർണ്ണമായി റീസെറ്റ് ചെയ്തു!', 'success');
       } else if (resetModalType === 'batches') {
-        // Clear runs and consumption
-        await supabase.from('production_consumption').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        await supabase.from('production_runs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        await supabase.from('daily_closings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        await supabase.from('daily_cost_allocations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        setResetSuccessNotice('പ്രൊഡക്ഷൻ ബാച്ചുകൾ റീസെറ്റ് ചെയ്തു (Batches cleared)');
+        // 1. Reverse product stock produced and restore ingredient consumption for all runs
+        const { data: allRuns } = await supabase
+          .from('production_runs')
+          .select(`
+            id,
+            actual_quantity,
+            product_id,
+            production_consumption (
+              ingredient_id,
+              actual_quantity
+            )
+          `);
+
+        if (allRuns && allRuns.length > 0) {
+          const prodDeductMap = new Map<string, number>();
+          const ingRestoreMap = new Map<string, number>();
+
+          for (const run of allRuns) {
+            if (run.product_id && Number(run.actual_quantity) > 0) {
+              prodDeductMap.set(run.product_id, (prodDeductMap.get(run.product_id) || 0) + Number(run.actual_quantity));
+            }
+            if (run.production_consumption && (run.production_consumption as any[]).length > 0) {
+              for (const pc of run.production_consumption as any[]) {
+                if (pc.ingredient_id && Number(pc.actual_quantity) > 0) {
+                  ingRestoreMap.set(pc.ingredient_id, (ingRestoreMap.get(pc.ingredient_id) || 0) + Number(pc.actual_quantity));
+                }
+              }
+            }
+          }
+
+          // Deduct produced kg from products
+          for (const [pId, qty] of prodDeductMap.entries()) {
+            const { data: prod } = await supabase.from('products').select('current_stock').eq('id', pId).maybeSingle();
+            if (prod) {
+              const newStock = Math.max(0, Number(((prod.current_stock || 0) - qty).toFixed(3)));
+              await supabase.from('products').update({ current_stock: newStock, updated_at: new Date().toISOString() }).eq('id', pId);
+            }
+          }
+
+          // Restore consumed ingredients back to stock
+          for (const [iId, qty] of ingRestoreMap.entries()) {
+            const { data: ing } = await supabase.from('ingredients').select('current_stock').eq('id', iId).maybeSingle();
+            if (ing) {
+              const newStock = Number(((ing.current_stock || 0) + qty).toFixed(3));
+              await supabase.from('ingredients').update({ current_stock: newStock, updated_at: new Date().toISOString() }).eq('id', iId);
+            }
+          }
+        }
+
+        // 2. Unlink packing records referencing runs
+        try {
+          await supabase.from('packing_records').update({ production_run_id: null }).neq('id', '00000000-0000-0000-0000-000000000000');
+        } catch {}
+
+        // 3. Clear runs, consumption, closings, allocations
+        const { error: pcErr } = await supabase.from('production_consumption').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (pcErr) throw pcErr;
+        const { error: prErr } = await supabase.from('production_runs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (prErr) throw prErr;
+        const { error: dcErr } = await supabase.from('daily_closings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (dcErr) throw dcErr;
+        const { error: dcaErr } = await supabase.from('daily_cost_allocations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (dcaErr) throw dcaErr;
+
+        invalidateAdminCache();
+        setResetSuccessNotice('പ്രൊഡക്ഷൻ ബാച്ചുകൾ റീസെറ്റ് ചെയ്തു, സ്റ്റോക്ക് ക്രമീകരിച്ചു (Batches cleared and stocks reversed)');
+        showToast('പ്രൊഡക്ഷൻ ബാച്ചുകൾ റീസെറ്റ് ചെയ്തു, സ്റ്റോക്ക് ക്രമീകരിച്ചു!', 'success');
       } else if (resetModalType === 'ledger') {
         // Clear stock movements
-        await supabase.from('stock_movements').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        const { error: smErr } = await supabase.from('stock_movements').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (smErr) throw smErr;
+        invalidateAdminCache();
         setResetSuccessNotice('സ്റ്റോക്ക് ലെഡ്ജർ ക്ലിയർ ചെയ്തു (Stock ledger cleared)');
+        showToast('സ്റ്റോക്ക് ലെഡ്ജർ ക്ലിയർ ചെയ്തു!', 'success');
       } else if (resetModalType === 'stock') {
         // Reset raw ingredients to baseline
         for (const ing of ingredients) {
           const baseline = ing.category === 'basic' ? 50 : 20;
-          await supabase.from('ingredients').update({ current_stock: baseline }).eq('id', ing.id);
+          const { error } = await supabase.from('ingredients').update({ current_stock: baseline, updated_at: new Date().toISOString() }).eq('id', ing.id);
+          if (error) throw error;
         }
         invalidateAdminCache();
         setResetSuccessNotice('ചേരുവകളുടെ സ്റ്റോക്ക് ക്രമീകരിച്ചു (Ingredient stock reset)');
+        showToast('ചേരുവകളുടെ സ്റ്റോക്ക് ആരംഭ അളവിലേക്ക് പുനഃസ്ഥാപിച്ചു!', 'success');
       } else if (resetModalType === 'zero_all_stocks') {
         // Reset all products, ingredients, and packaging items current_stock to 0
         const res = await resetAllStocksToZero();
         if (!res.success) {
           throw new Error(res.message);
         }
+        invalidateAdminCache();
         setResetSuccessNotice('എല്ലാ ഉൽപ്പന്നങ്ങൾ, ചേരുവകൾ, പാക്കറ്റുകൾ എന്നിവയുടെ സ്റ്റോക്ക് പൂജ്യമാക്കി (0)! (All stocks reset to 0)');
         showToast('എല്ലാ ഉൽപ്പന്നങ്ങൾ, ചേരുവകൾ, പാക്കറ്റുകൾ എന്നിവയുടെ സ്റ്റോക്ക് പൂജ്യമാക്കി (0)!', 'success');
       } else if (resetModalType === 'full') {
-        // Full factory reset
-        await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        await supabase.from('production_consumption').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        await supabase.from('production_runs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        await supabase.from('daily_closings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        await supabase.from('daily_cost_allocations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        await supabase.from('stock_movements').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        // Full factory reset: clear sales, runs, consumption, closings, allocations, stock movements, reset product stock to 0, ingredients to baseline
+        const { error: sErr } = await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (sErr) throw sErr;
+        try {
+          await supabase.from('packing_records').update({ production_run_id: null }).neq('id', '00000000-0000-0000-0000-000000000000');
+        } catch {}
+        const { error: pcErr } = await supabase.from('production_consumption').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (pcErr) throw pcErr;
+        const { error: prErr } = await supabase.from('production_runs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (prErr) throw prErr;
+        const { error: dcErr } = await supabase.from('daily_closings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (dcErr) throw dcErr;
+        const { error: dcaErr } = await supabase.from('daily_cost_allocations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (dcaErr) throw dcaErr;
+        const { error: smErr } = await supabase.from('stock_movements').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        if (smErr) throw smErr;
+
+        // Reset product stocks to 0
+        const { error: pZeroErr } = await supabase.from('products').update({ current_stock: 0, updated_at: new Date().toISOString() }).neq('id', '00000000-0000-0000-0000-000000000000');
+        if (pZeroErr) throw pZeroErr;
+
+        // Reset ingredients to baseline
+        for (const ing of ingredients) {
+          const baseline = ing.category === 'basic' ? 50 : 20;
+          await supabase.from('ingredients').update({ current_stock: baseline, updated_at: new Date().toISOString() }).eq('id', ing.id);
+        }
+
+        invalidateAdminCache();
         setResetSuccessNotice('ഫാക്ടറി ഡാറ്റ പൂർണ്ണമായി റീസെറ്റ് ചെയ്തു (Full factory reset complete)');
+        showToast('ഫാക്ടറി ഡാറ്റ പൂർണ്ണമായി റീസെറ്റ് ചെയ്തു!', 'success');
       }
 
       // Audit log

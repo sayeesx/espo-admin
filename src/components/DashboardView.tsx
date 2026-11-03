@@ -42,6 +42,7 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { AnimatedNumber } from './AnimatedNumber';
 import { useFeedback } from '../context/FeedbackContext';
+import { useFullCostStockValuation } from '../hooks/useFullCostStockValuation';
 
 interface DashboardViewProps {
   products: Product[];
@@ -239,6 +240,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }, 0);
   }, [products, productProducedKgMap, productSoldKgMap]);
 
+  // Total stock valuation at full manufacturing cost (ingredients + oil + wages + packaging)
+  const { totalValuation: fullCostStockValuation } = useFullCostStockValuation(products, productionRuns);
+
   const totalRawValuation = ingredients.reduce((acc, ing) => {
     return acc + ing.currentStock * ing.avgCostPerUnit;
   }, 0);
@@ -345,27 +349,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     return productionRuns;
   }, [productionRuns, selectedDate]);
 
-  const [deletingBatchId, setDeletingBatchId] = useState<string | null>(null);
+  const [batchToDelete, setBatchToDelete] = useState<ProductionRun | null>(null);
+  const [restoreIngredientsChoice, setRestoreIngredientsChoice] = useState<boolean>(true);
+  const [isDeletingBatch, setIsDeletingBatch] = useState<boolean>(false);
 
-  const handleDeleteBatch = async (run: ProductionRun) => {
-    const confirmed = await confirm({
-      title: 'ബാച്ച് നീക്കം ചെയ്യണോ?',
-      message: `ബാച്ച് #${run.runNumber} (${run.productName}) ഡാറ്റാബേസിൽ നിന്നും പൂർണ്ണമായി ഒഴിവാക്കണോ?`,
-      confirmLabel: 'ഡിലീറ്റ് ചെയ്യുക',
-      cancelLabel: 'റദ്ദാക്കുക',
-      isDestructive: true,
-    });
-    if (!confirmed) return;
+  const handleDeleteBatch = (run: ProductionRun) => {
+    setBatchToDelete(run);
+    setRestoreIngredientsChoice(true);
+  };
 
+  const handleConfirmDeleteBatch = async () => {
+    if (!batchToDelete) return;
+    setIsDeletingBatch(true);
     try {
-      setDeletingBatchId(run.id);
-      await deleteProductionRun(run.id);
-      showToast(`ബാച്ച് #${run.runNumber} വിജയകരമായി നീക്കം ചെയ്തു`, 'success');
+      await deleteProductionRun(batchToDelete.id, {
+        restoreIngredients: restoreIngredientsChoice,
+      });
+      showToast(`ബാച്ച് #${batchToDelete.runNumber} വിജയകരമായി നീക്കം ചെയ്തു! സ്റ്റോക്ക് ക്രമീകരിച്ചു.`, 'success');
+      setBatchToDelete(null);
       onRefresh?.();
     } catch (err: any) {
       showToast(`ഡിലീറ്റ് പരാജയപ്പെട്ടു: ${err?.message || 'Failed to delete batch'}`, 'error');
     } finally {
-      setDeletingBatchId(null);
+      setIsDeletingBatch(false);
     }
   };
 
@@ -883,11 +889,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       </span>
                       <button
                         onClick={() => handleDeleteBatch(run)}
-                        disabled={deletingBatchId === run.id}
+                        disabled={isDeletingBatch && batchToDelete?.id === run.id}
                         className="p-1 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50"
                         title="Delete Batch Permanently"
                       >
-                        {deletingBatchId === run.id ? (
+                        {isDeletingBatch && batchToDelete?.id === run.id ? (
                           <FiRefreshCw className="w-3.5 h-3.5 animate-spin text-red-500" />
                         ) : (
                           <FiTrash2 className="w-3.5 h-3.5" />
@@ -1043,17 +1049,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark transition-all">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
-                  ഉൽപ്പന്ന സ്റ്റോക്ക് മൂല്യം
+                  total സ്റ്റോക്ക് മൂല്യം (total Valuation)
                 </span>
                 <div className="p-2 rounded-xl bg-red-50 dark:bg-red-950/40 text-epso-red dark:text-amber-400">
                   <FiDollarSign className="w-4 h-4" />
                 </div>
               </div>
               <div className="text-2xl font-black text-stone-900 dark:text-white">
-                <AnimatedNumber value={totalFinishedGoodsValuation} prefix="₹" />
+                <AnimatedNumber value={fullCostStockValuation} prefix="₹" />
               </div>
               <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
-                മൊത്തവില അടിസ്ഥാനത്തിൽ (Wholesale)
+                എല്ലാ ചെലവുകളും ഉൾപ്പെടുത്തി കണക്കാക്കിയത് (After All Expenses)
               </p>
             </div>
 
@@ -1358,11 +1364,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <td className="py-2.5 px-3 text-right">
                         <button
                           onClick={() => handleDeleteBatch(run)}
-                          disabled={deletingBatchId === run.id}
+                          disabled={isDeletingBatch && batchToDelete?.id === run.id}
                           className="p-1 rounded-lg text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors disabled:opacity-50"
                           title="Delete Batch Permanently"
                         >
-                          {deletingBatchId === run.id ? (
+                          {isDeletingBatch && batchToDelete?.id === run.id ? (
                             <FiRefreshCw className="w-3.5 h-3.5 animate-spin text-red-500" />
                           ) : (
                             <FiTrash2 className="w-3.5 h-3.5" />
@@ -1535,7 +1541,119 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             })}
           </div>
         </div>
-      </div>
+
+      {/* Modal: Delete Batch with Stock Handling Selection */}
+      {batchToDelete && (
+        <div className="fixed inset-0 z-[9999] overflow-y-auto">
+          <div
+            className="fixed inset-0 w-full h-full bg-black/70 backdrop-blur-md animate-apple-backdrop"
+            onClick={() => !isDeletingBatch && setBatchToDelete(null)}
+          />
+          <div className="min-h-full flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
+            <div className="w-full max-w-md bg-white dark:bg-[#1E1B1B] rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal pointer-events-auto">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-2xl bg-red-100 dark:bg-red-950/60 text-red-600 flex items-center justify-center font-black shrink-0">
+                  <FiTrash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-white font-malayalam">
+                    ബാച്ച് നീക്കം ചെയ്യുക (Delete Batch)
+                  </h3>
+                  <span className="text-xs text-red-600 dark:text-red-400 font-bold font-mono">
+                    #{batchToDelete.runNumber} · {batchToDelete.productName} ({batchToDelete.actualQuantity} {batchToDelete.unit})
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4 leading-relaxed">
+                ഈ ബാച്ച് നീക്കം ചെയ്യുമ്പോൾ സ്റ്റോക്ക് എങ്ങനെ കൈകാര്യം ചെയ്യണമെന്ന് തിരഞ്ഞെടുക്കുക:
+              </p>
+
+              <div className="space-y-3 mb-5">
+                <label
+                  onClick={() => setRestoreIngredientsChoice(true)}
+                  className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                    restoreIngredientsChoice
+                      ? 'bg-amber-500/10 border-amber-500 text-stone-900 dark:text-white'
+                      : 'bg-stone-50 dark:bg-[#141212] border-stone-200 dark:border-[#2E2828] text-stone-600 dark:text-stone-400'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="deleteBatchStockMode"
+                    checked={restoreIngredientsChoice}
+                    onChange={() => setRestoreIngredientsChoice(true)}
+                    className="mt-1 accent-amber-600"
+                  />
+                  <div className="text-xs font-malayalam leading-relaxed">
+                    <span className="font-bold block text-stone-900 dark:text-white mb-0.5">
+                      ഉൽപ്പന്ന സ്റ്റോക്ക് കുറയ്ക്കുകയും ചേരുവകൾ തിരികെ നൽകുകയും ചെയ്യുക (Full Reversal)
+                    </span>
+                    <span className="text-[11px] text-stone-500 dark:text-stone-400 block">
+                      Remove the produced kg ({batchToDelete.actualQuantity} {batchToDelete.unit}) from product stock AND return the consumed ingredients back to ingredient stock.
+                    </span>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => setRestoreIngredientsChoice(false)}
+                  className={`flex items-start gap-3 p-3.5 rounded-2xl border cursor-pointer transition-all ${
+                    !restoreIngredientsChoice
+                      ? 'bg-amber-500/10 border-amber-500 text-stone-900 dark:text-white'
+                      : 'bg-stone-50 dark:bg-[#141212] border-stone-200 dark:border-[#2E2828] text-stone-600 dark:text-stone-400'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="deleteBatchStockMode"
+                    checked={!restoreIngredientsChoice}
+                    onChange={() => setRestoreIngredientsChoice(false)}
+                    className="mt-1 accent-amber-600"
+                  />
+                  <div className="text-xs font-malayalam leading-relaxed">
+                    <span className="font-bold block text-stone-900 dark:text-white mb-0.5">
+                      ഉൽപ്പന്ന സ്റ്റോക്ക് മാത്രം കുറയ്ക്കുക (ചേരുവകൾ കുറച്ചതായിത്തന്നെ തുടരും)
+                    </span>
+                    <span className="text-[11px] text-stone-500 dark:text-stone-400 block">
+                      Only remove the produced kg from product stock (ingredients stay deducted as consumed / wastage).
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-stone-100 dark:border-[#282323]">
+                <button
+                  type="button"
+                  onClick={() => setBatchToDelete(null)}
+                  disabled={isDeletingBatch}
+                  className="px-4 py-2 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] font-bold text-xs cursor-pointer font-malayalam"
+                >
+                  റദ്ദാക്കുക (Cancel)
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeleteBatch}
+                  disabled={isDeletingBatch}
+                  className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-sm press-apple flex items-center gap-1.5 disabled:opacity-50 cursor-pointer font-malayalam"
+                >
+                  {isDeletingBatch ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                      <span>ഡിലീറ്റ് ചെയ്യുന്നു...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiTrash2 className="w-3.5 h-3.5" />
+                      <span>ബാച്ച് ഡിലീറ്റ് ചെയ്യുക</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
-  );
+  </div>
+);
 };
