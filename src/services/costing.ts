@@ -23,6 +23,54 @@ export function roundCurrency(value: number): number {
  * Oil consumed/lost = Opening + Purchases - Closing.
  * Daily oil expense = Oil consumed * Weighted avg cost per kg.
  */
+/**
+ * Daily Oil Stock & Consumption Calculator according to Cook's Workflow:
+ * 1. Automatically uses previous available oil stock from inventory.
+ * 2. Subtracts oil used during production.
+ * 3. Adds leftover oil entered at the end of the day back to stock.
+ *
+ * Formula:
+ * Final Oil Stock = Previous Available Stock - Oil Used + Leftover Oil
+ * Net Oil Consumed = Oil Used - Leftover Oil
+ * Daily Oil Expense = Net Oil Consumed * Cost per kg
+ *
+ * Example:
+ * Previous available: 20 kg
+ * Oil used: 5 kg
+ * Leftover: 2 kg
+ * -> Final available: 20 - 5 + 2 = 17 kg
+ * -> Net consumed: 3 kg
+ */
+export function calculateDailyOilUsage(
+  previousAvailableStockKg: number,
+  oilUsedKg: number,
+  leftoverOilKg: number,
+  oilCostPerKg: number
+): {
+  previousAvailableStockKg: number;
+  oilUsedKg: number;
+  leftoverOilKg: number;
+  netOilConsumedKg: number;
+  finalOilStockKg: number;
+  oilTotalExpense: number;
+} {
+  const prevStock = Math.max(0, roundStock(previousAvailableStockKg));
+  const used = Math.max(0, roundStock(oilUsedKg));
+  const leftover = Math.max(0, Math.min(used, roundStock(leftoverOilKg)));
+  const netOilConsumedKg = Math.max(0, roundStock(used - leftover));
+  const finalOilStockKg = Math.max(0, roundStock(prevStock - netOilConsumedKg));
+  const oilTotalExpense = roundCurrency(netOilConsumedKg * Math.max(0, oilCostPerKg));
+
+  return {
+    previousAvailableStockKg: prevStock,
+    oilUsedKg: used,
+    leftoverOilKg: leftover,
+    netOilConsumedKg,
+    finalOilStockKg,
+    oilTotalExpense,
+  };
+}
+
 export function calculateContinuousOilExpense(
   openingBalanceKg: number,
   purchasesKg: number,

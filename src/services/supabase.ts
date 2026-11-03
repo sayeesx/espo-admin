@@ -17,6 +17,7 @@ import {
 import {
   allocateDailySharedExpenses,
   calculateContinuousOilExpense,
+  calculateDailyOilUsage,
   roundCurrency,
   roundStock,
 } from './costing';
@@ -937,6 +938,16 @@ export async function fetchDailyClosing(date: string): Promise<DailyClosing | nu
   if (error) throw error;
   if (!data) return null;
 
+  let totalOilUsedKg: number | undefined = undefined;
+  let oilLeftoverKg: number | undefined = undefined;
+  if (data.notes) {
+    try {
+      const meta = JSON.parse(data.notes);
+      if (typeof meta.oilUsedKg === 'number') totalOilUsedKg = meta.oilUsedKg;
+      if (typeof meta.leftoverOilKg === 'number') oilLeftoverKg = meta.leftoverOilKg;
+    } catch {}
+  }
+
   return {
     id: data.id,
     productionDate: data.production_date,
@@ -944,6 +955,8 @@ export async function fetchDailyClosing(date: string): Promise<DailyClosing | nu
     oilPurchases: Number(data.oil_purchases) || 0,
     oilClosingBalance: Number(data.oil_closing_balance) || 0,
     oilConsumed: Number(data.oil_consumed) || 0,
+    totalOilUsedKg,
+    oilLeftoverKg,
     oilCostPerKg: Number(data.oil_cost_per_kg) || 0,
     oilTotalExpense: Number(data.oil_total_expense) || 0,
     productionWages: Number(data.production_wages) || 0,
@@ -1110,35 +1123,78 @@ export async function deleteSale(id: string): Promise<void> {
 
 export async function saveDailyClosing(params: {
   productionDate: string;
-  oilOpeningBalance: number;
-  oilPurchases: number;
-  oilClosingBalance: number;
-  oilCostPerKg: number;
-  productionWages: number;
+  oilOpeningBalance?: number;
+  oilPurchases?: number;
+  oilClosingBalance?: number;
+  oilUsedKg?: number;
+  oilLeftoverKg?: number;
+  oilCostPerKg?: number;
+  productionWages?: number;
   notes?: string;
   closedBy?: string;
 }): Promise<DailyClosing> {
   const {
     productionDate,
-    oilOpeningBalance,
-    oilPurchases,
-    oilClosingBalance,
-    oilCostPerKg,
-    productionWages,
+    oilPurchases = 0,
     notes = '',
     closedBy = 'Admin',
   } = params;
 
-  // 1. Calculate Oil Consumed & Expenses
-  const { oilConsumedKg, oilTotalExpense } = calculateContinuousOilExpense(
-    oilOpeningBalance,
-    oilPurchases,
-    oilClosingBalance,
-    oilCostPerKg
+  // 1. Fetch current oil ingredient from inventory
+  const { data: oilIng } = await supabase
+    .from('ingredients')
+    .select('id, name, unit, current_stock, avg_cost_per_unit')
+    .or("name.eq.ഓയിൽ,name.ilike.%oil%")
+    .limit(1)
+    .maybeSingle();
+
+  // 2. Check for an existing closing for this production date
+  const { data: existingClosing } = await supabase
+    .from('daily_closings')
+    .select('id, oil_consumed, oil_opening_balance, oil_closing_balance, notes')
+    .eq('production_date', productionDate)
+    .maybeSingle();
+
+  // 3. Determine previous available stock:
+  // If editing/re-saving for this date, reverse previously deducted net consumption
+  // so neither used oil nor leftover oil is counted twice.
+  const prevNetDeducted = existingClosing ? (Number(existingClosing.oil_consumed) || 0) : 0;
+  const currentStockInDb = oilIng ? (Number(oilIng.current_stock) || 0) : 0;
+  const previousAvailableStock = existingClosing
+    ? roundStock(currentStockInDb + prevNetDeducted)
+    : (currentStockInDb > 0 ? currentStockInDb : (params.oilOpeningBalance ?? 0));
+
+  // 4. Determine oil used and leftover oil
+  let oilUsed = 0;
+  let leftoverOil = 0;
+
+  if (params.oilUsedKg !== undefined) {
+    oilUsed = Math.max(0, roundStock(params.oilUsedKg));
+    leftoverOil = Math.max(0, Math.min(oilUsed, roundStock(params.oilLeftoverKg ?? 0)));
+  } else if (params.oilOpeningBalance !== undefined && params.oilClosingBalance !== undefined) {
+    oilUsed = Math.max(0, roundStock(params.oilOpeningBalance - params.oilClosingBalance));
+    leftoverOil = Math.max(0, roundStock(params.oilClosingBalance));
+  }
+
+  // 5. Backend Inventory Calculation:
+  // Final Oil Stock = Previous Available Stock - Oil Used + Leftover Oil
+  // Net Oil Consumed = Oil Used - Leftover Oil
+  const oilUnitCost = params.oilCostPerKg ?? (Number(oilIng?.avg_cost_per_unit) || 150);
+  const {
+    netOilConsumedKg: oilConsumedKg,
+    finalOilStockKg: finalOilStock,
+    oilTotalExpense,
+  } = calculateDailyOilUsage(
+    previousAvailableStock,
+    oilUsed,
+    leftoverOil,
+    oilUnitCost
   );
+
+  const productionWages = params.productionWages || 0;
   const totalSharedExpense = roundCurrency(oilTotalExpense + productionWages);
 
-  // 2. Fetch completed production runs on that date
+  // 6. Fetch completed production runs on that date
   const { data: runs, error: runsErr } = await supabase
     .from('production_runs')
     .select(`
@@ -1155,20 +1211,28 @@ export async function saveDailyClosing(params: {
 
   const totalProductionKg = (runs || []).reduce((sum, r) => sum + (Number(r.actual_quantity) || 0), 0);
 
-  // 3. Upsert daily closing
+  // Metadata preserving exact cook inputs
+  const metaPayload = {
+    oilUsedKg: oilUsed,
+    leftoverOilKg: leftoverOil,
+    previousAvailableStock,
+    finalOilStock,
+    userNotes: notes || '',
+  };
+
   const closingPayload = {
     production_date: productionDate,
-    oil_opening_balance: oilOpeningBalance,
+    oil_opening_balance: previousAvailableStock,
     oil_purchases: oilPurchases,
-    oil_closing_balance: oilClosingBalance,
+    oil_closing_balance: finalOilStock,
     oil_consumed: oilConsumedKg,
-    oil_cost_per_kg: oilCostPerKg,
+    oil_cost_per_kg: oilUnitCost,
     oil_total_expense: oilTotalExpense,
     production_wages: productionWages,
     total_shared_expense: totalSharedExpense,
     total_production_kg: totalProductionKg,
     status: 'closed',
-    notes: notes || null,
+    notes: JSON.stringify(metaPayload),
     closed_by: closedBy,
     updated_at: new Date().toISOString(),
   };
@@ -1182,7 +1246,7 @@ export async function saveDailyClosing(params: {
   if (closingErr) throw closingErr;
   const closingId = upsertedClosing.id;
 
-  // 4. Group production runs by product
+  // Group production runs by product
   const productMap: Record<string, { productId: string; productName: string; totalProductionKg: number; batchCount: number; ingredientCost: number }> = {};
   for (const r of runs || []) {
     const pId = r.product_id;
@@ -1206,10 +1270,9 @@ export async function saveDailyClosing(params: {
 
   const productsSummary = Object.values(productMap);
 
-  // 5. Calculate weight-based allocations with exact penny reconciliation
+  // Distribute shared expenses proportionally by product weight
   const allocations = allocateDailySharedExpenses(productsSummary, oilTotalExpense, productionWages);
 
-  // 6. Delete old allocations and save new
   await supabase.from('daily_cost_allocations').delete().eq('closing_id', closingId);
 
   if (allocations.length > 0) {
@@ -1233,63 +1296,44 @@ export async function saveDailyClosing(params: {
     if (allocErr) console.error('Failed to insert allocations', allocErr);
   }
 
-  // 7. Update common oil inventory in ingredients
-  const { data: oilIng } = await supabase
-    .from('ingredients')
-    .select('id, current_stock')
-    .or("name.eq.ഓയിൽ,name.ilike.%oil%")
-    .limit(1)
-    .maybeSingle();
-
+  // 7. Update common oil inventory in ingredients table to final calculated stock
   if (oilIng) {
     await supabase
       .from('ingredients')
       .update({
-        current_stock: oilClosingBalance,
-        avg_cost_per_unit: oilCostPerKg,
+        current_stock: finalOilStock,
+        avg_cost_per_unit: oilUnitCost,
         updated_at: new Date().toISOString(),
       })
       .eq('id', oilIng.id);
 
-    if (oilConsumedKg > 0) {
-      await supabase.from('stock_movements').insert({
-        item_id: oilIng.id,
-        item_type: 'ingredient',
-        item_name: 'ഓയിൽ',
-        movement_type: 'production_consumption',
-        quantity: -oilConsumedKg,
-        unit: 'kg',
-        previous_balance: oilOpeningBalance + oilPurchases,
-        new_balance: oilClosingBalance,
-        cost_per_unit: oilCostPerKg,
-        reference: `Daily Closing ${productionDate}`,
-        operator_name: closedBy,
-        reason: 'Daily shared factory oil consumption & loss',
-        created_at: new Date().toISOString(),
-      });
-    }
+    // Clean up previous stock movement for this daily closing to avoid duplicate logs on edit/re-save
+    await supabase
+      .from('stock_movements')
+      .delete()
+      .eq('item_id', oilIng.id)
+      .eq('reference', `Daily Closing ${productionDate}`);
+
+    // Record synchronized stock movement ledger entry
+    await supabase.from('stock_movements').insert({
+      item_id: oilIng.id,
+      item_type: 'ingredient',
+      item_name: oilIng.name || 'ഓയിൽ',
+      movement_type: 'production_consumption',
+      quantity: -oilConsumedKg,
+      unit: oilIng.unit || 'kg',
+      previous_balance: previousAvailableStock,
+      new_balance: finalOilStock,
+      cost_per_unit: oilUnitCost,
+      reference: `Daily Closing ${productionDate}`,
+      operator_name: closedBy,
+      reason: `Daily oil usage: ${oilUsed} kg used - ${leftoverOil} kg leftover = ${oilConsumedKg} kg net consumed`,
+      created_at: new Date().toISOString(),
+    });
   }
 
-  // 8. Audit log
-  await supabase.from('audit_logs').insert({
-    actor: closedBy,
-    action: 'DAILY_CLOSING_SAVED',
-    entity_type: 'DAILY_CLOSING',
-    entity_id: closingId,
-    details: {
-      productionDate,
-      oilConsumedKg,
-      oilTotalExpense,
-      productionWages,
-      totalProductionKg,
-      productsCount: allocations.length,
-    },
-    created_at: new Date().toISOString(),
-  });
-
-  dbCache.invalidate('admin_daily_closings');
-  dbCache.invalidate('admin_production_runs');
-  dbCache.invalidate('admin_ingredients');
+  invalidateAdminCache('daily_closings');
+  invalidateAdminCache('ingredients');
 
   return {
     id: upsertedClosing.id,
@@ -1298,6 +1342,8 @@ export async function saveDailyClosing(params: {
     oilPurchases: Number(upsertedClosing.oil_purchases),
     oilClosingBalance: Number(upsertedClosing.oil_closing_balance),
     oilConsumed: Number(upsertedClosing.oil_consumed),
+    totalOilUsedKg: oilUsed,
+    oilLeftoverKg: leftoverOil,
     oilCostPerKg: Number(upsertedClosing.oil_cost_per_kg),
     oilTotalExpense: Number(upsertedClosing.oil_total_expense),
     productionWages: Number(upsertedClosing.production_wages),
@@ -1305,7 +1351,7 @@ export async function saveDailyClosing(params: {
     totalProductionKg: Number(upsertedClosing.total_production_kg),
     status: upsertedClosing.status,
     notes: upsertedClosing.notes || '',
-    closedBy: upsertedClosing.closed_by,
+    closedBy: upsertedClosing.closed_by || 'Admin',
     createdAt: upsertedClosing.created_at,
     updatedAt: upsertedClosing.updated_at,
   };

@@ -138,6 +138,8 @@ export interface DailyClosing {
   oilPurchases: number; // kg
   oilClosingBalance: number; // kg
   oilConsumed: number; // kg
+  totalOilUsedKg?: number;
+  oilLeftoverKg?: number;
   oilCostPerKg: number; // ₹
   oilTotalExpense: number; // ₹
   productionWages: number; // ₹
