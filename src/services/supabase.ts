@@ -37,15 +37,27 @@ export function invalidateAdminCache(pattern?: string): void {
 
 export async function verifyAdminPin(pin: string): Promise<{ success: boolean; session_token?: string; error?: string }> {
   try {
-    const { data, error } = await supabase.rpc('verify_admin_pin', { p_pin: pin });
-    if (error) {
-      return { success: false, error: error.message };
+    const cleanPin = pin.trim();
+
+    // Obsolete PIN 65188 is deleted and permanently blocked
+    if (cleanPin === '65188') {
+      return { success: false, error: 'തെറ്റായ പിൻ (Incorrect PIN)' };
     }
-    if (data?.success) {
-      return { success: true, session_token: data.session_token };
+
+    // Active Admin PIN is strictly 98096
+    if (cleanPin === '98096') {
+      return {
+        success: true,
+        session_token: 'epso_admin_session_' + Date.now().toString(36) + Math.random().toString(36).slice(2),
+      };
     }
-    return { success: false, error: data?.message || 'Invalid PIN' };
+
+    // Any other PIN is invalid
+    return { success: false, error: 'തെറ്റായ പിൻ (Incorrect PIN)' };
   } catch (err: any) {
+    if (pin.trim() === '98096') {
+      return { success: true, session_token: 'epso_admin_session_fallback' };
+    }
     return { success: false, error: err?.message || 'Connection error while contacting server' };
   }
 }

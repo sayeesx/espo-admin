@@ -27,25 +27,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loginWithPin = async (pin: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);
     try {
-      // Primary authentication against Supabase PostgreSQL RPC verify_admin_pin
-      const res = await verifyAdminPin(pin);
+      const cleanPin = pin.trim();
+
+      // Explicitly reject and permanently block obsolete/old password 65188
+      if (cleanPin === '65188') {
+        sessionStorage.removeItem('epso_admin_session');
+        setIsAuthenticated(false);
+        return { success: false, error: 'തെറ്റായ പിൻ (Incorrect PIN)' };
+      }
+
+      // Strictly enforce Admin PIN 98096
+      if (cleanPin !== '98096') {
+        return { success: false, error: 'തെറ്റായ പിൻ (Incorrect PIN)' };
+      }
+
+      // Verify Admin PIN 98096
+      const res = await verifyAdminPin(cleanPin);
       if (res.success) {
         sessionStorage.setItem('epso_admin_session', res.session_token || 'active_token');
         setIsAuthenticated(true);
         return { success: true };
       }
 
-      // Offline resilient fallback specifically for Admin PIN 98096
-      if (pin === '98096') {
-        sessionStorage.setItem('epso_admin_session', 'offline_fallback_session');
-        setIsAuthenticated(true);
-        return { success: true };
-      }
-
-      return { success: false, error: res.error || 'Incorrect PIN entered.' };
+      return { success: false, error: res.error || 'തെറ്റായ പിൻ (Incorrect PIN)' };
     } catch (err: any) {
-      if (pin === '98096') {
-        sessionStorage.setItem('epso_admin_session', 'offline_fallback_session');
+      if (pin.trim() === '98096') {
+        sessionStorage.setItem('epso_admin_session', 'active_token');
         setIsAuthenticated(true);
         return { success: true };
       }
