@@ -7,6 +7,7 @@ import {
 } from '../types';
 import {
   fetchDailyClosings,
+  fetchPacketTypes,
   fetchPackingRecords,
   fetchDailyWages,
   fetchProductSellingPrices,
@@ -93,6 +94,8 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
 
   // Data states
   const [productCosts, setProductCosts] = useState<ProductCostSummary[]>([]);
+  const [allPackings, setAllPackings] = useState<any[]>([]);
+  const [packetTypeCostMap, setPacketTypeCostMap] = useState<Record<string, number>>({});
   const [sellingPrices, setSellingPrices] = useState<Record<string, number>>({});
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [editPriceValue, setEditPriceValue] = useState<string>('');
@@ -106,13 +109,24 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   const loadCostingData = useCallback(async (dateFilter: string) => {
     setIsLoading(true);
     try {
-      // 1. Fetch all needed data in parallel
-      const [closings, allPackingRecords, wageList, pricesData] = await Promise.all([
+      // 1. Fetch all needed data in parallel (auto-fetched)
+      const [closings, allPackingRecords, wageList, pricesData, packetTypesList] = await Promise.all([
         fetchDailyClosings(90),
         fetchPackingRecords({ limit: 500 }),
         fetchDailyWages(90),
         fetchProductSellingPrices(),
+        fetchPacketTypes().catch(() => []),
       ]);
+
+      setAllPackings(allPackingRecords || []);
+
+      const pCostMap: Record<string, number> = {};
+      for (const pt of packetTypesList || []) {
+        if (pt.name) {
+          pCostMap[pt.name.toLowerCase().trim()] = Number(pt.costPerPacket) || 0;
+        }
+      }
+      setPacketTypeCostMap(pCostMap);
 
       // Build selling prices map
       const priceMap: Record<string, number> = {};
@@ -176,7 +190,14 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
         }
         const prodPackets = prodPacking.reduce((sum, pr) => sum + (pr.packetsPacked || 0), 0);
         const packagingMaterialCost = roundCurrency(
-          prodPacking.reduce((sum, pr) => sum + (pr.packagingCost || 0), 0)
+          prodPacking.reduce((sum, pr) => {
+            const sizeKey = (pr.packetSize || '').toLowerCase().trim();
+            const unitCost = Number(pr.coverUnitCost) || pCostMap[sizeKey] || 0;
+            const cost = (pr.packagingCost && pr.packagingCost > 0)
+              ? Number(pr.packagingCost)
+              : roundCurrency((pr.packetsPacked || 0) * unitCost);
+            return sum + cost;
+          }, 0)
         );
 
         // Oil and Wages allocation: proportional to production weight on respective dates
@@ -259,8 +280,19 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   }, [products, productionRuns]);
 
   useEffect(() => {
+    if (onRefresh) onRefresh();
     loadCostingData(selectedDate);
-  }, [selectedDate, loadCostingData]);
+  }, [selectedDate, loadCostingData, onRefresh]);
+
+  // Auto-fetch when window gains focus (no manual reload needed)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (onRefresh) onRefresh();
+      loadCostingData(selectedDate);
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [selectedDate, loadCostingData, onRefresh]);
 
   // Load detail ingredients for a product
   const loadProductDetail = useCallback(async (productId: string) => {
@@ -296,6 +328,8 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
 
   const handleOpenDetail = (product: ProductCostSummary) => {
     setSelectedProduct(product);
+    if (onRefresh) onRefresh();
+    loadCostingData(selectedDate);
     loadProductDetail(product.productId);
   };
 
@@ -716,6 +750,68 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
             <span className="text-xl font-black text-emerald-700 dark:text-emerald-200 font-mono">{formatCurrency(p.totalManufacturingCost)}</span>
           </div>
         </div>
+
+        {/* PACKET TYPES & PACKAGING BREAKDOWN (How packets affect costing) */}
+        {(() => {
+          const prodPackings = allPackings.filter((pr) => pr.productId === p.productId && (selectedDate === 'all' || pr.packingDate === selectedDate));
+          const pMap: Record<string, { size: string; count: number; cost: number }> = {};
+          for (const pr of prodPackings) {
+            const s = pr.packetSize || 'Unknown';
+            if (!pMap[s]) pMap[s] = { size: s, count: 0, cost: 0 };
+            const sKey = s.toLowerCase().trim();
+            const uCost = Number(pr.coverUnitCost) || packetTypeCostMap[sKey] || 0;
+            const itemCost = (pr.packagingCost && pr.packagingCost > 0)
+              ? Number(pr.packagingCost)
+              : roundCurrency((pr.packetsPacked || 0) * uCost);
+            pMap[s].count += (pr.packetsPacked || 0);
+            pMap[s].cost += itemCost;
+          }
+          const packetList = Object.values(pMap);
+
+          return (
+            <div className="p-5 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-3 font-malayalam">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FiPackage className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <h3 className="text-sm font-black text-stone-900 dark:text-white">
+                    ഉപയോഗിച്ച പാക്കറ്റുകളുടെ വിശദാംശങ്ങൾ (Packets Used & Cost Impact)
+                  </h3>
+                </div>
+                <span className="text-xs font-mono font-bold text-stone-500">
+                  {p.totalPacketsPacked} pkts ആകെ
+                </span>
+              </div>
+              <p className="text-xs text-stone-400">
+                തിരഞ്ഞെടുത്ത പാക്കറ്റുകളുടെ എണ്ണവും തരവും അനുസരിച്ചുള്ള പാക്കിംഗ് ചെലവ്:
+              </p>
+
+              {packetList.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 pt-1">
+                  {packetList.map((item, idx) => (
+                    <div key={idx} className="p-3 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200/70 dark:border-[#282323] flex items-center justify-between">
+                      <div>
+                        <span className="font-bold text-xs text-stone-900 dark:text-white block font-mono">{item.size}</span>
+                        <span className="text-[11px] text-stone-400 font-mono">{item.count} pkts</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-mono font-black text-xs text-purple-700 dark:text-purple-400 block">
+                          ₹{item.cost.toFixed(2)}
+                        </span>
+                        <span className="text-[10px] text-stone-400 font-mono">
+                          {item.count > 0 ? `₹${(item.cost / item.count).toFixed(2)}/pkt` : ''}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="py-4 text-center text-xs text-stone-400">
+                  പാക്കറ്റ് വിവരങ്ങൾ ലഭ്യമല്ല
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Production Metrics */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">

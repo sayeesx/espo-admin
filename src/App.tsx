@@ -74,6 +74,9 @@ export const App: React.FC = () => {
     if (newTab === 'ai') {
       setIsAIOpen(true);
     }
+    if (newTab === 'costing') {
+      loadAllData(true);
+    }
     setChangingTab(newTab);
     setTimeout(() => {
       setActiveTab(newTab);
