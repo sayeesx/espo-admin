@@ -7,6 +7,17 @@ import { FeedbackProvider } from './context/FeedbackContext';
 import './index.css';
 
 // Prevent mouse wheel from incrementing/decrementing number inputs while keeping manual entry intact
+// Ensure all legacy service workers and live caches are purged (non-PWA mode)
+if (typeof window !== 'undefined') {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (const registration of registrations) {
+        registration.unregister();
+      }
+    });
+  }
+}
+
 document.addEventListener(
   'wheel',
   (e) => {

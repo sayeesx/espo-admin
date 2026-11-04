@@ -24,6 +24,8 @@ import { WagesAdminView } from './components/WagesAdminView';
 import { AIAdminAssistant } from './components/AIAdminAssistant';
 import { SettingsAdminView } from './components/SettingsAdminView';
 import { InventoryStockAdminView } from './components/InventoryStockAdminView';
+import { CompulsoryUpdateModal } from './components/CompulsoryUpdateModal';
+import { useUpdateChecker } from './hooks/useUpdateChecker';
 import {
   fetchProducts,
   fetchIngredients,
@@ -40,6 +42,7 @@ const ACTIVE_TAB_KEY = 'epso_admin_active_tab';
 
 export const App: React.FC = () => {
   const { isAuthenticated } = useAuth();
+  const { hasUpdate, isUpdating, newVersion, applyUpdateAndClearCache, checkVersion } = useUpdateChecker();
 
   // Tab persistence: check URL parameter first, then localStorage, defaulting to 'dashboard'
   const getInitialTab = (): AdminTab => {
@@ -76,6 +79,7 @@ export const App: React.FC = () => {
   const [changingTab, setChangingTab] = useState<AdminTab | null>(null);
 
   const handleTabChange = useCallback((newTab: AdminTab) => {
+    checkVersion();
     if (newTab === 'ai') {
       setIsAIOpen(true);
     }
@@ -286,7 +290,17 @@ export const App: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    return <PinGate />;
+    return (
+      <>
+        <PinGate />
+        <CompulsoryUpdateModal
+          isOpen={hasUpdate}
+          isUpdating={isUpdating}
+          newVersion={newVersion}
+          onUpdate={applyUpdateAndClearCache}
+        />
+      </>
+    );
   }
 
   return (
@@ -474,6 +488,14 @@ export const App: React.FC = () => {
       <ProductionPinModal
         isOpen={isPinModalOpen}
         onClose={() => setIsPinModalOpen(false)}
+      />
+
+      {/* Compulsory Immediate Update Modal for New Deployments (Without Shadows) */}
+      <CompulsoryUpdateModal
+        isOpen={hasUpdate}
+        isUpdating={isUpdating}
+        newVersion={newVersion}
+        onUpdate={applyUpdateAndClearCache}
       />
     </div>
   );

@@ -1,36 +1,83 @@
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
 import path from 'path';
+import fs from 'fs';
+import { execSync } from 'child_process';
+
+function getGitCommitHash(): string {
+  if (process.env.VERCEL_GIT_COMMIT_SHA) {
+    return process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7);
+  }
+  try {
+    return execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+      .toString()
+      .trim();
+  } catch {
+    return '';
+  }
+}
+
+function versionPlugin(): Plugin {
+  const commitHash = getGitCommitHash();
+  const buildTimestamp = Date.now();
+  const buildId = commitHash ? `${commitHash}-${buildTimestamp}` : `${buildTimestamp}`;
+  const versionData = JSON.stringify(
+    {
+      buildId,
+      commitHash: commitHash || 'unknown',
+      builtAt: new Date(buildTimestamp).toISOString(),
+    },
+    null,
+    2
+  );
+
+  return {
+    name: 'version-plugin',
+    config() {
+      return {
+        define: {
+          __APP_BUILD_ID__: JSON.stringify(buildId),
+        },
+      };
+    },
+    buildStart() {
+      try {
+        const publicDir = path.resolve(import.meta.dirname, 'public');
+        if (!fs.existsSync(publicDir)) {
+          fs.mkdirSync(publicDir, { recursive: true });
+        }
+        fs.writeFileSync(path.join(publicDir, 'version.json'), versionData, 'utf-8');
+      } catch (err) {
+        console.warn('Failed to write public/version.json:', err);
+      }
+    },
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        if (req.url && (req.url === '/version.json' || req.url.startsWith('/version.json?'))) {
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+          res.setHeader('Pragma', 'no-cache');
+          res.setHeader('Expires', '0');
+          res.end(versionData);
+          return;
+        }
+        next();
+      });
+    },
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: versionData,
+      });
+    },
+  };
+}
 
 export default defineConfig({
   plugins: [
     react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'favicon.png', 'epso-logo-transparent.png'],
-      manifest: {
-        name: 'Epso Production Admin',
-        short_name: 'Epso Admin',
-        description: 'Epso Production & Inventory Remote Owner Dashboard',
-        theme_color: '#C6382B',
-        background_color: '#141212',
-        display: 'standalone',
-        orientation: 'portrait-primary',
-        icons: [
-          {
-            src: 'favicon.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: 'favicon.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-        ],
-      },
-    }),
+    versionPlugin(),
   ],
   resolve: {
     alias: {

@@ -31,6 +31,7 @@ import {
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 import { AddPurchaseModal } from './AddPurchaseModal';
 import { ManagePacketTypesModal } from './ManagePacketTypesModal';
+import { IngredientDetailModal } from './IngredientDetailModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import { createPortal } from 'react-dom';
 import { ThemeSelect } from './ThemeSelect';
@@ -60,6 +61,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   const [purchaseListModalOpen, setPurchaseListModalOpen] = useState(false);
   const [addPurchaseModalOpen, setAddPurchaseModalOpen] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
+  const [detailIngredient, setDetailIngredient] = useState<Ingredient | null>(null);
 
   // Tab state: Raw Ingredients vs Packet Types
   const [activeIngredientTab, setActiveIngredientTab] = useState<'ingredients' | 'packets'>('ingredients');
@@ -520,7 +522,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
           return (
             <div
               key={ing.id}
-              className={`p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border transition-all shadow-apple-card dark:shadow-apple-card-dark flex flex-col justify-between ${
+              onClick={() => setDetailIngredient(ing)}
+              className={`p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border transition-all shadow-apple-card dark:shadow-apple-card-dark flex flex-col justify-between cursor-pointer hover:border-amber-400 dark:hover:border-amber-600/70 hover:shadow-md ${
                 isLowStock
                   ? 'border-amber-300 dark:border-amber-800/80 ring-1 ring-amber-300 dark:ring-amber-800'
                   : 'border-stone-200 dark:border-[#2E2828]'
@@ -656,14 +659,20 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
               {/* Action Buttons */}
               <div className="flex items-center gap-2 pt-2 border-t border-stone-100 dark:border-[#282323]">
                 <button
-                  onClick={() => openAdjustModal(ing)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openAdjustModal(ing);
+                  }}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 text-xs font-bold press-apple transition-colors border border-amber-500/30"
                 >
                   <FiRepeat className="w-3.5 h-3.5" />
                   <span className="font-malayalam">സ്റ്റോക്ക് മാറ്റുക</span>
                 </button>
                 <button
-                  onClick={() => openEditModal(ing)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openEditModal(ing);
+                  }}
                   className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] border border-stone-200 dark:border-[#2E2828] press-apple transition-colors text-xs font-bold"
                   title="തിരുത്തുക (Edit)"
                 >
@@ -671,7 +680,10 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   <span className="font-malayalam">തിരുത്തുക</span>
                 </button>
                 <button
-                  onClick={() => handleDelete(ing)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(ing);
+                  }}
                   className="flex items-center justify-center p-2 rounded-xl text-stone-400 hover:text-red-500 hover:bg-red-500/10 border border-stone-200 dark:border-[#2E2828] hover:border-red-500/30 press-apple transition-colors"
                   title="ഡിലീറ്റ് ചെയ്യുക (Delete from database)"
                 >
@@ -1585,6 +1597,15 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
         isOpen={managePacketsOpen}
         onClose={() => setManagePacketsOpen(false)}
         onUpdated={loadPackagingItems}
+      />
+
+      {/* Ingredient Analytics Details Modal */}
+      <IngredientDetailModal
+        isOpen={Boolean(detailIngredient)}
+        onClose={() => setDetailIngredient(null)}
+        ingredient={detailIngredient}
+        stockMovements={stockMovements}
+        products={products}
       />
     </div>
   );
