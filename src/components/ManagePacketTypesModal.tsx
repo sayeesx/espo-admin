@@ -24,12 +24,14 @@ interface ManagePacketTypesModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdated?: () => void;
+  initialPacket?: PacketType | null;
 }
 
 export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
   isOpen,
   onClose,
   onUpdated,
+  initialPacket,
 }) => {
   const { showToast, confirm } = useFeedback();
   useLockBodyScroll(isOpen);
@@ -51,6 +53,12 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
       setLoading(true);
       const data = await fetchPacketTypes();
       setPacketTypes(data);
+      if (initialPacket?.id) {
+        const fresh = data.find((p) => p.id === initialPacket.id);
+        if (fresh) {
+          startEdit(fresh);
+        }
+      }
     } catch (err: any) {
       console.error('Failed to load packet types:', err);
     } finally {
@@ -60,10 +68,14 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      if (initialPacket) {
+        startEdit(initialPacket);
+      } else {
+        resetForm();
+      }
       loadData();
-      resetForm();
     }
-  }, [isOpen]);
+  }, [isOpen, initialPacket]);
 
   const resetForm = () => {
     setEditingId(null);
@@ -214,7 +226,7 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
               <div className="flex items-center justify-between">
                 <span className="font-bold text-stone-900 dark:text-white font-malayalam flex items-center gap-1.5">
                   <FiLayers className="w-4 h-4 text-epso-orange" />
-                  {editingId ? 'പാക്കറ്റ് തരം തിരുത്തുക (Edit Packet)' : 'പുതിയ പാക്കറ്റ് തരം ചേർക്കുക (Add Packet Type)'}
+                  {editingId ? `പാക്കറ്റ് തരം തിരുത്തുക: ${name || 'Selected'}` : 'പുതിയ പാക്കറ്റ് തരം ചേർക്കുക (Add Packet Type)'}
                 </span>
                 {editingId && (
                   <button

@@ -832,46 +832,72 @@ export async function deleteProductionRun(
 
 export async function fetchProductionRuns(force = false): Promise<ProductionRun[]> {
   return dbCache.wrap('admin_production_runs', async () => {
-    const { data, error } = await supabase
-      .from('production_runs')
-      .select(`
-        *,
-        products (name),
-        production_consumption (
+    const [{ data, error }, { data: packingsData }] = await Promise.all([
+      supabase
+        .from('production_runs')
+        .select(`
           *,
-          ingredients (name)
-        )
-      `)
-      .order('created_at', { ascending: false })
-      .limit(50);
+          products (name),
+          production_consumption (
+            *,
+            ingredients (name)
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(100),
+      supabase
+        .from('packing_records')
+        .select('id, production_run_id, packet_size, packets_packed, weight_packed_kg, notes')
+        .order('created_at', { ascending: false })
+        .limit(500),
+    ]);
 
     if (error) throw error;
-    return (data || []).map((row: any) => ({
-      id: row.id,
-      runNumber: row.run_number,
-      productId: row.product_id,
-      productName: row.products?.name || 'Snack',
-      recipeId: row.recipe_id,
-      recipeVersion: row.recipe_version,
-      productionDate: row.production_date,
-      plannedQuantity: Number(row.planned_quantity) || 0,
-      actualQuantity: Number(row.actual_quantity) || 0,
-      unit: row.unit,
-      status: row.status as any,
-      notes: row.notes,
-      operatorName: row.operator_name || 'Staff',
-      totalIngredientCost: Number(row.total_ingredient_cost) || 0,
-      ingredientsConsumed: (row.production_consumption || []).map((c: any) => ({
-        ingredientId: c.ingredient_id,
-        ingredientName: c.ingredients?.name || 'Ingredient',
-        expectedQuantity: Number(c.expected_quantity) || 0,
-        actualQuantity: Number(c.actual_quantity) || 0,
-        unit: c.unit,
-        unitCost: Number(c.unit_cost) || 0,
-        totalCost: Number(c.total_cost) || 0,
-      })),
-      createdAt: row.created_at,
-    }));
+    return (data || []).map((row: any) => {
+      const runPackings = (packingsData || []).filter((p: any) =>
+        p.production_run_id
+          ? p.production_run_id === row.id
+          : Boolean(p.notes && p.notes.includes(row.run_number))
+      );
+      const totalPackets = runPackings.reduce(
+        (sum: number, p: any) => sum + (Number(p.packets_packed) || 0),
+        0
+      );
+
+      return {
+        id: row.id,
+        runNumber: row.run_number,
+        productId: row.product_id,
+        productName: row.products?.name || 'Snack',
+        recipeId: row.recipe_id,
+        recipeVersion: row.recipe_version,
+        productionDate: row.production_date,
+        plannedQuantity: Number(row.planned_quantity) || 0,
+        actualQuantity: Number(row.actual_quantity) || 0,
+        unit: row.unit,
+        status: row.status as any,
+        notes: row.notes,
+        operatorName: row.operator_name || 'Staff',
+        totalIngredientCost: Number(row.total_ingredient_cost) || 0,
+        ingredientsConsumed: (row.production_consumption || []).map((c: any) => ({
+          ingredientId: c.ingredient_id,
+          ingredientName: c.ingredients?.name || 'Ingredient',
+          expectedQuantity: Number(c.expected_quantity) || 0,
+          actualQuantity: Number(c.actual_quantity) || 0,
+          unit: c.unit,
+          unitCost: Number(c.unit_cost) || 0,
+          totalCost: Number(c.total_cost) || 0,
+        })),
+        createdAt: row.created_at,
+        packingRecords: runPackings.map((p: any) => ({
+          id: p.id,
+          packetSize: p.packet_size,
+          packetsPacked: Number(p.packets_packed) || 0,
+          weightPackedKg: Number(p.weight_packed_kg) || 0,
+        })),
+        totalPacketsPacked: totalPackets,
+      };
+    });
   }, { ttl: dbCache.TTL.PRODUCTION_RUNS, force });
 }
 

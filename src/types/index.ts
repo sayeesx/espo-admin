@@ -102,6 +102,13 @@ export interface ProductionRun {
   }[];
   totalIngredientCost?: number;
   createdAt?: string;
+  packingRecords?: Array<{
+    id: string;
+    packetSize: string;
+    packetsPacked: number;
+    weightPackedKg?: number;
+  }>;
+  totalPacketsPacked?: number;
 }
 
 export interface StockMovement {

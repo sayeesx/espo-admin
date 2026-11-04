@@ -139,6 +139,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   const [packetTypes, setPacketTypes] = useState<PacketType[]>([]);
   const [loadingPackaging, setLoadingPackaging] = useState<boolean>(false);
   const [managePacketsOpen, setManagePacketsOpen] = useState<boolean>(false);
+  const [selectedPacketTypeForEdit, setSelectedPacketTypeForEdit] = useState<PacketType | null>(null);
   const [packetModalOpen, setPacketModalOpen] = useState(false);
   const [selectedPackagingItem, setSelectedPackagingItem] = useState<PackagingItem | null>(null);
   const [packProductId, setPackProductId] = useState<string>('');
@@ -797,7 +798,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => setManagePacketsOpen(true)}
+                onClick={() => { setSelectedPacketTypeForEdit(null); setManagePacketsOpen(true); }}
                 className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
                 title="പാക്കറ്റ് തരങ്ങൾ മാനേജ് ചെയ്യുക / തിരുത്തുക"
               >
@@ -878,7 +879,10 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => setManagePacketsOpen(true)}
+                onClick={() => {
+                  setSelectedPacketTypeForEdit(null);
+                  setManagePacketsOpen(true);
+                }}
                 className="text-xs text-epso-orange hover:underline font-bold flex items-center gap-1 cursor-pointer"
               >
                 <FiEdit2 className="w-3.5 h-3.5" />
@@ -890,7 +894,10 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
               {packetTypes.map((pt) => (
                 <div
                   key={pt.id}
-                  onClick={() => setManagePacketsOpen(true)}
+                  onClick={() => {
+                    setSelectedPacketTypeForEdit(pt);
+                    setManagePacketsOpen(true);
+                  }}
                   className="p-3 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] hover:border-orange-400 dark:hover:border-orange-600 transition-all cursor-pointer group shadow-2xs select-none"
                   title="ക്ലിക്ക് ചെയ്ത് തിരുത്തുക"
                 >
@@ -1663,8 +1670,15 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
       {/* Packet Types Manager Modal */}
       <ManagePacketTypesModal
         isOpen={managePacketsOpen}
-        onClose={() => setManagePacketsOpen(false)}
-        onUpdated={loadPackagingItems}
+        onClose={() => {
+          setManagePacketsOpen(false);
+          setSelectedPacketTypeForEdit(null);
+        }}
+        initialPacket={selectedPacketTypeForEdit}
+        onUpdated={() => {
+          loadPackagingItems();
+          fetchPacketTypes(true).then((pts) => setPacketTypes(pts));
+        }}
       />
 
       {/* Ingredient Analytics Details Modal */}

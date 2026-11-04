@@ -138,6 +138,64 @@ const CircularGauge: React.FC<CircularGaugeProps> = ({
   );
 };
 
+export const getBatchCompletionStatus = (run: ProductionRun) => {
+  if (run.status === 'cancelled') {
+    return {
+      status: 'cancelled' as const,
+      label: 'Cancelled',
+      malayalam: 'ഒഴിവാക്കി',
+      color: 'stone',
+      isFullyCompleted: false,
+    };
+  }
+
+  const hasProducedWeight = Boolean(run.actualQuantity && run.actualQuantity > 0);
+  const totalPackets = run.totalPacketsPacked ?? (run.packingRecords ? run.packingRecords.reduce((sum, p) => sum + (p.packetsPacked || 0), 0) : 0);
+  const hasPackedPackets = totalPackets > 0;
+
+  if (hasProducedWeight && hasPackedPackets) {
+    return {
+      status: 'completed' as const,
+      label: 'Completed',
+      malayalam: 'പൂർത്തിയായി',
+      color: 'emerald',
+      isFullyCompleted: true,
+      totalPackets,
+    };
+  }
+
+  if (hasProducedWeight && !hasPackedPackets) {
+    return {
+      status: 'packets_pending' as const,
+      label: 'Packets Pending',
+      malayalam: 'പാക്കറ്റ് ബാക്കി',
+      color: 'amber',
+      isFullyCompleted: false,
+      totalPackets: 0,
+    };
+  }
+
+  if (!hasProducedWeight && hasPackedPackets) {
+    return {
+      status: 'weight_pending' as const,
+      label: 'Weight Pending',
+      malayalam: 'തൂക്കം ബാക്കി',
+      color: 'amber',
+      isFullyCompleted: false,
+      totalPackets,
+    };
+  }
+
+  return {
+    status: 'in_progress' as const,
+    label: 'In Progress',
+    malayalam: 'ബാച്ച് ആരംഭിച്ചു',
+    color: 'amber',
+    isFullyCompleted: false,
+    totalPackets: 0,
+  };
+};
+
 export const DashboardView: React.FC<DashboardViewProps> = ({
   products,
   ingredients,
@@ -255,12 +313,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     (ing) => ing.isActive && ing.minStock > 0 && ing.currentStock <= ing.minStock
   );
 
-  const completedBatchesCount = productionRuns.filter((r) => r.status === 'completed').length;
+  const completedBatchesCount = productionRuns.filter((r) => getBatchCompletionStatus(r).isFullyCompleted).length;
   const totalProducedUnits = productionRuns.reduce((acc, r) => acc + (r.actualQuantity || 0), 0);
 
   // Active Date Runs & Output based on selected date
   const activeDateRuns = useMemo(
-    () => productionRuns.filter((r) => r.productionDate === activeDate && r.status === 'completed'),
+    () => productionRuns.filter((r) => r.productionDate === activeDate && getBatchCompletionStatus(r).isFullyCompleted),
     [productionRuns, activeDate]
   );
   const activeOutputKg = useMemo(
@@ -916,7 +974,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         )}
                       </button>
                     </div>
-                    <p className="text-[10px] text-stone-400 font-semibold">{run.operatorName}</p>
+                    <div className="flex items-center justify-end gap-1.5 mt-0.5">
+                      {(() => {
+                        const batchSt = getBatchCompletionStatus(run);
+                        return (
+                          <>
+                            <span
+                              className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ${
+                                batchSt.color === 'emerald'
+                                  ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300'
+                                  : batchSt.color === 'amber'
+                                  ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300'
+                                  : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400'
+                              }`}
+                            >
+                              {batchSt.label}
+                            </span>
+                            <span className="text-[10px] text-stone-400 font-semibold">
+                              {(run.totalPacketsPacked || 0) > 0 ? `${run.totalPacketsPacked} pkts` : 'No pkts'} • {run.operatorName}
+                            </span>
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
 
@@ -1378,21 +1458,54 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         {run.productionDate}
                       </td>
                       <td className="py-2.5 px-3 font-bold text-stone-900 dark:text-white">
-                        {run.actualQuantity} {run.unit}
+                        {run.actualQuantity > 0 ? (
+                          `${run.actualQuantity} ${run.unit}`
+                        ) : (
+                          <span className="text-amber-600 dark:text-amber-400 font-bold italic text-[11px]">
+                            Unweighed
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 font-medium text-stone-700 dark:text-stone-300">
+                        {(run.totalPacketsPacked || 0) > 0 ? (
+                          <span className="font-mono font-bold text-stone-900 dark:text-white">
+                            {run.totalPacketsPacked} pkts
+                          </span>
+                        ) : (
+                          <span className="text-amber-600 dark:text-amber-400 font-semibold italic text-[11px]">
+                            Not added
+                          </span>
+                        )}
                       </td>
                       <td className="py-2.5 px-3 text-stone-500 dark:text-stone-400">
                         {run.operatorName}
                       </td>
                       <td className="py-2.5 px-3">
-                        <span
-                          className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            run.status === 'completed'
-                              ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-400'
-                              : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400'
-                          }`}
-                        >
-                          {run.status === 'completed' ? 'Completed' : 'Cancelled'}
-                        </span>
+                        {(() => {
+                          const batchSt = getBatchCompletionStatus(run);
+                          return (
+                            <span
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black ${
+                                batchSt.color === 'emerald'
+                                  ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-400'
+                                  : batchSt.color === 'amber'
+                                  ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300'
+                                  : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400'
+                              }`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  batchSt.color === 'emerald'
+                                    ? 'bg-emerald-500'
+                                    : batchSt.color === 'amber'
+                                    ? 'bg-amber-500'
+                                    : 'bg-stone-400'
+                                }`}
+                              />
+                              <span>{batchSt.label}</span>
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="py-2.5 px-3 text-right">
                         <button
