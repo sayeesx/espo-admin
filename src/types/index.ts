@@ -170,6 +170,9 @@ export interface DailyCostAllocation {
   ingredientCost: number;
   allocatedOilCost: number;
   allocatedProductionWages: number;
+  allocatedCookingWages?: number;
+  allocatedPackingWages?: number;
+  allocatedBasicIngredientsCost?: number;
   totalProductionCost: number;
   productionCostPerKg: number;
   createdAt?: string;
@@ -218,6 +221,9 @@ export interface FinalProductCosting {
   totalIngredientCost: number;
   allocatedOilCost: number;
   allocatedProductionWages: number;
+  allocatedCookingWages?: number;
+  allocatedPackingWages?: number;
+  allocatedBasicIngredientsCost?: number;
   totalProductionCost: number;
   productionCostPerKg: number;
   // Packing

@@ -12,8 +12,9 @@ import {
   fetchDailyWages,
   fetchProductSellingPrices,
   saveProductSellingPrice,
+  fetchStockMovements,
 } from '../services/supabase';
-import { roundCurrency, roundStock } from '../services/costing';
+import { roundCurrency, roundStock, isBasicIngredientName } from '../services/costing';
 import { LoadingSpinner } from './LoadingSpinner';
 import { useFeedback } from '../context/FeedbackContext';
 import {
@@ -52,6 +53,7 @@ interface ProductCostSummary {
   batchCount: number;
   ingredientCost: number;
   oilCost: number;
+  basicIngredientsCost: number;
   productionWages: number;
   packingWages: number;
   packagingMaterialCost: number;
@@ -69,6 +71,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   products,
   ingredients,
   productionRuns,
+  stockMovements,
   onRefresh,
 }) => {
   const { showToast } = useFeedback();
@@ -108,6 +111,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   const [isSavingPrice, setIsSavingPrice] = useState(false);
   const [closingDataMap, setClosingDataMap] = useState<Record<string, any>>({});
   const [wageDataMap, setWageDataMap] = useState<Record<string, any>>({});
+  const [dailyBasicMap, setDailyBasicMap] = useState<Record<string, number>>({});
 
   // Per-product detail data
   const [detailIngredients, setDetailIngredients] = useState<any[]>([]);
@@ -116,13 +120,56 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     setIsLoading(true);
     try {
       // 1. Fetch all needed data in parallel (auto-fetched)
-      const [closings, allPackingRecords, wageList, pricesData, packetTypesList] = await Promise.all([
+      const [closings, allPackingRecords, wageList, pricesData, packetTypesList, fetchedMovements] = await Promise.all([
         fetchDailyClosings(90),
         fetchPackingRecords({ limit: 500 }),
         fetchDailyWages(90),
         fetchProductSellingPrices(),
         fetchPacketTypes().catch(() => []),
+        fetchStockMovements(false).catch(() => []),
       ]);
+
+      const movements = (stockMovements && stockMovements.length > 0) ? stockMovements : (fetchedMovements || []);
+
+      // Build ingredients cost lookup
+      const ingCostMap = new Map<string, number>();
+      for (const ing of ingredients || []) {
+        if (ing.id) ingCostMap.set(ing.id, Number(ing.avgCostPerUnit) || 0);
+        if (ing.name) ingCostMap.set(ing.name.toLowerCase().trim(), Number(ing.avgCostPerUnit) || 0);
+      }
+
+      // Compute daily basic ingredients consumption cost by date
+      // Basic ingredients: ഉപ്പ്, അണ്ടി തോട്, ചിപ്പ്ളി പൊടി, കറിവേപ്പില
+      const basicCostByDate: Record<string, number> = {};
+      for (const m of movements) {
+        if ((m.quantity || 0) >= 0) continue;
+        const itemName = (m.itemName || '').toLowerCase().trim();
+        const reason = (m.reason || '').toLowerCase();
+
+        const isBasic = isBasicIngredientName(itemName) || reason.includes('daily basic ingredient usage');
+        if (!isBasic) continue;
+
+        // Exclude oil (oil is tracked separately via daily closings)
+        if (itemName.includes('ഓയിൽ') || itemName.includes('oil')) continue;
+
+        const isConsumption =
+          m.movementType === 'production_consumption' ||
+          reason.includes('daily basic ingredient usage');
+        if (!isConsumption) continue;
+
+        const dateMatch = m.reason?.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+        const movDate = dateMatch ? dateMatch[1] : (m.createdAt ? m.createdAt.split('T')[0] : '');
+        if (!movDate) continue;
+
+        const qtyKg = m.unit?.toLowerCase() === 'g' ? Math.abs(m.quantity) / 1000 : Math.abs(m.quantity);
+        const unitCost = (m.costPerUnit && m.costPerUnit > 0)
+          ? m.costPerUnit
+          : (ingCostMap.get(m.itemId) || ingCostMap.get(itemName) || 0);
+        const cost = roundCurrency(qtyKg * unitCost);
+
+        basicCostByDate[movDate] = roundCurrency((basicCostByDate[movDate] || 0) + cost);
+      }
+      setDailyBasicMap(basicCostByDate);
 
       setAllPackings(allPackingRecords || []);
 
@@ -176,11 +223,12 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
         const totalKg = pRuns.reduce((sum, r) => sum + (r.actualQuantity || 0), 0);
         const batchCount = pRuns.length;
 
-        // Ingredients cost from runs
+        // Ingredients cost from runs (excluding basic ingredients to avoid double-counting)
         let ingredientCost = 0;
         for (const run of pRuns) {
           if (run.ingredientsConsumed && Array.isArray(run.ingredientsConsumed) && run.ingredientsConsumed.length > 0) {
             for (const ing of run.ingredientsConsumed) {
+              if (isBasicIngredientName(ing.ingredientName || '')) continue;
               ingredientCost += (ing.totalCost || 0);
             }
           } else if (run.totalIngredientCost) {
@@ -206,10 +254,11 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           }, 0)
         );
 
-        // Oil and Wages allocation: proportional to production weight on respective dates
+        // Oil, Basic Ingredients, Cooking and Packing Wages allocation: proportional to production weight on respective dates
         let oilCost = 0;
-        let productionWages = 0;
-        let packingWages = 0;
+        let basicIngredientsCost = 0;
+        let productionWages = 0; // Cooking workers wage (കുക്കിംഗ് തൊഴിലാളികൾ)
+        let packingWages = 0;    // Packing workers wage (പാക്കിംഗ് തൊഴിലാളികൾ)
 
         if (pRuns.length > 0) {
           for (const run of pRuns) {
@@ -227,9 +276,16 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
               oilCost += roundCurrency(dayOilCost * ratio);
             }
 
+            const dayBasicCost = basicCostByDate[rDate] || 0;
+            if (dayBasicCost > 0) {
+              basicIngredientsCost += roundCurrency(dayBasicCost * ratio);
+            }
+
+            // Cooking workers wage (കുക്കിംഗ് തൊഴിലാളികൾ)
             const dayProdWages = wage?.productionWageAmount ?? (closing?.productionWages || 0);
             productionWages += roundCurrency(dayProdWages * ratio);
 
+            // Packing workers wage (പാക്കിംഗ് തൊഴിലാളികൾ)
             const dayPackWages = wage?.packingWageAmount ?? 0;
             if (dayPackWages > 0) {
               packingWages += roundCurrency(dayPackWages * ratio);
@@ -238,11 +294,12 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
         }
 
         oilCost = roundCurrency(oilCost);
+        basicIngredientsCost = roundCurrency(basicIngredientsCost);
         productionWages = roundCurrency(productionWages);
         packingWages = roundCurrency(packingWages);
 
         const totalManufacturingCost = roundCurrency(
-          ingredientCost + oilCost + productionWages + packingWages + packagingMaterialCost
+          ingredientCost + oilCost + basicIngredientsCost + productionWages + packingWages + packagingMaterialCost
         );
 
         const costPerKg = totalKg > 0 ? roundCurrency(totalManufacturingCost / totalKg) : 0;
@@ -263,6 +320,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           batchCount,
           ingredientCost,
           oilCost,
+          basicIngredientsCost,
           productionWages,
           packingWages,
           packagingMaterialCost,
@@ -283,7 +341,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     } finally {
       setIsLoading(false);
     }
-  }, [products, productionRuns]);
+  }, [products, productionRuns, ingredients, stockMovements]);
 
   useEffect(() => {
     if (onRefresh) onRefresh();
@@ -314,6 +372,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     for (const run of runs) {
       if (run.ingredientsConsumed) {
         for (const ing of run.ingredientsConsumed) {
+          if (isBasicIngredientName(ing.ingredientName || '')) continue;
           const key = ing.ingredientId || ing.ingredientName || 'unknown';
           if (!ingMap[key]) {
             ingMap[key] = {
@@ -483,10 +542,11 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
       if (closing && closing.oilConsumed > 0) {
         dayOil = roundCurrency((closing.oilConsumed * (closing.oilCostPerKg || 150)) * ratio);
       }
+      const dayBasicCost = roundCurrency((dailyBasicMap[d] || 0) * ratio);
       const dayProdWages = roundCurrency(((wage?.productionWageAmount ?? closing?.productionWages) || 0) * ratio);
       const dayPackWages = roundCurrency((wage?.packingWageAmount || 0) * ratio);
 
-      const mfgCost = roundCurrency(ingCost + dayOil + dayProdWages + dayPackWages);
+      const mfgCost = roundCurrency(ingCost + dayOil + dayBasicCost + dayProdWages + dayPackWages);
       const costPerKg = totalKg > 0 ? roundCurrency(mfgCost / totalKg) : 0;
 
       trends.push({
@@ -499,7 +559,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     }
 
     return trends;
-  }, [selectedProduct, productionRuns, closingDataMap, wageDataMap]);
+  }, [selectedProduct, productionRuns, closingDataMap, wageDataMap, dailyBasicMap]);
 
   // Ingredient sensitivity breakdown: how each ingredient affects 1 kg finished product cost
   const ingredientImpactList = useMemo(() => {
@@ -836,6 +896,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           {[
             { label: 'ചേരുവകളുടെ ചെലവ്', value: p.ingredientCost, icon: FiBox, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/20' },
             { label: 'ഉപയോഗിച്ച ഓയിലിന്റെ ചെലവ്', value: p.oilCost, icon: FiDroplet, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/20' },
+            { label: 'അടിസ്ഥാന ചേരുവകൾ (ഉപ്പ്, തോട്..)', value: p.basicIngredientsCost, icon: FiLayers, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/20' },
             { label: 'കുക്കിംഗ് തൊഴിലാളികളുടെ കൂലി', value: p.productionWages, icon: FiUsers, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/20' },
             { label: 'പാക്കിംഗ് തൊഴിലാളികളുടെ കൂലി', value: p.packingWages, icon: FiUsers, color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950/20' },
             { label: 'പാക്കിംഗ് കവർ / മെറ്റീരിയലുകൾ', value: p.packagingMaterialCost, icon: FiPackage, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-950/20' },

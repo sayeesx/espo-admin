@@ -89,7 +89,37 @@ export function calculateContinuousOilExpense(
 }
 
 /**
- * Distributes shared daily expenses (Oil & Wages) across products produced that day by production weight.
+ * Checks if an ingredient name matches any of the 4 basic ingredients:
+ * - ഉപ്പ് (Salt)
+ * - അണ്ടി തോട് (Cashew shell)
+ * - ചിപ്പ്ളി പൊടി (Chippli powder)
+ * - കറിവേപ്പില (Curry leaves)
+ */
+export function isBasicIngredientName(name: string): boolean {
+  if (!name) return false;
+  const n = name.toLowerCase().trim();
+  return (
+    n.includes('ഉപ്പ്') ||
+    n.includes('salt') ||
+    n.includes('അണ്ടി തോട്') ||
+    (n.includes('തോട്') && n.includes('അണ്ടി')) ||
+    n.includes('cashew') ||
+    n.includes('ചിപ്പ്ളി') ||
+    n.includes('chippli') ||
+    n.includes('കറിവേപ്പില') ||
+    n.includes('കറിവേപ്പി') ||
+    n.includes('curry')
+  );
+}
+
+/**
+ * Distributes shared daily expenses (Oil, Cooking Wages, Packing Wages, Basic Ingredients)
+ * across products produced that day by production weight.
+ *
+ * Important: Cooking workers (കുക്കിംഗ് തൊഴിലാളികൾ) and packing workers (പാക്കിംഗ് തൊഴിലാളികൾ)
+ * are both treated as separate wage categories in daily wage expenses, and both are allocated
+ * across production batches using the existing daily wage allocation method (weight ratio).
+ *
  * Formula: Product allocation = (Product production kg / Total production kg) * Total daily expense.
  * Exact reconciliation: The final product absorbs any fractional paisa rounding discrepancy
  * so that sum(allocated) strictly equals the original expense amount.
@@ -103,7 +133,9 @@ export function allocateDailySharedExpenses(
     ingredientCost: number;
   }>,
   dailyOilExpense: number,
-  dailyProductionWages: number
+  dailyCookingWages: number,
+  dailyBasicIngredientsExpense: number = 0,
+  dailyPackingWages: number = 0
 ): Array<{
   productId: string;
   productName: string;
@@ -112,6 +144,9 @@ export function allocateDailySharedExpenses(
   ingredientCost: number;
   allocatedOilCost: number;
   allocatedProductionWages: number;
+  allocatedCookingWages: number;
+  allocatedPackingWages: number;
+  allocatedBasicIngredientsCost: number;
   totalProductionCost: number;
   productionCostPerKg: number;
 }> {
@@ -121,32 +156,47 @@ export function allocateDailySharedExpenses(
       ...p,
       allocatedOilCost: 0,
       allocatedProductionWages: 0,
+      allocatedCookingWages: 0,
+      allocatedPackingWages: 0,
+      allocatedBasicIngredientsCost: 0,
       totalProductionCost: p.ingredientCost,
       productionCostPerKg: 0,
     }));
   }
 
   let runningOil = 0;
-  let runningWages = 0;
+  let runningCookingWages = 0;
+  let runningPackingWages = 0;
+  let runningBasic = 0;
   const count = productsSummary.length;
 
   return productsSummary.map((p, idx) => {
     const isLast = idx === count - 1;
     let oilAlloc: number;
-    let wagesAlloc: number;
+    let cookingAlloc: number;
+    let packingAlloc: number;
+    let basicAlloc: number;
 
     if (isLast) {
       oilAlloc = roundCurrency(dailyOilExpense - runningOil);
-      wagesAlloc = roundCurrency(dailyProductionWages - runningWages);
+      cookingAlloc = roundCurrency(dailyCookingWages - runningCookingWages);
+      packingAlloc = roundCurrency(dailyPackingWages - runningPackingWages);
+      basicAlloc = roundCurrency(dailyBasicIngredientsExpense - runningBasic);
     } else {
       const ratio = p.totalProductionKg / totalKg;
       oilAlloc = roundCurrency(ratio * dailyOilExpense);
-      wagesAlloc = roundCurrency(ratio * dailyProductionWages);
+      cookingAlloc = roundCurrency(ratio * dailyCookingWages);
+      packingAlloc = roundCurrency(ratio * dailyPackingWages);
+      basicAlloc = roundCurrency(ratio * dailyBasicIngredientsExpense);
       runningOil += oilAlloc;
-      runningWages += wagesAlloc;
+      runningCookingWages += cookingAlloc;
+      runningPackingWages += packingAlloc;
+      runningBasic += basicAlloc;
     }
 
-    const totalProdCost = roundCurrency(p.ingredientCost + oilAlloc + wagesAlloc);
+    const totalProdCost = roundCurrency(
+      p.ingredientCost + oilAlloc + cookingAlloc + packingAlloc + basicAlloc
+    );
     const costPerKg = p.totalProductionKg > 0 ? roundCurrency(totalProdCost / p.totalProductionKg) : 0;
 
     return {
@@ -156,7 +206,10 @@ export function allocateDailySharedExpenses(
       batchCount: p.batchCount,
       ingredientCost: p.ingredientCost,
       allocatedOilCost: oilAlloc,
-      allocatedProductionWages: wagesAlloc,
+      allocatedProductionWages: cookingAlloc,
+      allocatedCookingWages: cookingAlloc,
+      allocatedPackingWages: packingAlloc,
+      allocatedBasicIngredientsCost: basicAlloc,
       totalProductionCost: totalProdCost,
       productionCostPerKg: costPerKg,
     };
@@ -165,8 +218,12 @@ export function allocateDailySharedExpenses(
 
 /**
  * Calculates Final Product Costing Breakdown.
- * Total product cost = Ingredient cost + Allocated oil cost + Allocated wages + Packaging cover cost + Packing labour.
- * Clearly separates bulk production cost from packing cost and maintains unpacked bulk stock valuation.
+ *
+ * Packing labour is treated as a wage expense allocated across production batches
+ * by weight (included in productionAllocation). Per-packet packing labour calculation
+ * is removed, ensuring labour is NOT calculated based on the number of packets.
+ *
+ * Total product cost = Bulk production cost + Packaging material (cover) cost.
  */
 export function calculateFinalProductCosting(
   productionAllocation: {
@@ -177,40 +234,43 @@ export function calculateFinalProductCosting(
     ingredientCost: number;
     allocatedOilCost: number;
     allocatedProductionWages: number;
+    allocatedCookingWages?: number;
+    allocatedPackingWages?: number;
+    allocatedBasicIngredientsCost?: number;
     totalProductionCost: number;
     productionCostPerKg: number;
   },
   packingRecords: Array<{
     packetSize: string;
     packetsPacked: number;
-    coverUnitCost: number;
+    coverUnitCost?: number;
     packagingCost: number;
-    packingLabourRate: number;
-    packingLabourCost: number;
-    totalPackingCost: number;
+    packingLabourRate?: number;
+    packingLabourCost?: number;
+    totalPackingCost?: number;
     weightPackedKg: number;
   }>
 ): FinalProductCosting {
   const totalPacketsPacked = packingRecords.reduce((sum, r) => sum + r.packetsPacked, 0);
   const totalWeightPackedKg = roundStock(packingRecords.reduce((sum, r) => sum + r.weightPackedKg, 0));
-  const totalPackagingCost = roundCurrency(packingRecords.reduce((sum, r) => sum + r.packagingCost, 0));
-  const totalPackingLabourCost = roundCurrency(packingRecords.reduce((sum, r) => sum + r.packingLabourCost, 0));
-  const totalPackingCost = roundCurrency(totalPackagingCost + totalPackingLabourCost);
+  const totalPackagingCost = roundCurrency(packingRecords.reduce((sum, r) => sum + (r.packagingCost || 0), 0));
+  // Removed per-packet packing labour calculation; packing labour is allocated as daily wage expense.
+  const totalPackingLabourCost = 0;
+  const totalPackingCost = totalPackagingCost;
 
   const totalCost = roundCurrency(productionAllocation.totalProductionCost + totalPackingCost);
   const unpackedKg = Math.max(0, roundStock(productionAllocation.totalProductionKg - totalWeightPackedKg));
   const unpackedValuation = roundCurrency(unpackedKg * productionAllocation.productionCostPerKg);
 
   // Group packing by size for packet-level costing breakdown
-  const sizeMap: Record<string, { packets: number; coverCost: number; labourCost: number; totalCost: number; weightKg: number }> = {};
+  const sizeMap: Record<string, { packets: number; coverCost: number; totalCost: number; weightKg: number }> = {};
   for (const r of packingRecords) {
     if (!sizeMap[r.packetSize]) {
-      sizeMap[r.packetSize] = { packets: 0, coverCost: 0, labourCost: 0, totalCost: 0, weightKg: 0 };
+      sizeMap[r.packetSize] = { packets: 0, coverCost: 0, totalCost: 0, weightKg: 0 };
     }
     sizeMap[r.packetSize].packets += r.packetsPacked;
-    sizeMap[r.packetSize].coverCost += r.packagingCost;
-    sizeMap[r.packetSize].labourCost += r.packingLabourCost;
-    sizeMap[r.packetSize].totalCost += r.totalPackingCost;
+    sizeMap[r.packetSize].coverCost += (r.packagingCost || 0);
+    sizeMap[r.packetSize].totalCost += (r.packagingCost || 0);
     sizeMap[r.packetSize].weightKg += r.weightPackedKg;
   }
 
@@ -230,16 +290,17 @@ export function calculateFinalProductCosting(
     }
 
     // Bulk product share inside this packet: kgPerPacket * productionCostPerKg
+    // Note: productionCostPerKg ALREADY includes both cooking and packing wages allocated by weight!
     const bulkInsidePacket = roundCurrency(kgPerPacket * productionAllocation.productionCostPerKg);
-    const packingInsidePacket = item.packets > 0 ? roundCurrency(item.totalCost / item.packets) : 0;
-    const costPerPacket = roundCurrency(bulkInsidePacket + packingInsidePacket);
+    const coverInsidePacket = item.packets > 0 ? roundCurrency(item.coverCost / item.packets) : 0;
+    const costPerPacket = roundCurrency(bulkInsidePacket + coverInsidePacket);
 
     return {
       size,
       packets: item.packets,
       coverCost: roundCurrency(item.coverCost),
-      labourCost: roundCurrency(item.labourCost),
-      totalCost: roundCurrency(item.totalCost),
+      labourCost: 0,
+      totalCost: roundCurrency(item.coverCost),
       costPerPacket,
     };
   });
@@ -252,12 +313,15 @@ export function calculateFinalProductCosting(
     totalIngredientCost: productionAllocation.ingredientCost,
     allocatedOilCost: productionAllocation.allocatedOilCost,
     allocatedProductionWages: productionAllocation.allocatedProductionWages,
+    allocatedCookingWages: productionAllocation.allocatedCookingWages ?? productionAllocation.allocatedProductionWages,
+    allocatedPackingWages: productionAllocation.allocatedPackingWages ?? 0,
+    allocatedBasicIngredientsCost: productionAllocation.allocatedBasicIngredientsCost ?? 0,
     totalProductionCost: productionAllocation.totalProductionCost,
     productionCostPerKg: productionAllocation.productionCostPerKg,
     totalPacketsPacked,
     totalWeightPackedKg,
     totalPackagingCost,
-    totalPackingLabourCost,
+    totalPackingLabourCost: 0,
     totalPackingCost,
     totalCost,
     packetsBySize,

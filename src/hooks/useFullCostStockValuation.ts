@@ -5,15 +5,17 @@ import {
   fetchPackingRecords,
   fetchDailyWages,
   fetchPacketTypes,
+  fetchStockMovements,
+  fetchIngredients,
 } from '../services/supabase';
-import { roundCurrency } from '../services/costing';
+import { roundCurrency, isBasicIngredientName } from '../services/costing';
 
 /**
  * Full-cost stock valuation.
  *
  * Cost per kg for each product is computed with the SAME formula used by the
  * Production Costing page (all-time view):
- *   (ingredients + oil + production wages + packing wages + packaging material) / total kg produced
+ *   (ingredients + oil + basic ingredients + cooking wages + packing wages + packaging material) / total kg produced
  *
  * Total valuation = Σ (product current stock kg × full cost per kg)
  */
@@ -25,11 +27,13 @@ export function useFullCostStockValuation(products: Product[], productionRuns: P
 
     (async () => {
       try {
-        const [closings, allPackingRecords, wageList, packetTypesList] = await Promise.all([
+        const [closings, allPackingRecords, wageList, packetTypesList, movementsList, ingredientsList] = await Promise.all([
           fetchDailyClosings(90).catch(() => [] as any[]),
           fetchPackingRecords({ limit: 500 }).catch(() => [] as any[]),
           fetchDailyWages(90).catch(() => [] as any[]),
           fetchPacketTypes().catch(() => [] as any[]),
+          fetchStockMovements(false).catch(() => [] as any[]),
+          fetchIngredients().catch(() => [] as any[]),
         ]);
 
         const pCostMap: Record<string, number> = {};
@@ -49,6 +53,45 @@ export function useFullCostStockValuation(products: Product[], productionRuns: P
           closingMap[c.productionDate] = c;
         }
 
+        // Map ingredients by id and lowercase name for unit cost lookup
+        const ingCostMap = new Map<string, number>();
+        for (const ing of ingredientsList || []) {
+          if (ing.id) ingCostMap.set(ing.id, Number(ing.avgCostPerUnit) || 0);
+          if (ing.name) ingCostMap.set(ing.name.toLowerCase().trim(), Number(ing.avgCostPerUnit) || 0);
+        }
+
+        // Compute daily basic ingredients consumption cost by date
+        // Basic ingredients: ഉപ്പ്, അണ്ടി തോട്, ചിപ്പ്ളി പൊടി, കറിവേപ്പില
+        const basicCostByDate: Record<string, number> = {};
+        for (const m of movementsList || []) {
+          if ((m.quantity || 0) >= 0) continue;
+          const itemName = (m.itemName || '').toLowerCase().trim();
+          const reason = (m.reason || '').toLowerCase();
+
+          const isBasic = isBasicIngredientName(itemName) || reason.includes('daily basic ingredient usage');
+          if (!isBasic) continue;
+
+          // Exclude oil (tracked separately via daily closings)
+          if (itemName.includes('ഓയിൽ') || itemName.includes('oil')) continue;
+
+          const isConsumption =
+            m.movementType === 'production_consumption' ||
+            reason.includes('daily basic ingredient usage');
+          if (!isConsumption) continue;
+
+          const dateMatch = m.reason?.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+          const movDate = dateMatch ? dateMatch[1] : (m.createdAt ? m.createdAt.split('T')[0] : '');
+          if (!movDate) continue;
+
+          const qtyKg = m.unit?.toLowerCase() === 'g' ? Math.abs(m.quantity) / 1000 : Math.abs(m.quantity);
+          const unitCost = (m.costPerUnit && m.costPerUnit > 0)
+            ? m.costPerUnit
+            : (ingCostMap.get(m.itemId) || ingCostMap.get(itemName) || 0);
+          const cost = roundCurrency(qtyKg * unitCost);
+
+          basicCostByDate[movDate] = roundCurrency((basicCostByDate[movDate] || 0) + cost);
+        }
+
         const completedRuns = productionRuns.filter((r) => r.status === 'completed');
         const map: Record<string, number> = {};
 
@@ -60,11 +103,12 @@ export function useFullCostStockValuation(products: Product[], productionRuns: P
             continue;
           }
 
-          // Ingredients cost from runs
+          // Ingredients cost from runs (exclude basic ingredients to avoid double-counting)
           let ingredientCost = 0;
           for (const run of pRuns) {
             if (run.ingredientsConsumed && Array.isArray(run.ingredientsConsumed) && run.ingredientsConsumed.length > 0) {
               for (const ing of run.ingredientsConsumed) {
+                if (isBasicIngredientName(ing.ingredientName || '')) continue;
                 ingredientCost += ing.totalCost || 0;
               }
             } else if (run.totalIngredientCost) {
@@ -87,8 +131,9 @@ export function useFullCostStockValuation(products: Product[], productionRuns: P
             }, 0)
           );
 
-          // Oil and wages: proportional to production weight on respective dates
+          // Oil, basic ingredients, cooking wages, and packing wages: proportional to production weight on respective dates
           let oilCost = 0;
+          let basicIngredientsCost = 0;
           let productionWages = 0;
           let packingWages = 0;
 
@@ -106,6 +151,11 @@ export function useFullCostStockValuation(products: Product[], productionRuns: P
               oilCost += roundCurrency(dayOilCost * ratio);
             }
 
+            const dayBasicCost = basicCostByDate[rDate] || 0;
+            if (dayBasicCost > 0) {
+              basicIngredientsCost += roundCurrency(dayBasicCost * ratio);
+            }
+
             const dayProdWages = wage?.productionWageAmount ?? (closing?.productionWages || 0);
             productionWages += roundCurrency(dayProdWages * ratio);
 
@@ -118,6 +168,7 @@ export function useFullCostStockValuation(products: Product[], productionRuns: P
           const totalManufacturingCost = roundCurrency(
             ingredientCost +
               roundCurrency(oilCost) +
+              roundCurrency(basicIngredientsCost) +
               roundCurrency(productionWages) +
               roundCurrency(packingWages) +
               packagingMaterialCost
@@ -145,4 +196,3 @@ export function useFullCostStockValuation(products: Product[], productionRuns: P
 
   return { costPerKgMap, totalValuation };
 }
-
