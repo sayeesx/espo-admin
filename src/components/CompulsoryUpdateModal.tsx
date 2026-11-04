@@ -70,7 +70,7 @@ export const CompulsoryUpdateModal: React.FC<CompulsoryUpdateModalProps> = ({
         {/* Status Badge */}
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100/70 dark:bg-red-950/60 border border-red-200 dark:border-red-900/50 text-[#C6382B] text-xs font-semibold mb-3">
           <Sparkles className="w-3.5 h-3.5" />
-          <span>പുതിയ പതിപ്പ് ലഭ്യമാണ് • New Version Ready</span>
+          <span>Update Compulsory • അപ്‌ഡേറ്റ് നിർബന്ധമാണ്</span>
         </div>
 
         {/* Title */}
@@ -78,9 +78,9 @@ export const CompulsoryUpdateModal: React.FC<CompulsoryUpdateModalProps> = ({
           id="compulsory-update-title"
           className="text-xl sm:text-2xl font-black text-stone-900 dark:text-white font-malayalam leading-tight mb-2"
         >
-          പുതിയ അപ്‌ഡേറ്റ് ലഭ്യമാണ്
+          അപ്‌ഡേറ്റ് നിർബന്ധമാണ്
           <span className="block text-sm font-sans font-bold text-stone-600 dark:text-stone-300 mt-1">
-            New System Deployment Detected
+            Update Compulsory
           </span>
         </h2>
 
@@ -89,7 +89,7 @@ export const CompulsoryUpdateModal: React.FC<CompulsoryUpdateModalProps> = ({
           id="compulsory-update-description"
           className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 font-malayalam leading-relaxed mb-4"
         >
-          സിസ്റ്റത്തിലേക്ക് പുതിയ ഫീച്ചറുകളും മാറ്റങ്ങളും വിന്യസിച്ചിരിക്കുന്നു. ഏറ്റവും പുതിയ ഡാറ്റ കൃത്യമായി ലഭിക്കുന്നതിന് ക്യാഷ് മായ്‌ച്ച് ദയവായി ഇപ്പോൾ അപ്‌ഡേറ്റ് ചെയ്യുക.
+          സിസ്റ്റത്തിലേക്ക് പുതിയ മാറ്റങ്ങൾ വിന്യസിച്ചിരിക്കുന്നു. തുടർന്ന് പ്രവർത്തിക്കാൻ ദയവായി ഇപ്പോൾ അപ്‌ഡേറ്റ് ചെയ്യുക.
         </p>
 
         {/* Version metadata box */}
@@ -121,7 +121,7 @@ export const CompulsoryUpdateModal: React.FC<CompulsoryUpdateModalProps> = ({
         <div className="flex items-center gap-2 p-2.5 mb-5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-amber-800 dark:text-amber-300 text-left text-xs">
           <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
           <span className="font-malayalam leading-tight">
-            തുടർന്നു പ്രവർത്തിക്കാൻ നിർബന്ധമായും അപ്‌ഡേറ്റ് ചെയ്യേണ്ടതുണ്ട് (Compulsory Update).
+            തുടർന്നു പ്രവർത്തിക്കാൻ അപ്‌ഡേറ്റ് നിർബന്ധമാണ് (Update Compulsory).
           </span>
         </div>
 
@@ -130,14 +130,14 @@ export const CompulsoryUpdateModal: React.FC<CompulsoryUpdateModalProps> = ({
           type="button"
           disabled={isUpdating}
           onClick={onUpdate}
-          className="w-full py-3.5 px-4 rounded-xl font-bold text-white bg-[#C6382B] hover:bg-[#b02f23] active:bg-[#99251a] disabled:opacity-75 disabled:cursor-wait transition-colors border border-[#a8291c] flex items-center justify-center gap-2 text-sm sm:text-base font-malayalam"
+          className="w-full py-3.5 px-4 rounded-xl font-bold text-white bg-[#C6382B] hover:bg-[#b02f23] active:bg-[#99251a] disabled:opacity-75 disabled:cursor-wait transition-colors border border-[#a8291c] flex items-center justify-center gap-2 text-sm sm:text-base font-malayalam cursor-pointer"
           style={{ boxShadow: 'none' }}
         >
           <RefreshCw className={`w-5 h-5 ${isUpdating ? 'animate-spin' : ''}`} />
           <span>
             {isUpdating
-              ? 'ക്യാഷ് മായ്‌ച്ച് അപ്‌ഡേറ്റ് ചെയ്യുന്നു... (Updating...)'
-              : 'ക്യാഷ് മായ്‌ച്ച് ഇപ്പോൾ അപ്‌ഡേറ്റ് ചെയ്യുക (Update Now)'}
+              ? 'Updating...'
+              : 'Update Now'}
           </span>
         </button>
       </div>
