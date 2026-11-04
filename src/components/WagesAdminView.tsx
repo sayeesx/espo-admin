@@ -542,6 +542,57 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
                 </span>
               </span>
             </div>
+
+            {/* BATCH WAGE ALLOCATION PER KG LOGIC & PREVIEW */}
+            <div className="p-5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/60 dark:border-amber-900/40 pb-3">
+                <div>
+                  <h4 className="text-sm font-black text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                    <FiLayers className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    <span>ബാച്ചുകളിലേക്കുള്ള കൂലി വിഹിതം (Wage Allocation per Kg)</span>
+                  </h4>
+                  <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
+                    ഉൽപ്പാദിപ്പിച്ച ബാച്ചുകളുടെ ഭാരത്തിനനുസരിച്ച് (Proportional Output Weight)
+                  </p>
+                </div>
+
+                <div className="text-left sm:text-right">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-amber-800 dark:text-amber-300 block">
+                    ലേബർ ചെലവ് / കിലോ
+                  </span>
+                  <span className="text-xl font-black font-mono text-amber-950 dark:text-amber-100">
+                    {totalProductionKg > 0
+                      ? `₹${(Number(totalWageBudget || 0) / totalProductionKg).toFixed(2)} / kg`
+                      : '₹0.00 / kg'}
+                  </span>
+                </div>
+              </div>
+
+              {totalProductionKg > 0 ? (
+                <div className="space-y-2 text-xs sm:text-sm text-stone-700 dark:text-stone-300">
+                  <div className="p-3 rounded-xl bg-white/80 dark:bg-[#141212]/80 border border-amber-200/70 dark:border-amber-900/40 font-mono text-xs flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      സൂത്രവാക്യം: ആകെ കൂലി (₹{Number(totalWageBudget || 0).toLocaleString('en-IN')}) ÷ ആകെ ഉൽപ്പാദനം ({totalProductionKg.toFixed(1)} kg)
+                    </span>
+                    <span className="font-bold text-amber-800 dark:text-amber-300">
+                      = ₹{(Number(totalWageBudget || 0) / totalProductionKg).toFixed(2)} / kg
+                    </span>
+                  </div>
+                  <p className="text-xs text-stone-600 dark:text-stone-400">
+                    ഇന്ന് ഫാക്ടറിയിൽ ഉണ്ടാക്കിയ ഓരോ ബാച്ചിന്റെയും അസംസ്കൃത വസ്തുക്കളുടെ ചെലവിനൊപ്പം ഈ ലേബർ നിരക്ക് (<span className="font-mono font-bold text-stone-800 dark:text-stone-200">ബാച്ച് ഭാരം × ₹{(Number(totalWageBudget || 0) / totalProductionKg).toFixed(2)}</span>) കോസ്റ്റിംഗിൽ സ്വയം ചേർക്കപ്പെടും.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-stone-100 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] text-xs text-stone-600 dark:text-stone-400 space-y-1">
+                  <p className="font-bold text-stone-800 dark:text-stone-200">
+                    പണിയില്ലാത്ത / ക്ലീനിംഗ് ദിവസങ്ങൾ (Non-Production Day):
+                  </p>
+                  <p>
+                    ഇന്ന് ഉൽപ്പാദനം നടന്നിട്ടില്ലാത്തതിനാൽ (0 kg), ഈ കൂലി തുക മാസത്തെ പൊതുവായ പ്രവർത്തനച്ചെലവുകളിലേക്ക് (General Operational Overhead) ചേർക്കപ്പെടുന്നു; ഉൽപ്പന്ന ബാച്ചുകളിലേക്ക് ചേർക്കപ്പെടില്ല.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ======================================================== */}

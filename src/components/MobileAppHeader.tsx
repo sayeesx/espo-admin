@@ -11,6 +11,7 @@ interface MobileAppHeaderProps {
   notificationCount: number;
   onOpenPinModal?: () => void;
   changingTab?: AdminTab | null;
+  isTodayWagePending?: boolean;
 }
 
 export const MobileAppHeader: React.FC<MobileAppHeaderProps> = ({
@@ -21,6 +22,7 @@ export const MobileAppHeader: React.FC<MobileAppHeaderProps> = ({
   notificationCount,
   onOpenPinModal,
   changingTab = null,
+  isTodayWagePending = false,
 }) => {
   const { theme, toggleTheme } = useTheme();
 
@@ -47,8 +49,19 @@ export const MobileAppHeader: React.FC<MobileAppHeaderProps> = ({
           </div>
         </div>
 
-        {/* Right Controls: Refresh, Theme Toggle, Notification Bell */}
+        {/* Right Controls: Wages Warning, Refresh, Theme Toggle, Notification Bell */}
         <div className="flex items-center gap-1.5">
+          {isTodayWagePending && (
+            <button
+              type="button"
+              onClick={() => onTabChange('wages')}
+              className="px-2.5 py-1 rounded-full bg-amber-500 text-stone-950 font-black text-[10px] font-malayalam flex items-center gap-1 shadow-xs animate-pulse cursor-pointer press-apple"
+              title="ഇന്നത്തെ കൂലി നൽകിയിട്ടില്ല (Add Today's Wage)"
+            >
+              <span>⚠️</span>
+              <span className="hidden xs:inline">കൂലി ബാക്കി</span>
+            </button>
+          )}
 
           {/* Refresh button */}
           <button

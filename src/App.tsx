@@ -33,6 +33,7 @@ import {
   fetchProductionRuns,
   fetchStockMovements,
   fetchAuditLogs,
+  fetchDailyWage,
   invalidateAdminCache,
 } from './services/supabase';
 import { Product, Ingredient, Recipe, ProductionRun, StockMovement, AuditLog } from './types';
@@ -104,7 +105,21 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  // Browser Back/Forward navigation support so user never drops out of epso-admin.vercel.app
+  // Guarantee activeTab is mirrored in URL searchParams and localStorage at all times
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('tab') !== activeTab) {
+        url.searchParams.set('tab', activeTab);
+        window.history.replaceState({ tab: activeTab }, '', url.toString());
+      }
+      localStorage.setItem(ACTIVE_TAB_KEY, activeTab);
+    } catch {
+      // ignore
+    }
+  }, [activeTab]);
+
+  // Browser Back/Forward navigation support so user stays in the right tab
   useEffect(() => {
     const handlePopState = () => {
       try {
@@ -128,8 +143,13 @@ export const App: React.FC = () => {
           setActiveTab(tabParam);
           localStorage.setItem(ACTIVE_TAB_KEY, tabParam);
         } else {
-          setActiveTab('dashboard');
-          localStorage.setItem(ACTIVE_TAB_KEY, 'dashboard');
+          const savedTab = localStorage.getItem(ACTIVE_TAB_KEY) as AdminTab;
+          if (savedTab && validTabs.includes(savedTab)) {
+            setActiveTab(savedTab);
+          } else {
+            setActiveTab('dashboard');
+            localStorage.setItem(ACTIVE_TAB_KEY, 'dashboard');
+          }
         }
       } catch {
         // ignore
@@ -151,6 +171,7 @@ export const App: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState<boolean>(false);
   const [isAIOpen, setIsAIOpen] = useState<boolean>(false);
+  const [isTodayWageAdded, setIsTodayWageAdded] = useState<boolean>(true);
 
   // Persistent dismissed notification IDs
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(() => {
@@ -202,6 +223,7 @@ export const App: React.FC = () => {
       invalidateAdminCache();
     }
     try {
+      const todayStr = new Date().toISOString().split('T')[0];
       const [
         productsRes,
         ingredientsRes,
@@ -209,6 +231,7 @@ export const App: React.FC = () => {
         runsRes,
         movementsRes,
         logsRes,
+        todayWageRes,
       ] = await Promise.allSettled([
         fetchProducts(force),
         fetchIngredients(force),
@@ -216,6 +239,7 @@ export const App: React.FC = () => {
         fetchProductionRuns(force),
         fetchStockMovements(force),
         fetchAuditLogs(force),
+        fetchDailyWage(todayStr),
       ]);
 
       if (productsRes.status === 'fulfilled') setProducts(productsRes.value);
@@ -224,6 +248,12 @@ export const App: React.FC = () => {
       if (runsRes.status === 'fulfilled') setProductionRuns(runsRes.value);
       if (movementsRes.status === 'fulfilled') setStockMovements(movementsRes.value);
       if (logsRes.status === 'fulfilled') setAuditLogs(logsRes.value);
+      if (todayWageRes.status === 'fulfilled') {
+        const tw = todayWageRes.value;
+        setIsTodayWageAdded(Boolean(tw && tw.totalWageBudget > 0));
+      } else {
+        setIsTodayWageAdded(false);
+      }
     } catch (err) {
       console.error('Failed to load admin dataset from Supabase:', err);
     } finally {
@@ -321,6 +351,7 @@ export const App: React.FC = () => {
         notificationCount={notificationCount}
         onOpenPinModal={() => setIsPinModalOpen(true)}
         changingTab={changingTab}
+        isTodayWagePending={!isTodayWageAdded}
       />
 
       {/* Desktop Vertical Sidebar */}
@@ -332,6 +363,7 @@ export const App: React.FC = () => {
         notificationCount={notificationCount}
         onOpenPinModal={() => setIsPinModalOpen(true)}
         changingTab={changingTab}
+        isTodayWagePending={!isTodayWageAdded}
       />
 
       {/* Main Content Area with Desktop Sidebar Offset */}
@@ -351,6 +383,7 @@ export const App: React.FC = () => {
                   onNavigateTab={handleTabChange}
                   onRefresh={loadAllData}
                   onOpenAI={() => setIsAIOpen(true)}
+                  isTodayWagePending={!isTodayWageAdded}
                 />
               )}
 

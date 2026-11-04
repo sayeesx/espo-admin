@@ -51,6 +51,7 @@ interface DashboardViewProps {
   onNavigateTab: (tab: any) => void;
   onRefresh?: () => void;
   onOpenAI?: () => void;
+  isTodayWagePending?: boolean;
 }
 
 interface CircularGaugeProps {
@@ -144,6 +145,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateTab,
   onRefresh,
   onOpenAI,
+  isTodayWagePending = false,
 }) => {
   const { showToast, confirm } = useFeedback();
   const { isDark } = useTheme();
@@ -492,10 +494,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <button
               type="button"
               onClick={() => onNavigateTab('wages')}
-              className="py-1.5 px-2 rounded-xl text-[11px] font-bold bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50 flex items-center justify-center gap-1 press-apple font-malayalam"
+              className={`py-1.5 px-2 rounded-xl text-[11px] font-bold border flex items-center justify-center gap-1 press-apple font-malayalam ${
+                !todayWage || isTodayWagePending
+                  ? 'bg-amber-500 text-stone-950 border-amber-600 font-black shadow-xs animate-pulse ring-2 ring-amber-400/50'
+                  : 'bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-900/50'
+              }`}
             >
-              <span>🍳 കൂലി</span>
-              <span className="text-[9px] font-mono opacity-80">{todayWage ? '✓' : 'Pending'}</span>
+              <span>{(!todayWage || isTodayWagePending) ? '⚠️ കൂലി ബാക്കി' : '🍳 കൂലി'}</span>
+              <span className={`text-[9px] font-mono ${(!todayWage || isTodayWagePending) ? 'bg-stone-950 text-amber-300 px-1 rounded font-black' : 'opacity-80'}`}>
+                {todayWage && !isTodayWagePending ? '✓' : '!'}
+              </span>
             </button>
             <button
               type="button"
@@ -622,11 +630,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <button
             type="button"
             onClick={() => onNavigateTab('wages')}
-            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-orange-50 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50 flex items-center gap-1.5 press-apple font-malayalam whitespace-nowrap shrink-0 shadow-2xs"
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold border flex items-center gap-1.5 press-apple font-malayalam whitespace-nowrap shrink-0 shadow-2xs ${
+              !todayWage || isTodayWagePending
+                ? 'bg-amber-500 text-stone-950 border-amber-600 font-black animate-pulse ring-2 ring-amber-400/50'
+                : 'bg-orange-50 dark:bg-orange-950/40 text-orange-800 dark:text-orange-300 border-orange-200 dark:border-orange-900/50'
+            }`}
           >
-            <span>🍳 കൂലി കണക്ക്</span>
-            <span className="text-[10px] font-mono font-black px-1.5 py-0.2 rounded bg-orange-200/80 dark:bg-orange-900/80 text-orange-950 dark:text-orange-200">
-              {todayWage ? `₹${todayWage.totalWageBudget}` : '₹4000'}
+            <span>{(!todayWage || isTodayWagePending) ? '⚠️ ഇന്നത്തെ കൂലി നൽകിയിട്ടില്ല' : '🍳 കൂലി കണക്ക്'}</span>
+            <span className={`text-[10px] font-mono font-black px-1.5 py-0.2 rounded ${
+              (!todayWage || isTodayWagePending)
+                ? 'bg-stone-950 text-amber-300'
+                : 'bg-orange-200/80 dark:bg-orange-900/80 text-orange-950 dark:text-orange-200'
+            }`}>
+              {todayWage && !isTodayWagePending ? `₹${todayWage.totalWageBudget}` : 'ചേർക്കുക'}
             </span>
           </button>
           <button
@@ -955,12 +971,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <button
               type="button"
               onClick={() => onNavigateTab('wages')}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/60 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-900/50 flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all shadow-2xs"
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold border flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all shadow-2xs ${
+                !todayWage || isTodayWagePending
+                  ? 'bg-amber-500 text-stone-950 border-amber-600 font-black animate-pulse ring-2 ring-amber-400/50'
+                  : 'bg-orange-50 hover:bg-orange-100 dark:bg-orange-950/40 dark:hover:bg-orange-900/60 text-orange-800 dark:text-orange-300 border-orange-200 dark:border-orange-900/50'
+              }`}
               title="Daily Wages"
             >
-              <span>കൂലി കണക്ക്</span>
-              <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded-md bg-orange-200/80 dark:bg-orange-900/80 text-orange-950 dark:text-orange-200">
-                {todayWage ? `₹${todayWage.totalWageBudget}` : '₹4000'}
+              <span>{(!todayWage || isTodayWagePending) ? '⚠️ ഇന്നത്തെ കൂലി നൽകിയിട്ടില്ല' : 'കൂലി കണക്ക്'}</span>
+              <span className={`text-[10px] font-mono font-black px-1.5 py-0.5 rounded-md ${
+                (!todayWage || isTodayWagePending)
+                  ? 'bg-stone-950 text-amber-300'
+                  : 'bg-orange-200/80 dark:bg-orange-900/80 text-orange-950 dark:text-orange-200'
+              }`}>
+                {todayWage && !isTodayWagePending ? `₹${todayWage.totalWageBudget}` : 'ചേർക്കുക'}
               </span>
             </button>
             <button

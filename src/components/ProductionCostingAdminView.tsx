@@ -87,7 +87,13 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   }, [productionRuns]);
 
   // Default to 'all' (Total Costing / All-Time Average) as explicitly requested!
-  const [selectedDate, setSelectedDate] = useState<string>('all');
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('epso_admin_costing_selected_date');
+      if (saved) return saved;
+    } catch {}
+    return 'all';
+  });
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<ProductCostSummary | null>(null);
@@ -326,12 +332,67 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     setDetailIngredients(Object.values(ingMap));
   }, [productionRuns, selectedDate]);
 
+  // Persist selected product in URL and localStorage
   const handleOpenDetail = (product: ProductCostSummary) => {
     setSelectedProduct(product);
+    try {
+      localStorage.setItem('epso_admin_costing_selected_product_id', product.productId);
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', 'costing');
+      url.searchParams.set('productId', product.productId);
+      window.history.replaceState({ tab: 'costing', productId: product.productId }, '', url.toString());
+    } catch {
+      // ignore
+    }
     if (onRefresh) onRefresh();
     loadCostingData(selectedDate);
     loadProductDetail(product.productId);
   };
+
+  const handleCloseDetail = () => {
+    setSelectedProduct(null);
+    try {
+      localStorage.removeItem('epso_admin_costing_selected_product_id');
+      const url = new URL(window.location.href);
+      url.searchParams.delete('productId');
+      window.history.replaceState({ tab: 'costing' }, '', url.toString());
+    } catch {
+      // ignore
+    }
+  };
+
+  // Restore selected product on reload or when productCosts update
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const savedProdId = params.get('productId') || localStorage.getItem('epso_admin_costing_selected_product_id');
+      if (savedProdId && productCosts.length > 0 && !selectedProduct) {
+        const found = productCosts.find((p) => p.productId === savedProdId);
+        if (found) {
+          setSelectedProduct(found);
+          loadProductDetail(found.productId);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [productCosts, selectedProduct, loadProductDetail]);
+
+  // Keep detailIngredients fresh whenever selectedDate or selectedProduct changes
+  useEffect(() => {
+    if (selectedProduct) {
+      loadProductDetail(selectedProduct.productId);
+    }
+  }, [selectedProduct, selectedDate, loadProductDetail]);
+
+  // Persist selectedDate choice
+  useEffect(() => {
+    try {
+      localStorage.setItem('epso_admin_costing_selected_date', selectedDate);
+    } catch {
+      // ignore
+    }
+  }, [selectedDate]);
 
   const handleSavePrice = async (productId: string) => {
     const price = Number(editPriceValue) || 0;
@@ -469,7 +530,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
 
   // Detail view
   if (selectedProduct) {
-    const p = selectedProduct;
+    const p = productCosts.find((pc) => pc.productId === selectedProduct.productId) || selectedProduct;
     const trendValues = productDailyTrends.map((t) => t.costPerKg);
     const minTrend = trendValues.length > 0 ? Math.min(...trendValues) : p.costPerKg;
     const maxTrend = trendValues.length > 0 ? Math.max(...trendValues) : p.costPerKg;
@@ -477,19 +538,68 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
 
     return (
       <div className="space-y-6 pb-8 font-malayalam max-w-6xl mx-auto">
-        {/* Back Button and Date Indicator */}
-        <div className="flex items-center justify-between gap-3">
+        {/* Back Button and Date Segmented Control inside Detail Page */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <button
-            onClick={() => setSelectedProduct(null)}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] text-xs font-bold text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-[#282323] transition-colors cursor-pointer press-apple"
+            onClick={handleCloseDetail}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] text-xs font-bold text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-[#282323] transition-colors cursor-pointer press-apple w-fit"
           >
             <FiArrowLeft className="w-4 h-4" />
             <span>തിരികെ ലിസ്റ്റിലേക്ക്</span>
           </button>
 
-          <span className="text-xs px-3 py-1.5 rounded-xl bg-amber-500/10 text-amber-700 dark:text-amber-400 font-bold border border-amber-500/20">
-            {formatDate(selectedDate)}
-          </span>
+          {/* Costing View Options inside Product Detail */}
+          <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-stone-100 dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] overflow-x-auto no-scrollbar shrink-0">
+            <button
+              type="button"
+              onClick={() => setSelectedDate('all')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                selectedDate === 'all'
+                  ? 'bg-amber-500 text-stone-950 shadow-xs font-black'
+                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+              }`}
+            >
+              <FiActivity className="w-3.5 h-3.5" />
+              <span>ആകെ ശരാശരി (All-Time Average)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedDate(todayStr)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                selectedDate === todayStr
+                  ? 'bg-amber-500 text-stone-950 shadow-xs font-black'
+                  : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
+              }`}
+            >
+              <FiCalendar className="w-3.5 h-3.5" />
+              <span>ഇന്നത്തെ ചെലവ് (Today)</span>
+            </button>
+
+            {/* Specific Date Dropdown */}
+            <div className="flex items-center gap-1 pl-2 border-l border-stone-200 dark:border-stone-700">
+              <select
+                value={selectedDate !== 'all' && selectedDate !== todayStr ? selectedDate : ''}
+                onChange={(e) => {
+                  if (e.target.value) setSelectedDate(e.target.value);
+                }}
+                className={`text-xs font-bold focus:outline-none cursor-pointer py-1.5 px-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-800 dark:text-stone-200 shadow-2xs transition-colors ${
+                  selectedDate !== 'all' && selectedDate !== todayStr
+                    ? '!bg-amber-500/20 !border-amber-500/50 text-amber-800 dark:text-amber-300'
+                    : 'hover:border-stone-300 dark:hover:border-stone-600'
+                }`}
+              >
+                <option value="" disabled className="bg-white dark:bg-[#1E1B1B] text-stone-400 dark:text-stone-500">
+                  മറ്റു തീയതികൾ (Other Dates)...
+                </option>
+                {availableDates.map((d) => (
+                  <option key={d} value={d} className="bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-stone-100">
+                    {formatDate(d)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
         {/* Product Header */}
@@ -857,82 +967,40 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   // Dashboard view
   return (
     <div className="space-y-6 pb-8 font-malayalam">
-      {/* Top Filter and Search Bar with Costing View Options */}
+      {/* Top Header and Search Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
-        {/* Costing View Options (Segmented Control) */}
-        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-stone-100 dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] overflow-x-auto no-scrollbar shrink-0">
-          <button
-            type="button"
-            onClick={() => setSelectedDate('all')}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-              selectedDate === 'all'
-                ? 'bg-amber-500 text-stone-950 shadow-xs'
-                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
-            }`}
-          >
-            <FiActivity className="w-3.5 h-3.5" />
-            <span>ആകെ ശരാശരി (All-Time Average)</span>
-          </button>
+        <div>
+          <h2 className="text-base sm:text-lg font-black text-stone-900 dark:text-white">
+            ഉൽപ്പന്ന കോസ്റ്റിംഗ് (Product Costing Summary)
+          </h2>
+          <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+            {filteredProductCosts.length} ഉൽപ്പന്നങ്ങൾ · തീയതി തിരിച്ചുള്ള വിശദാംശങ്ങൾക്ക് കാർഡിലെ 'വിശദാംശങ്ങൾ' ക്ലിക്ക് ചെയ്യുക
+          </p>
+        </div>
 
-          <button
-            type="button"
-            onClick={() => setSelectedDate(todayStr)}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-              selectedDate === todayStr
-                ? 'bg-amber-500 text-stone-950 shadow-xs'
-                : 'text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-white'
-            }`}
-          >
-            <FiCalendar className="w-3.5 h-3.5" />
-            <span>ഇന്നത്തെ ചെലവ് (Today)</span>
-          </button>
-
-          {/* Specific Date Dropdown */}
-          <div className="flex items-center gap-1 pl-2 border-l border-stone-200 dark:border-stone-700">
-            <select
-              value={selectedDate !== 'all' && selectedDate !== todayStr ? selectedDate : ''}
-              onChange={(e) => {
-                if (e.target.value) setSelectedDate(e.target.value);
-              }}
-              className={`text-xs font-bold focus:outline-none cursor-pointer py-1.5 px-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-800 dark:text-stone-200 shadow-2xs transition-colors ${
-                selectedDate !== 'all' && selectedDate !== todayStr
-                  ? '!bg-amber-500/20 !border-amber-500/50 text-amber-800 dark:text-amber-300'
-                  : 'hover:border-stone-300 dark:hover:border-stone-600'
-              }`}
-            >
-              <option value="" disabled className="bg-white dark:bg-[#1E1B1B] text-stone-400 dark:text-stone-500">
-                മറ്റു തീയതികൾ (Other Dates)...
-              </option>
-              {availableDates.map((d) => (
-                <option key={d} value={d} className="bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-stone-100">
-                  {formatDate(d)}
-                </option>
-              ))}
-            </select>
+        <div className="flex items-center gap-2">
+          {/* Search */}
+          <div className="relative flex-1 sm:w-64">
+            <FiSearch className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search product..."
+              className="w-full pl-10 pr-4 py-2 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-epso-red/30 dark:focus:ring-amber-500/30 transition-all"
+            />
           </div>
-        </div>
 
-        {/* Search */}
-        <div className="relative flex-1 max-w-xs">
-          <FiSearch className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search product..."
-            className="w-full pl-10 pr-4 py-2 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-xs text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-epso-red/30 dark:focus:ring-amber-500/30 transition-all"
-          />
+          {/* Refresh button */}
+          <button
+            onClick={() => loadCostingData(selectedDate)}
+            disabled={isLoading}
+            className="p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+            title="Refresh Costing"
+          >
+            <FiRefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-epso-red dark:text-amber-400' : ''}`} />
+          </button>
         </div>
-
-        {/* Refresh button */}
-        <button
-          onClick={() => loadCostingData(selectedDate)}
-          disabled={isLoading}
-          className="p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] transition-colors cursor-pointer disabled:opacity-50 shrink-0"
-          title="Refresh Costing"
-        >
-          <FiRefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-epso-red dark:text-amber-400' : ''}`} />
-        </button>
       </div>
 
       {isLoading ? (

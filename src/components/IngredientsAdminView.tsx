@@ -63,8 +63,76 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
   const [detailIngredient, setDetailIngredient] = useState<Ingredient | null>(null);
 
-  // Tab state: Raw Ingredients vs Packet Types
-  const [activeIngredientTab, setActiveIngredientTab] = useState<'ingredients' | 'packets'>('ingredients');
+  // Tab state: Raw Ingredients vs Packet Types (persisted across reloads)
+  const [activeIngredientTab, setActiveIngredientTab] = useState<'ingredients' | 'packets'>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const sub = params.get('subtab');
+      if (sub === 'packets') return 'packets';
+      const saved = localStorage.getItem('epso_admin_ingredients_active_subtab');
+      if (saved === 'packets') return 'packets';
+    } catch {
+      // ignore
+    }
+    return 'ingredients';
+  });
+
+  const handleSelectSubTab = (tab: 'ingredients' | 'packets') => {
+    setActiveIngredientTab(tab);
+    try {
+      localStorage.setItem('epso_admin_ingredients_active_subtab', tab);
+      const url = new URL(window.location.href);
+      if (tab === 'packets') {
+        url.searchParams.set('subtab', 'packets');
+      } else {
+        url.searchParams.delete('subtab');
+      }
+      window.history.replaceState({ tab: 'ingredients', subtab: tab }, '', url.toString());
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleOpenDetailIngredient = (ing: Ingredient) => {
+    setDetailIngredient(ing);
+    try {
+      localStorage.setItem('epso_admin_selected_ingredient_id', ing.id);
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', 'ingredients');
+      url.searchParams.set('ingredientId', ing.id);
+      window.history.replaceState({ tab: 'ingredients', ingredientId: ing.id }, '', url.toString());
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleCloseDetailIngredient = () => {
+    setDetailIngredient(null);
+    try {
+      localStorage.removeItem('epso_admin_selected_ingredient_id');
+      const url = new URL(window.location.href);
+      url.searchParams.delete('ingredientId');
+      window.history.replaceState({ tab: 'ingredients' }, '', url.toString());
+    } catch {
+      // ignore
+    }
+  };
+
+  // Restore detailIngredient on reload or when ingredients update
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const savedId = params.get('ingredientId') || localStorage.getItem('epso_admin_selected_ingredient_id');
+      if (savedId && ingredients.length > 0) {
+        const found = ingredients.find((i) => i.id === savedId);
+        if (found) {
+          setDetailIngredient(found);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [ingredients]);
 
   // Packaging / Packet Types states
   const [packagingItems, setPackagingItems] = useState<PackagingItem[]>([]);
@@ -409,7 +477,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
             <div className="flex items-center gap-2 flex-nowrap shrink-0 ml-auto">
               <button
                 type="button"
-                onClick={() => setActiveIngredientTab('packets')}
+                onClick={() => handleSelectSubTab('packets')}
                 className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer whitespace-nowrap shrink-0"
                 title="പാക്കറ്റ് തരങ്ങൾ (Packet Types & Covers)"
               >
@@ -522,7 +590,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
           return (
             <div
               key={ing.id}
-              onClick={() => setDetailIngredient(ing)}
+              onClick={() => handleOpenDetailIngredient(ing)}
               className={`p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border transition-all shadow-apple-card dark:shadow-apple-card-dark flex flex-col justify-between cursor-pointer hover:border-amber-400 dark:hover:border-amber-600/70 hover:shadow-md ${
                 isLowStock
                   ? 'border-amber-300 dark:border-amber-800/80 ring-1 ring-amber-300 dark:ring-amber-800'
@@ -720,7 +788,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
-                onClick={() => setActiveIngredientTab('ingredients')}
+                onClick={() => handleSelectSubTab('ingredients')}
                 className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer"
               >
                 <FiBox className="w-4 h-4 text-amber-500" />
@@ -748,7 +816,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => setActiveIngredientTab('ingredients')}
+                onClick={() => handleSelectSubTab('ingredients')}
                 className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#332c2c] text-stone-700 dark:text-stone-200 font-bold text-xs transition-colors cursor-pointer border border-stone-200 dark:border-stone-700 shadow-2xs ml-1"
                 title="അടച്ച് ചേരുവകളിലേക്ക് തിരികെ പോകുക (Close and go back to ingredients)"
                 aria-label="Close"
@@ -1602,7 +1670,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
       {/* Ingredient Analytics Details Modal */}
       <IngredientDetailModal
         isOpen={Boolean(detailIngredient)}
-        onClose={() => setDetailIngredient(null)}
+        onClose={handleCloseDetailIngredient}
         ingredient={detailIngredient}
         stockMovements={stockMovements}
         products={products}

@@ -44,6 +44,7 @@ interface HeaderProps {
   notificationCount?: number;
   onOpenPinModal?: () => void;
   changingTab?: AdminTab | null;
+  isTodayWagePending?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -54,6 +55,7 @@ export const Header: React.FC<HeaderProps> = ({
   notificationCount = 0,
   onOpenPinModal,
   changingTab = null,
+  isTodayWagePending = false,
 }) => {
   const { logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -140,6 +142,20 @@ export const Header: React.FC<HeaderProps> = ({
                   {item.labelMl}
                 </span>
               </div>
+
+              {item.id === 'wages' && isTodayWagePending && (
+                <span
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-black shrink-0 font-malayalam flex items-center gap-1 shadow-2xs ${
+                    isActive
+                      ? 'bg-white text-stone-900 dark:bg-stone-900 dark:text-amber-400 font-bold'
+                      : 'bg-amber-500 text-stone-950 animate-pulse'
+                  }`}
+                  title="ഇന്നത്തെ കൂലി നൽകിയിട്ടില്ല (Today's wage not added)"
+                >
+                  <span className="text-[9px]">⚠️</span>
+                  <span className="text-[10px]">ബാക്കി</span>
+                </span>
+              )}
 
               {item.badge && item.badge > 0 ? (
                 <span
