@@ -907,7 +907,7 @@ export async function fetchStockMovements(force = false): Promise<StockMovement[
       .from('stock_movements')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(100);
+      .limit(1000);
 
     if (error) throw error;
     return (data || []).map((row) => ({

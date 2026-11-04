@@ -34,6 +34,7 @@ import {
   fetchStockMovements,
   fetchAuditLogs,
   fetchDailyWage,
+  fetchDailyWages,
   invalidateAdminCache,
 } from './services/supabase';
 import { Product, Ingredient, Recipe, ProductionRun, StockMovement, AuditLog } from './types';
@@ -173,6 +174,7 @@ export const App: React.FC = () => {
   const [productionRuns, setProductionRuns] = useState<ProductionRun[]>([]);
   const [stockMovements, setStockMovements] = useState<StockMovement[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [dailyWages, setDailyWages] = useState<any[]>([]);
 
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
@@ -239,6 +241,7 @@ export const App: React.FC = () => {
         movementsRes,
         logsRes,
         todayWageRes,
+        dailyWagesRes,
       ] = await Promise.allSettled([
         fetchProducts(force),
         fetchIngredients(force),
@@ -247,6 +250,7 @@ export const App: React.FC = () => {
         fetchStockMovements(force),
         fetchAuditLogs(force),
         fetchDailyWage(todayStr),
+        fetchDailyWages(90, force),
       ]);
 
       if (productsRes.status === 'fulfilled') setProducts(productsRes.value);
@@ -255,6 +259,7 @@ export const App: React.FC = () => {
       if (runsRes.status === 'fulfilled') setProductionRuns(runsRes.value);
       if (movementsRes.status === 'fulfilled') setStockMovements(movementsRes.value);
       if (logsRes.status === 'fulfilled') setAuditLogs(logsRes.value);
+      if (dailyWagesRes.status === 'fulfilled') setDailyWages(dailyWagesRes.value);
       if (todayWageRes.status === 'fulfilled') {
         const tw = todayWageRes.value;
         setIsTodayWageAdded(Boolean(tw && tw.totalWageBudget > 0));
@@ -420,6 +425,7 @@ export const App: React.FC = () => {
 
               {activeTab === 'wages' && (
                 <WagesAdminView
+                  productionRuns={productionRuns}
                   onRefresh={loadAllData}
                 />
               )}
@@ -480,6 +486,8 @@ export const App: React.FC = () => {
 
               {activeTab === 'movements' && (
                 <StockLedgerAdminView
+                  products={products}
+                  wages={dailyWages}
                   movements={stockMovements}
                   ingredients={ingredients}
                   onRefresh={loadAllData}

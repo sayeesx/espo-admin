@@ -13,6 +13,9 @@ import {
   FiMinus,
   FiLayers,
   FiClock,
+  FiTrendingUp,
+  FiArrowRight,
+  FiFileText,
 } from 'react-icons/fi';
 import {
   fetchDailyWages,
@@ -20,22 +23,29 @@ import {
   saveDailyWage,
   fetchTotalPacketsForDate,
   fetchTotalProductionKgForDate,
+  fetchProductionRuns,
 } from '../services/supabase';
 import { roundCurrency } from '../services/costing';
 import { LoadingSpinner } from './LoadingSpinner';
 import { useFeedback } from '../context/FeedbackContext';
+import { ProductionRun } from '../types';
 
 interface WagesAdminViewProps {
+  productionRuns?: ProductionRun[];
   onRefresh: () => void;
 }
 
-export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => {
+export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
+  productionRuns: initialProductionRuns,
+  onRefresh,
+}) => {
   const { showToast } = useFeedback();
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState<string>(getTodayStr);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [wageLedgerTab, setWageLedgerTab] = useState<'batches' | 'days'>('batches');
 
   // Form state
   const [totalWageBudget, setTotalWageBudget] = useState<string>('4000');
@@ -46,10 +56,17 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
   const [notes, setNotes] = useState<string>('');
   const [existingWage, setExistingWage] = useState<any>(null);
 
-  // History
+  // History & All Production Runs
   const [wageHistory, setWageHistory] = useState<any[]>([]);
+  const [allRuns, setAllRuns] = useState<ProductionRun[]>(initialProductionRuns || []);
 
-  // Derived calculations
+  useEffect(() => {
+    if (initialProductionRuns && initialProductionRuns.length > 0) {
+      setAllRuns(initialProductionRuns);
+    }
+  }, [initialProductionRuns]);
+
+  // Derived wage calculations for workers
   const calculations = useMemo(() => {
     const budget = Number(totalWageBudget) || 0;
     const cooks = Math.max(0, numCooks);
@@ -92,19 +109,24 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
     };
   }, [totalWageBudget, numCooks, numPackers]);
 
+  // Load wage data and production runs for date
   const loadDateData = useCallback(async (date: string) => {
     setIsLoading(true);
     try {
-      const [existing, packets, prodKg, history] = await Promise.all([
+      const [existing, packets, prodKg, history, fetchedRuns] = await Promise.all([
         fetchDailyWage(date),
         fetchTotalPacketsForDate(date),
         fetchTotalProductionKgForDate(date),
         fetchDailyWages(60),
+        fetchProductionRuns(),
       ]);
 
       setTotalPackets(packets);
       setTotalProductionKg(prodKg);
       setWageHistory(history);
+      if (fetchedRuns && fetchedRuns.length > 0) {
+        setAllRuns(fetchedRuns);
+      }
 
       if (existing) {
         setExistingWage(existing);
@@ -130,6 +152,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
     loadDateData(selectedDate);
   }, [selectedDate, loadDateData]);
 
+  // Save wage details to Supabase
   const handleSave = async () => {
     const budget = Number(totalWageBudget) || 0;
     const cooks = Math.max(0, numCooks);
@@ -180,6 +203,96 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
   };
 
   const isToday = selectedDate === getTodayStr();
+
+  // Find all batches completed on the selected date
+  const dayBatches = useMemo(() => {
+    return allRuns.filter(
+      (r) => r.productionDate === selectedDate && r.status !== 'cancelled'
+    );
+  }, [allRuns, selectedDate]);
+
+  // Calculate proportional wage allocation per batch for selected date
+  const batchWageAllocations = useMemo(() => {
+    if (dayBatches.length === 0) return [];
+
+    const effectiveTotalKg =
+      totalProductionKg > 0
+        ? totalProductionKg
+        : dayBatches.reduce((sum, r) => sum + (Number(r.actualQuantity) || 0), 0);
+
+    const cookingBudget = calculations.productionWageAmount;
+    const packingBudget = calculations.packingWageAmount;
+
+    let runningCooking = 0;
+    let runningPacking = 0;
+
+    return dayBatches.map((run, idx) => {
+      const isLast = idx === dayBatches.length - 1;
+      const weight = Number(run.actualQuantity) || 0;
+      const weightRatio = effectiveTotalKg > 0 ? weight / effectiveTotalKg : 1 / dayBatches.length;
+
+      let cookingAlloc = 0;
+      let packingAlloc = 0;
+
+      if (isLast) {
+        cookingAlloc = roundCurrency(cookingBudget - runningCooking);
+        packingAlloc = roundCurrency(packingBudget - runningPacking);
+      } else {
+        cookingAlloc = roundCurrency(weightRatio * cookingBudget);
+        packingAlloc = roundCurrency(weightRatio * packingBudget);
+        runningCooking += cookingAlloc;
+        runningPacking += packingAlloc;
+      }
+
+      const totalBatchWage = roundCurrency(cookingAlloc + packingAlloc);
+      const wagePerKg = weight > 0 ? roundCurrency(totalBatchWage / weight) : 0;
+      const sharePercent = effectiveTotalKg > 0 ? roundCurrency((weight / effectiveTotalKg) * 100) : 0;
+      const packetsCount =
+        run.totalPacketsPacked ||
+        run.packingRecords?.reduce((s, p) => s + (p.packetsPacked || 0), 0) ||
+        0;
+
+      return {
+        run,
+        weight,
+        sharePercent,
+        cookingAlloc,
+        packingAlloc,
+        totalBatchWage,
+        wagePerKg,
+        packetsCount,
+      };
+    });
+  }, [dayBatches, totalProductionKg, calculations]);
+
+  // Multi-day accumulation ledger
+  const multiDayLedger = useMemo(() => {
+    return wageHistory.map((w) => {
+      const runsForDay = allRuns.filter(
+        (r) => r.productionDate === w.productionDate && r.status !== 'cancelled'
+      );
+      const dayKg = Number(w.totalProductionKg) || 0;
+      const dayBudget = Number(w.totalWageBudget) || 0;
+      const wageRateKg = dayKg > 0 ? roundCurrency(dayBudget / dayKg) : 0;
+
+      return {
+        date: w.productionDate,
+        totalBudget: dayBudget,
+        numCooks: Number(w.numCooks) || 0,
+        numPackers: Number(w.numPackers) || 0,
+        productionWageAmount: Number(w.productionWageAmount) || 0,
+        packingWageAmount: Number(w.packingWageAmount) || 0,
+        wagePerCook: Number(w.wagePerCook) || 0,
+        wagePerPacker: Number(w.wagePerPacker) || 0,
+        totalProductionKg: dayKg,
+        totalPackets: Number(w.totalPacketsProduced) || 0,
+        batchesCount: runsForDay.length,
+        wageRateKg,
+        notes: w.notes,
+        isAllocated: dayKg > 0,
+      };
+    });
+  }, [wageHistory, allRuns]);
 
   return (
     <div className="space-y-6 pb-12 font-malayalam max-w-6xl xl:max-w-7xl mx-auto">
@@ -273,7 +386,8 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
                 </p>
                 <p className="text-sm sm:text-base font-black text-stone-900 dark:text-white mt-0.5">
                   <span className="font-mono text-epso-red dark:text-amber-400">{totalProductionKg.toFixed(1)} kg</span> ഉൽപ്പാദനം ·{' '}
-                  <span className="font-mono text-indigo-600 dark:text-indigo-400">{totalPackets}</span> പാക്കറ്റുകൾ പാക്ക് ചെയ്തു
+                  <span className="font-mono text-indigo-600 dark:text-indigo-400">{totalPackets}</span> പാക്കറ്റുകൾ പാക്ക് ചെയ്തു ·{' '}
+                  <span className="font-mono text-amber-700 dark:text-amber-300">{dayBatches.length}</span> ബാച്ചുകൾ
                 </p>
               </div>
             </div>
@@ -284,7 +398,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
           </div>
 
           {/* ======================================================== */}
-          {/* WAGE BUDGET & WORKERS FORM (Google Outlined Style)        */}
+          {/* WAGE BUDGET & WORKERS FORM                               */}
           {/* ======================================================== */}
           <div className="p-6 sm:p-7 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-6">
             <div className="border-b border-stone-100 dark:border-[#282323] pb-4">
@@ -297,7 +411,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
               </p>
             </div>
 
-            {/* Total Budget Input with Google Outlined Style */}
+            {/* Total Budget Input */}
             <div className="space-y-3">
               <label className="block text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300">
                 ആകെ കൂലി ബഡ്ജറ്റ് (Total Daily Wage Budget) *
@@ -338,7 +452,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
               </div>
             </div>
 
-            {/* Workers Count Cards (Spacious, Clear & Clean) */}
+            {/* Workers Count Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
               {/* Cooking Team (Cooks) */}
               <div className="p-5 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] space-y-3">
@@ -356,7 +470,6 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
                   </div>
                 </div>
 
-                {/* Counter Stepper with Google Outlined Input */}
                 <div className="flex items-center gap-3 pt-1">
                   <button
                     type="button"
@@ -401,7 +514,6 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
                   </div>
                 </div>
 
-                {/* Counter Stepper with Google Outlined Input */}
                 <div className="flex items-center gap-3 pt-1">
                   <button
                     type="button"
@@ -447,7 +559,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
           </div>
 
           {/* ======================================================== */}
-          {/* CLEAR & UNDERSTANDABLE WAGE ALLOCATION BREAKDOWN         */}
+          {/* WAGE ALLOCATION BREAKDOWN (COOKS VS PACKERS)             */}
           {/* ======================================================== */}
           <div className="p-6 sm:p-7 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-5">
             <div className="flex items-center justify-between border-b border-stone-100 dark:border-[#282323] pb-4">
@@ -542,57 +654,333 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
                 </span>
               </span>
             </div>
+          </div>
 
-            {/* BATCH WAGE ALLOCATION PER KG LOGIC & PREVIEW */}
-            <div className="p-5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 space-y-3">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-amber-200/60 dark:border-amber-900/40 pb-3">
-                <div>
-                  <h4 className="text-sm font-black text-amber-900 dark:text-amber-200 flex items-center gap-2">
-                    <FiLayers className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                    <span>ബാച്ചുകളിലേക്കുള്ള കൂലി വിഹിതം (Wage Allocation per Kg)</span>
-                  </h4>
-                  <p className="text-xs text-amber-700/80 dark:text-amber-400/80 mt-0.5">
-                    ഉൽപ്പാദിപ്പിച്ച ബാച്ചുകളുടെ ഭാരത്തിനനുസരിച്ച് (Proportional Output Weight)
-                  </p>
-                </div>
+          {/* ======================================================== */}
+          {/* SEPARATE WAGE ALLOCATION LEDGER: BATCHES & MULTI-DAY     */}
+          {/* "ബാച്ചുകളിലേക്കുള്ള കൂലി വിഹിതം (Wage Allocation per Kg)" */}
+          {/* ======================================================== */}
+          <div className="p-6 sm:p-7 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-6">
+            {/* Header with Title and Rate Per Kg */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-200 dark:border-[#282323] pb-4">
+              <div>
+                <h4 className="text-base sm:text-lg font-black text-stone-900 dark:text-white flex items-center gap-2">
+                  <FiLayers className="w-5 h-5 text-epso-orange dark:text-amber-400" />
+                  <span>ബാച്ചുകളിലേക്കുള്ള കൂലി വിഹിതം (Wage Allocation per Kg)</span>
+                </h4>
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
+                  ഉൽപ്പാദിപ്പിച്ച ബാച്ചുകളുടെ ഭാരത്തിനനുസരിച്ച് കൂലി സമാഹരണവും ബാച്ച് തിരിച്ചുള്ള വിതരണവും
+                </p>
+              </div>
 
-                <div className="text-left sm:text-right">
-                  <span className="text-[10px] uppercase tracking-wider font-bold text-amber-800 dark:text-amber-300 block">
+              <div className="flex items-center gap-3">
+                <div className="px-4 py-2 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 text-right">
+                  <span className="text-[10px] uppercase font-bold text-amber-800 dark:text-amber-300 block">
                     ലേബർ ചെലവ് / കിലോ
                   </span>
-                  <span className="text-xl font-black font-mono text-amber-950 dark:text-amber-100">
+                  <span className="text-lg sm:text-xl font-black font-mono text-amber-950 dark:text-amber-100">
                     {totalProductionKg > 0
                       ? `₹${(Number(totalWageBudget || 0) / totalProductionKg).toFixed(2)} / kg`
                       : '₹0.00 / kg'}
                   </span>
                 </div>
               </div>
-
-              {totalProductionKg > 0 ? (
-                <div className="space-y-2 text-xs sm:text-sm text-stone-700 dark:text-stone-300">
-                  <div className="p-3 rounded-xl bg-white/80 dark:bg-[#141212]/80 border border-amber-200/70 dark:border-amber-900/40 font-mono text-xs flex flex-wrap items-center justify-between gap-2">
-                    <span>
-                      സൂത്രവാക്യം: ആകെ കൂലി (₹{Number(totalWageBudget || 0).toLocaleString('en-IN')}) ÷ ആകെ ഉൽപ്പാദനം ({totalProductionKg.toFixed(1)} kg)
-                    </span>
-                    <span className="font-bold text-amber-800 dark:text-amber-300">
-                      = ₹{(Number(totalWageBudget || 0) / totalProductionKg).toFixed(2)} / kg
-                    </span>
-                  </div>
-                  <p className="text-xs text-stone-600 dark:text-stone-400">
-                    ഇന്ന് ഫാക്ടറിയിൽ ഉണ്ടാക്കിയ ഓരോ ബാച്ചിന്റെയും അസംസ്കൃത വസ്തുക്കളുടെ ചെലവിനൊപ്പം ഈ ലേബർ നിരക്ക് (<span className="font-mono font-bold text-stone-800 dark:text-stone-200">ബാച്ച് ഭാരം × ₹{(Number(totalWageBudget || 0) / totalProductionKg).toFixed(2)}</span>) കോസ്റ്റിംഗിൽ സ്വയം ചേർക്കപ്പെടും.
-                  </p>
-                </div>
-              ) : (
-                <div className="p-3 rounded-xl bg-stone-100 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] text-xs text-stone-600 dark:text-stone-400 space-y-1">
-                  <p className="font-bold text-stone-800 dark:text-stone-200">
-                    പണിയില്ലാത്ത / ക്ലീനിംഗ് ദിവസങ്ങൾ (Non-Production Day):
-                  </p>
-                  <p>
-                    ഇന്ന് ഉൽപ്പാദനം നടന്നിട്ടില്ലാത്തതിനാൽ (0 kg), ഈ കൂലി തുക മാസത്തെ പൊതുവായ പ്രവർത്തനച്ചെലവുകളിലേക്ക് (General Operational Overhead) ചേർക്കപ്പെടുന്നു; ഉൽപ്പന്ന ബാച്ചുകളിലേക്ക് ചേർക്കപ്പെടില്ല.
-                  </p>
-                </div>
-              )}
             </div>
+
+            {/* Formula Explanation Banner */}
+            {totalProductionKg > 0 ? (
+              <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-900/40 space-y-2 text-xs">
+                <div className="font-mono text-xs flex flex-wrap items-center justify-between gap-2 text-amber-900 dark:text-amber-200">
+                  <span>
+                    സൂത്രവാക്യം: ആകെ കൂലി (₹{Number(totalWageBudget || 0).toLocaleString('en-IN')}) ÷ ആകെ ഉൽപ്പാദനം ({totalProductionKg.toFixed(1)} kg)
+                  </span>
+                  <span className="font-bold text-amber-800 dark:text-amber-300">
+                    = ₹{(Number(totalWageBudget || 0) / totalProductionKg).toFixed(2)} / kg
+                  </span>
+                </div>
+                <p className="text-stone-600 dark:text-stone-400">
+                  ഇന്ന് ഉണ്ടാക്കിയ ഓരോ ബാച്ചിന്റെയും അസംസ്കൃത വസ്തുക്കളുടെ ചെലവിനൊപ്പം ഈ ലേബർ നിരക്ക് (<span className="font-mono font-bold text-stone-800 dark:text-stone-200">ബാച്ച് ഭാരം × ₹{(Number(totalWageBudget || 0) / totalProductionKg).toFixed(2)}</span>) കോസ്റ്റിംഗിൽ സ്വയം ചേർക്കപ്പെടും.
+                </p>
+              </div>
+            ) : (
+              <div className="p-4 rounded-2xl bg-stone-100 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] text-xs text-stone-600 dark:text-stone-400 space-y-1">
+                <p className="font-bold text-stone-800 dark:text-stone-200">
+                  പണിയില്ലാത്ത / ക്ലീനിംഗ് ദിവസങ്ങൾ (Non-Production Day):
+                </p>
+                <p>
+                  ഇന്ന് ഉൽപ്പാദനം നടന്നിട്ടില്ലാത്തതിനാൽ (0 kg), ഈ കൂലി തുക (₹{Number(totalWageBudget || 0).toLocaleString('en-IN')}) മാസത്തെ പൊതുവായ പ്രവർത്തനച്ചെലവുകളിലേക്ക് (General Operational Overhead) ചേർക്കപ്പെടുന്നു; ഉൽപ്പന്ന ബാച്ചുകളിലേക്ക് ചേർക്കപ്പെടില്ല.
+                </p>
+              </div>
+            )}
+
+            {/* Sub-Ledger View Switcher (Simple Layout) */}
+            <div className="flex items-center gap-2 border-b border-stone-100 dark:border-[#282323] pb-3">
+              <button
+                onClick={() => setWageLedgerTab('batches')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  wageLedgerTab === 'batches'
+                    ? 'bg-stone-900 text-white dark:bg-white dark:text-stone-950 shadow-xs'
+                    : 'bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#322c2c] text-stone-600 dark:text-stone-400'
+                }`}
+              >
+                <FiLayers className="w-3.5 h-3.5 text-epso-orange" />
+                <span>ഈ ദിവസത്തെ ബാച്ച് വിതരണ ലെഡ്ജർ ({batchWageAllocations.length} ബാച്ചുകൾ)</span>
+              </button>
+
+              <button
+                onClick={() => setWageLedgerTab('days')}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  wageLedgerTab === 'days'
+                    ? 'bg-stone-900 text-white dark:bg-white dark:text-stone-950 shadow-xs'
+                    : 'bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#322c2c] text-stone-600 dark:text-stone-400'
+                }`}
+              >
+                <FiClock className="w-3.5 h-3.5 text-indigo-500" />
+                <span>ദിവസേനയുള്ള കൂലി സമാഹരണ ലെഡ്ജർ ({wageHistory.length} ദിവസങ്ങൾ)</span>
+              </button>
+            </div>
+
+            {/* TAB 1: BATCH ALLOCATION LEDGER FOR SELECTED DATE */}
+            {wageLedgerTab === 'batches' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400">
+                  <span className="font-bold text-stone-800 dark:text-stone-200">
+                    {formatDate(selectedDate)} തീയതിയിലെ പൂർത്തിയായ ബാച്ചുകൾ:
+                  </span>
+                  <span>ഭാരത്തിനനുസരിച്ച് (By Weight Proportions)</span>
+                </div>
+
+                {batchWageAllocations.length === 0 ? (
+                  <div className="py-12 px-4 text-center rounded-2xl bg-stone-50 dark:bg-[#141212] border border-dashed border-stone-300 dark:border-[#342D2D] text-xs text-stone-500 dark:text-stone-400 space-y-2">
+                    <FiLayers className="w-8 h-8 mx-auto text-stone-300 dark:text-stone-600" />
+                    <p className="font-bold text-stone-700 dark:text-stone-300">
+                      ഈ തീയതിയിൽ ഉൽപ്പാദന ബാച്ചുകൾ കണ്ടെത്തിയില്ല
+                    </p>
+                    <p className="text-[11px] text-stone-400 max-w-md mx-auto">
+                      ഉൽപ്പാദന പേജിൽ ഈ തീയതിയിൽ ബാച്ചുകൾ പൂർത്തിയാക്കുമ്പോൾ ബാച്ചുകളുടെ കൃത്യമായ കൂലി വിഹിതം ഈ ലെഡ്ജറിൽ സ്വയം ദൃശ്യമാകും.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl border border-stone-200 dark:border-[#2E2828]">
+                    <table className="w-full text-xs text-left">
+                      <thead>
+                        <tr className="bg-stone-50 dark:bg-[#161414] border-b border-stone-200 dark:border-[#2E2828] text-stone-500 dark:text-stone-400 font-bold font-malayalam">
+                          <th className="py-3 px-4">ബാച്ച് നമ്പർ & ഉൽപ്പന്നം</th>
+                          <th className="py-3 px-4 text-right">ബാച്ച് ഭാരം</th>
+                          <th className="py-3 px-4 text-right">വിഹിതം (%)</th>
+                          <th className="py-3 px-4 text-right">കുക്കിംഗ് കൂലി</th>
+                          <th className="py-3 px-4 text-right">പാക്കിംഗ് കൂലി</th>
+                          <th className="py-3 px-4 text-right">ആകെ ബാച്ച് കൂലി</th>
+                          <th className="py-3 px-4 text-right">കിലോ നിരക്ക്</th>
+                          <th className="py-3 px-4 text-center">പാക്കറ്റുകൾ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stone-100 dark:divide-[#2E2828]">
+                        {batchWageAllocations.map((item) => (
+                          <tr key={item.run.id} className="hover:bg-stone-50 dark:hover:bg-[#252020] transition-colors">
+                            {/* Run info */}
+                            <td className="py-3 px-4">
+                              <span className="font-mono font-bold text-stone-900 dark:text-white block">
+                                {item.run.runNumber}
+                              </span>
+                              <span className="text-[11px] text-stone-600 dark:text-stone-300 font-bold block">
+                                {item.run.productName || 'സ്നാക്ക്'}
+                              </span>
+                              <span className="text-[10px] text-stone-400">
+                                {item.run.operatorName}
+                              </span>
+                            </td>
+
+                            {/* Batch Weight */}
+                            <td className="py-3 px-4 text-right font-mono font-bold text-stone-900 dark:text-white">
+                              {item.weight.toFixed(1)} {item.run.unit || 'kg'}
+                            </td>
+
+                            {/* Share Percent */}
+                            <td className="py-3 px-4 text-right font-mono">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                                {item.sharePercent.toFixed(1)}%
+                              </span>
+                            </td>
+
+                            {/* Cooking Wage */}
+                            <td className="py-3 px-4 text-right font-mono text-orange-700 dark:text-orange-400">
+                              ₹{item.cookingAlloc.toLocaleString('en-IN')}
+                            </td>
+
+                            {/* Packing Wage */}
+                            <td className="py-3 px-4 text-right font-mono text-indigo-700 dark:text-indigo-400">
+                              ₹{item.packingAlloc.toLocaleString('en-IN')}
+                            </td>
+
+                            {/* Total Batch Wage */}
+                            <td className="py-3 px-4 text-right font-mono font-black text-sm text-stone-900 dark:text-white">
+                              ₹{item.totalBatchWage.toLocaleString('en-IN')}
+                            </td>
+
+                            {/* Rate / kg */}
+                            <td className="py-3 px-4 text-right font-mono text-xs text-stone-700 dark:text-stone-300 font-bold">
+                              ₹{item.wagePerKg.toFixed(2)}/kg
+                            </td>
+
+                            {/* Packets packed */}
+                            <td className="py-3 px-4 text-center font-mono text-stone-600 dark:text-stone-400">
+                              {item.packetsCount > 0 ? `${item.packetsCount} pcs` : '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      {/* Summary Reconciliation Footer */}
+                      <tfoot>
+                        <tr className="bg-stone-100/80 dark:bg-[#161414] font-bold text-stone-900 dark:text-white border-t-2 border-stone-300 dark:border-[#3E3838]">
+                          <td className="py-3 px-4">ആകെ തുക (Reconciled):</td>
+                          <td className="py-3 px-4 text-right font-mono">
+                            {batchWageAllocations.reduce((s, b) => s + b.weight, 0).toFixed(1)} kg
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono">100.0%</td>
+                          <td className="py-3 px-4 text-right font-mono text-orange-700 dark:text-orange-400">
+                            ₹{calculations.productionWageAmount.toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono text-indigo-700 dark:text-indigo-400">
+                            ₹{calculations.packingWageAmount.toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-black text-sm text-emerald-700 dark:text-emerald-400">
+                            ₹{(Number(totalWageBudget) || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono">
+                            ₹{(totalProductionKg > 0 ? Number(totalWageBudget) / totalProductionKg : 0).toFixed(2)}/kg
+                          </td>
+                          <td className="py-3 px-4 text-center font-mono">{totalPackets} pcs</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: MULTI-DAY WAGE ACCUMULATION LEDGER */}
+            {wageLedgerTab === 'days' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400">
+                  <span className="font-bold text-stone-800 dark:text-stone-200">
+                    മുഴുവൻ ദിവസങ്ങളിലെ കൂലി സമാഹരണ രേഖകൾ ({multiDayLedger.length} ദിവസങ്ങൾ):
+                  </span>
+                  <span>ഏതൊരു ദിവസവും ക്ലിക്ക് ചെയ്ത് പരിശോധിക്കാം</span>
+                </div>
+
+                {multiDayLedger.length === 0 ? (
+                  <p className="text-center text-xs text-stone-400 py-10">മുൻകാല രേഖകൾ ലഭ്യമല്ല.</p>
+                ) : (
+                  <div className="overflow-x-auto rounded-2xl border border-stone-200 dark:border-[#2E2828]">
+                    <table className="w-full text-xs text-left">
+                      <thead>
+                        <tr className="bg-stone-50 dark:bg-[#161414] border-b border-stone-200 dark:border-[#2E2828] text-stone-500 dark:text-stone-400 font-bold font-malayalam">
+                          <th className="py-3 px-4">തീയതി</th>
+                          <th className="py-3 px-4 text-right">ആകെ കൂലി</th>
+                          <th className="py-3 px-4">തൊഴിലാളികൾ</th>
+                          <th className="py-3 px-4 text-right">ഉൽപ്പാദനം</th>
+                          <th className="py-3 px-4 text-center">ബാച്ചുകൾ</th>
+                          <th className="py-3 px-4 text-right">കിലോ നിരക്ക്</th>
+                          <th className="py-3 px-4 text-center">വിതരണ നില</th>
+                          <th className="py-3 px-4 text-center">പ്രവർത്തനം</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-stone-100 dark:divide-[#2E2828]">
+                        {multiDayLedger.map((row) => {
+                          const isCurrent = row.date === selectedDate;
+
+                          return (
+                            <tr
+                              key={row.date}
+                              className={`transition-colors ${
+                                isCurrent
+                                  ? 'bg-amber-50/60 dark:bg-amber-950/30'
+                                  : 'hover:bg-stone-50 dark:hover:bg-[#252020]'
+                              }`}
+                            >
+                              {/* Date */}
+                              <td className="py-3 px-4 font-bold text-stone-900 dark:text-white">
+                                <div className="flex items-center gap-1.5">
+                                  <span>{formatDate(row.date)}</span>
+                                  {isCurrent && (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500 text-stone-950">
+                                      ACTIVE
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Accumulated Wage */}
+                              <td className="py-3 px-4 text-right font-mono font-black text-sm text-stone-900 dark:text-white">
+                                ₹{row.totalBudget.toLocaleString('en-IN')}
+                              </td>
+
+                              {/* Workers split */}
+                              <td className="py-3 px-4 text-stone-600 dark:text-stone-300">
+                                <div className="text-[11px] space-y-0.5">
+                                  <span className="block text-orange-700 dark:text-orange-400">
+                                    {row.numCooks} കുക്കുകൾ (₹{row.wagePerCook}/ഒരാൾക്ക്)
+                                  </span>
+                                  <span className="block text-indigo-700 dark:text-indigo-400">
+                                    {row.numPackers} പാക്കർമാർ (₹{row.wagePerPacker}/ഒരാൾക്ക്)
+                                  </span>
+                                </div>
+                              </td>
+
+                              {/* Production Kg */}
+                              <td className="py-3 px-4 text-right font-mono font-bold text-stone-900 dark:text-white">
+                                {row.totalProductionKg.toFixed(1)} kg
+                                <span className="text-[10px] text-stone-400 block font-normal">
+                                  {row.totalPackets} പാക്കറ്റുകൾ
+                                </span>
+                              </td>
+
+                              {/* Batches count */}
+                              <td className="py-3 px-4 text-center font-mono font-bold">
+                                {row.batchesCount}
+                              </td>
+
+                              {/* Wage rate per kg */}
+                              <td className="py-3 px-4 text-right font-mono font-bold text-amber-900 dark:text-amber-300">
+                                {row.totalProductionKg > 0 ? `₹${row.wageRateKg.toFixed(2)}/kg` : '-'}
+                              </td>
+
+                              {/* Allocation Status */}
+                              <td className="py-3 px-4 text-center">
+                                {row.isAllocated ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">
+                                    ബാച്ചുകളിലേക്ക് വിതരണം ചെയ്തു
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">
+                                    പൊതു ഓവർഹെഡ്
+                                  </span>
+                                )}
+                              </td>
+
+                              {/* Inspect date action */}
+                              <td className="py-3 px-4 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedDate(row.date);
+                                    setWageLedgerTab('batches');
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold border border-stone-200 dark:border-[#3E3838] bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 hover:bg-stone-100 cursor-pointer"
+                                >
+                                  ബാച്ചുകൾ കാണുക
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* ======================================================== */}
@@ -605,7 +993,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({ onRefresh }) => 
             >
               <div className="flex items-center gap-2.5">
                 <FiClock className="w-4 h-4 text-stone-400" />
-                <span>കൂലി വിവരങ്ങളുടെ മുൻകാല ചരിത്രം ({wageHistory.length} രേഖകൾ)</span>
+                <span>കൂലി വിവരങ്ങളുടെ മുൻകാല സംഗ്രഹം ({wageHistory.length} രേഖകൾ)</span>
               </div>
               {showHistory ? <FiChevronUp className="w-5 h-5" /> : <FiChevronDown className="w-5 h-5" />}
             </button>
