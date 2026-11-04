@@ -43,14 +43,14 @@ export const CompulsoryUpdateModal: React.FC<CompulsoryUpdateModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 select-none"
+      className="fixed inset-0 z-[99999] bg-black/85 flex items-center justify-center p-4 select-none"
       role="alertdialog"
       aria-modal="true"
       aria-labelledby="compulsory-update-title"
       aria-describedby="compulsory-update-description"
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Modal Card - strictly WITHOUT shadows as requested */}
+      {/* Modal Card - strictly WITHOUT shadows and WITHOUT animation as requested */}
       <div
         className="w-full max-w-md bg-white dark:bg-[#181515] border-2 border-[#C6382B] rounded-2xl p-6 sm:p-7 text-center relative overflow-hidden"
         style={{ boxShadow: 'none' }}
@@ -59,7 +59,7 @@ export const CompulsoryUpdateModal: React.FC<CompulsoryUpdateModalProps> = ({
         {/* Top Accent Stripe */}
         <div className="absolute top-0 inset-x-0 h-1 bg-[#C6382B]" />
 
-        {/* Update Icon Badge (no drop shadows) */}
+        {/* Update Icon Badge (no drop shadows, no animation) */}
         <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 flex items-center justify-center text-[#C6382B]">
           <RefreshCw
             className={`w-8 h-8 ${isUpdating ? 'animate-spin' : ''}`}
@@ -89,7 +89,7 @@ export const CompulsoryUpdateModal: React.FC<CompulsoryUpdateModalProps> = ({
           id="compulsory-update-description"
           className="text-xs sm:text-sm text-stone-600 dark:text-stone-300 font-malayalam leading-relaxed mb-4"
         >
-          സിസ്റ്റത്തിലേക്ക് പുതിയ ഫീച്ചറുകളും മാറ്റങ്ങളും വിജയകരമായി വിന്യസിച്ചിരിക്കുന്നു. ഏറ്റവും പുതിയ ഡാറ്റ കൃത്യമായി ലഭിക്കുന്നതിന് ക്യാഷ് മായ്‌ച്ച് ദയവായി ഇപ്പോൾ അപ്‌ഡേറ്റ് ചെയ്യുക.
+          സിസ്റ്റത്തിലേക്ക് പുതിയ ഫീച്ചറുകളും മാറ്റങ്ങളും വിന്യസിച്ചിരിക്കുന്നു. ഏറ്റവും പുതിയ ഡാറ്റ കൃത്യമായി ലഭിക്കുന്നതിന് ക്യാഷ് മായ്‌ച്ച് ദയവായി ഇപ്പോൾ അപ്‌ഡേറ്റ് ചെയ്യുക.
         </p>
 
         {/* Version metadata box */}
@@ -97,8 +97,8 @@ export const CompulsoryUpdateModal: React.FC<CompulsoryUpdateModalProps> = ({
           <div className="flex items-center justify-between font-mono">
             <span className="text-stone-500 dark:text-stone-400">Status:</span>
             <span className="font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
-              Live Deployment
+              <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />
+              Live Deployment Ready
             </span>
           </div>
           {newVersion?.commitHash && newVersion.commitHash !== 'unknown' && (
@@ -125,7 +125,7 @@ export const CompulsoryUpdateModal: React.FC<CompulsoryUpdateModalProps> = ({
           </span>
         </div>
 
-        {/* Action Button - NO shadow */}
+        {/* Action Button - STRICTLY WITHOUT SHADOWS */}
         <button
           type="button"
           disabled={isUpdating}

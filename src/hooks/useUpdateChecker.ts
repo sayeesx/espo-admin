@@ -7,19 +7,38 @@ interface VersionInfo {
   builtAt?: string;
 }
 
-export function useUpdateChecker() {
-  const [hasUpdate, setHasUpdate] = useState<boolean>(false);
-  const [isUpdating, setIsUpdating] = useState<boolean>(false);
-  const [newVersion, setNewVersion] = useState<VersionInfo | null>(null);
+const STORAGE_KEY_PENDING = 'epso_admin_pending_update';
+const STORAGE_KEY_ACK = 'epso_admin_ack_build';
 
-  // Store the running application's build ID injected at build time by Vite
+export function useUpdateChecker() {
+  const [hasUpdate, setHasUpdate] = useState<boolean>(() => {
+    // Check if an update was already pending before manual reload
+    try {
+      const pending = localStorage.getItem(STORAGE_KEY_PENDING);
+      return Boolean(pending);
+    } catch {
+      return false;
+    }
+  });
+
+  const [isUpdating, setIsUpdating] = useState<boolean>(false);
+  const [newVersion, setNewVersion] = useState<VersionInfo | null>(() => {
+    try {
+      const pending = localStorage.getItem(STORAGE_KEY_PENDING);
+      if (pending) return JSON.parse(pending);
+    } catch {
+      // ignore
+    }
+    return null;
+  });
+
+  // Running application's build ID injected at build time by Vite
   const currentBuildIdRef = useRef<string>(
     typeof __APP_BUILD_ID__ !== 'undefined' ? __APP_BUILD_ID__ : ''
   );
 
   const checkVersion = useCallback(async () => {
-    // If update is already detected and modal is open, avoid redundant checks
-    if (hasUpdate || isUpdating) return;
+    if (isUpdating) return;
 
     try {
       const res = await fetch(`/version.json?_t=${Date.now()}`, {
@@ -37,36 +56,43 @@ export function useUpdateChecker() {
       const data: VersionInfo = await res.json();
       if (!data || !data.buildId) return;
 
-      // If initial buildId was empty (e.g. initial dev load without define), set it once
-      if (!currentBuildIdRef.current) {
+      const runningId = currentBuildIdRef.current;
+      const ackId = localStorage.getItem(STORAGE_KEY_ACK);
+
+      // If user has not acknowledged this new version yet, or runningId is different
+      const isDifferentFromRunning = runningId && data.buildId !== runningId;
+      const isDifferentFromAck = ackId && data.buildId !== ackId;
+
+      if (!runningId) {
         currentBuildIdRef.current = data.buildId;
-        return;
       }
 
-      // If remote buildId differs from running buildId, new deployment has happened!
-      if (data.buildId !== currentBuildIdRef.current) {
-        console.log('[UpdateChecker] New deployment detected:', {
-          current: currentBuildIdRef.current,
-          latest: data.buildId,
-        });
+      if (!ackId) {
+        // First ever visit: acknowledge current live build
+        localStorage.setItem(STORAGE_KEY_ACK, data.buildId);
+      } else if (isDifferentFromRunning || isDifferentFromAck) {
+        // A new deployment is live!
+        try {
+          localStorage.setItem(STORAGE_KEY_PENDING, JSON.stringify(data));
+        } catch {
+          // ignore
+        }
         setNewVersion(data);
         setHasUpdate(true);
       }
     } catch {
-      // Network issues or transient errors are safely ignored
+      // Safely ignore network errors
     }
-  }, [hasUpdate, isUpdating]);
+  }, [isUpdating]);
 
   useEffect(() => {
-    // 1. Initial check shortly after mount
-    const initialTimer = setTimeout(() => {
-      checkVersion();
-    }, 2000);
+    // 1. Check INSTANTLY on mount without any delay
+    checkVersion();
 
-    // 2. Continuous lightweight background polling every 15 seconds
-    const interval = setInterval(checkVersion, 15000);
+    // 2. High-frequency background polling every 5 seconds to catch deployments instantly
+    const interval = setInterval(checkVersion, 5000);
 
-    // 3. Immediate check on tab focus or visibility change (e.g. user returns to app)
+    // 3. Immediate check on tab focus or visibility change
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         checkVersion();
@@ -81,7 +107,7 @@ export function useUpdateChecker() {
       checkVersion();
     };
 
-    // 4. Catch Vite dynamic import chunk 404s (which happen when a new deployment invalidates old chunk hashes)
+    // 4. Catch Vite dynamic import chunk 404s
     const handleError = (e: ErrorEvent) => {
       const msg = e?.message || '';
       if (
@@ -89,7 +115,6 @@ export function useUpdateChecker() {
         msg.includes('Importing a module script failed') ||
         msg.includes('error loading dynamically imported module')
       ) {
-        console.warn('[UpdateChecker] Dynamic chunk error detected, triggering compulsory update.');
         setHasUpdate(true);
       }
     };
@@ -101,7 +126,6 @@ export function useUpdateChecker() {
         msg.includes('Importing a module script failed') ||
         msg.includes('error loading dynamically imported module')
       ) {
-        console.warn('[UpdateChecker] Unhandled chunk rejection detected, triggering compulsory update.');
         setHasUpdate(true);
       }
     };
@@ -113,7 +137,6 @@ export function useUpdateChecker() {
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
 
     return () => {
-      clearTimeout(initialTimer);
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleFocus);
@@ -128,6 +151,11 @@ export function useUpdateChecker() {
     setIsUpdating(true);
 
     try {
+      if (newVersion?.buildId) {
+        localStorage.setItem(STORAGE_KEY_ACK, newVersion.buildId);
+      }
+      localStorage.removeItem(STORAGE_KEY_PENDING);
+
       // 1. Clear CacheStorage
       if ('caches' in window) {
         const cacheKeys = await window.caches.keys();
@@ -152,12 +180,12 @@ export function useUpdateChecker() {
     } catch (err) {
       console.warn('[UpdateChecker] Error clearing caches:', err);
     } finally {
-      // 5. Force hard reload with timestamp query param to bypass any HTTP/disk cache
+      // 5. Force hard reload with timestamp query param
       const reloadUrl = new URL(window.location.href);
       reloadUrl.searchParams.set('_build_reload', Date.now().toString());
       window.location.replace(reloadUrl.toString());
     }
-  }, []);
+  }, [newVersion]);
 
   return {
     hasUpdate,
