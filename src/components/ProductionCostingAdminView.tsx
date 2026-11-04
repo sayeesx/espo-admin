@@ -391,15 +391,14 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     setDetailIngredients(Object.values(ingMap));
   }, [productionRuns, selectedDate]);
 
-  // Persist selected product in URL and localStorage
+  // Persist selected product in URL
   const handleOpenDetail = (product: ProductCostSummary) => {
     setSelectedProduct(product);
     try {
-      localStorage.setItem('epso_admin_costing_selected_product_id', product.productId);
       const url = new URL(window.location.href);
       url.searchParams.set('tab', 'costing');
       url.searchParams.set('productId', product.productId);
-      window.history.replaceState({ tab: 'costing', productId: product.productId }, '', url.toString());
+      window.history.pushState({ tab: 'costing', productId: product.productId }, '', url.toString());
     } catch {
       // ignore
     }
@@ -414,7 +413,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
       localStorage.removeItem('epso_admin_costing_selected_product_id');
       const url = new URL(window.location.href);
       url.searchParams.delete('productId');
-      window.history.replaceState({ tab: 'costing' }, '', url.toString());
+      window.history.pushState({ tab: 'costing' }, '', url.toString());
     } catch {
       // ignore
     }
@@ -424,7 +423,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      const savedProdId = params.get('productId') || localStorage.getItem('epso_admin_costing_selected_product_id');
+      const savedProdId = params.get('productId');
       if (savedProdId && productCosts.length > 0 && !selectedProduct) {
         const found = productCosts.find((p) => p.productId === savedProdId);
         if (found) {
@@ -436,6 +435,27 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
       // ignore
     }
   }, [productCosts, selectedProduct, loadProductDetail]);
+
+  // Support browser popstate (back/forward) navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const pid = params.get('productId');
+        if (!pid) {
+          setSelectedProduct(null);
+        } else if (productCosts.length > 0) {
+          const found = productCosts.find((p) => p.productId === pid);
+          if (found) {
+            setSelectedProduct(found);
+            loadProductDetail(found.productId);
+          }
+        }
+      } catch {}
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [productCosts, loadProductDetail]);
 
   // Keep detailIngredients fresh whenever selectedDate or selectedProduct changes
   useEffect(() => {
@@ -587,6 +607,26 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
       })
       .sort((a, b) => b.costPerKg - a.costPerKg);
   }, [selectedProduct, detailIngredients]);
+
+  // If restoring a product from URL on reload, show spinner until costing data is resolved
+  const targetProductId = useMemo(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('productId');
+    } catch {
+      return null;
+    }
+  }, []);
+
+  if (targetProductId && !selectedProduct && isLoading) {
+    return (
+      <div className="py-24 flex flex-col items-center justify-center space-y-3 font-malayalam">
+        <LoadingSpinner />
+        <p className="text-xs font-bold text-stone-400">
+          ഉൽപ്പന്നത്തിന്റെ കോസ്റ്റിംഗ് വിവരങ്ങൾ ലഭ്യമാക്കുന്നു...
+        </p>
+      </div>
+    );
+  }
 
   // Detail view
   if (selectedProduct) {

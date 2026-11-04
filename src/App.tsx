@@ -78,6 +78,7 @@ export const App: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<AdminTab>(getInitialTab);
   const [changingTab, setChangingTab] = useState<AdminTab | null>(null);
+  const [costingNavKey, setCostingNavKey] = useState(0);
 
   const handleTabChange = useCallback((newTab: AdminTab) => {
     checkVersion();
@@ -85,6 +86,7 @@ export const App: React.FC = () => {
       setIsAIOpen(true);
     }
     if (newTab === 'costing') {
+      setCostingNavKey((k) => k + 1);
       loadAllData(true);
     }
     setChangingTab(newTab);
@@ -95,8 +97,10 @@ export const App: React.FC = () => {
 
     try {
       localStorage.setItem(ACTIVE_TAB_KEY, newTab);
+      localStorage.removeItem('epso_admin_costing_selected_product_id');
       const url = new URL(window.location.href);
-      if (url.searchParams.get('tab') !== newTab) {
+      url.searchParams.delete('productId');
+      if (url.searchParams.get('tab') !== newTab || newTab === 'costing') {
         url.searchParams.set('tab', newTab);
         window.history.pushState({ tab: newTab }, '', url.toString());
       }
@@ -109,6 +113,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     try {
       const url = new URL(window.location.href);
+      if (activeTab !== 'costing') {
+        url.searchParams.delete('productId');
+      }
       if (url.searchParams.get('tab') !== activeTab) {
         url.searchParams.set('tab', activeTab);
         window.history.replaceState({ tab: activeTab }, '', url.toString());
@@ -419,6 +426,7 @@ export const App: React.FC = () => {
 
               {activeTab === 'costing' && (
                 <ProductionCostingAdminView
+                  key={costingNavKey}
                   products={products}
                   ingredients={ingredients}
                   productionRuns={productionRuns}

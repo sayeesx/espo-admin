@@ -296,10 +296,14 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
           }
         }
 
-        // 2. Unlink packing records referencing runs
-        try {
-          await supabase.from('packing_records').update({ production_run_id: null }).neq('id', '00000000-0000-0000-0000-000000000000');
-        } catch {}
+        // 2. Clear all packing records for products (so packets are not kept active on costing)
+        const { error: pkrErr } = await supabase
+          .from('packing_records')
+          .delete()
+          .neq('id', '00000000-0000-0000-0000-000000000000');
+        if (pkrErr) {
+          console.warn('Clear packing records error:', pkrErr);
+        }
 
         // 3. Clear runs, consumption, closings, allocations
         const { error: pcErr } = await supabase.from('production_consumption').delete().neq('id', '00000000-0000-0000-0000-000000000000');
@@ -312,8 +316,8 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
         if (dcaErr) throw dcaErr;
 
         invalidateAdminCache();
-        setResetSuccessNotice('പ്രൊഡക്ഷൻ ബാച്ചുകൾ റീസെറ്റ് ചെയ്തു, സ്റ്റോക്ക് ക്രമീകരിച്ചു (Batches cleared and stocks reversed)');
-        showToast('പ്രൊഡക്ഷൻ ബാച്ചുകൾ റീസെറ്റ് ചെയ്തു, സ്റ്റോക്ക് ക്രമീകരിച്ചു!', 'success');
+        setResetSuccessNotice('പ്രൊഡക്ഷൻ ബാച്ചുകളും പാക്കറ്റുകളും റീസെറ്റ് ചെയ്തു, സ്റ്റോക്ക് ക്രമീകരിച്ചു (Batches & packets cleared, stocks reversed)');
+        showToast('പ്രൊഡക്ഷൻ ബാച്ചുകളും പാക്കറ്റുകളും റീസെറ്റ് ചെയ്തു, സ്റ്റോക്ക് ക്രമീകരിച്ചു!', 'success');
       } else if (resetModalType === 'ledger') {
         // Clear stock movements
         const { error: smErr } = await supabase.from('stock_movements').delete().neq('id', '00000000-0000-0000-0000-000000000000');
@@ -345,7 +349,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
         const { error: sErr } = await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
         if (sErr) throw sErr;
         try {
-          await supabase.from('packing_records').update({ production_run_id: null }).neq('id', '00000000-0000-0000-0000-000000000000');
+          await supabase.from('packing_records').delete().neq('id', '00000000-0000-0000-0000-000000000000');
         } catch {}
         const { error: pcErr } = await supabase.from('production_consumption').delete().neq('id', '00000000-0000-0000-0000-000000000000');
         if (pcErr) throw pcErr;
@@ -729,7 +733,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                   റീസെറ്റ് ബാച്ചുകൾ (Clear Production Runs)
                 </span>
                 <span className="text-[11px] text-stone-400 block">
-                  പ്രൊഡക്ഷൻ റണ്ണുകൾ ({productionRuns.length} runs), ദിവസേനയുള്ള ക്ലോസിംഗ് എന്നിവ നീക്കം ചെയ്യുന്നു.
+                  പ്രൊഡക്ഷൻ റണ്ണുകൾ ({productionRuns.length} runs), പാക്കറ്റ് റെക്കോർഡുകൾ, ദിവസേനയുള്ള ക്ലോസിംഗ് എന്നിവ നീക്കം ചെയ്യുന്നു.
                 </span>
               </div>
               <button
