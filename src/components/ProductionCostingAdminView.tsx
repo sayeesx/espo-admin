@@ -894,15 +894,17 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
               onChange={(e) => {
                 if (e.target.value) setSelectedDate(e.target.value);
               }}
-              className={`bg-transparent text-xs font-bold focus:outline-none cursor-pointer py-1 px-2 rounded-lg ${
+              className={`text-xs font-bold focus:outline-none cursor-pointer py-1.5 px-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-800 dark:text-stone-200 shadow-2xs transition-colors ${
                 selectedDate !== 'all' && selectedDate !== todayStr
-                  ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
-                  : 'text-stone-600 dark:text-stone-400'
+                  ? '!bg-amber-500/20 !border-amber-500/50 text-amber-800 dark:text-amber-300'
+                  : 'hover:border-stone-300 dark:hover:border-stone-600'
               }`}
             >
-              <option value="" disabled>മറ്റു തീയതികൾ (Other Dates)...</option>
+              <option value="" disabled className="bg-white dark:bg-[#1E1B1B] text-stone-400 dark:text-stone-500">
+                മറ്റു തീയതികൾ (Other Dates)...
+              </option>
               {availableDates.map((d) => (
-                <option key={d} value={d}>
+                <option key={d} value={d} className="bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-stone-100">
                   {formatDate(d)}
                 </option>
               ))}
@@ -957,23 +959,14 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
                   className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark flex flex-col justify-between transition-all hover:border-stone-300 dark:hover:border-stone-700"
                 >
                   <div>
-                    {/* Header: Title, Subtitle, and Details Button */}
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex-1 min-w-0 pr-2">
-                        <h3 className="text-base font-bold text-stone-900 dark:text-white truncate">
-                          {p.productName}
-                        </h3>
-                        <p className="text-[11px] text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
-                          {p.totalProductionKg.toFixed(1)} kg · {p.batchCount} ബാച്ച് · {p.totalPacketsPacked} പാക്കറ്റുകൾ
-                        </p>
-                      </div>
-
-                      <button
-                        onClick={() => handleOpenDetail(p)}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer shrink-0 font-malayalam"
-                      >
-                        <span>വിശദാംശങ്ങൾ →</span>
-                      </button>
+                    {/* Header: Title & Subtitle */}
+                    <div className="mb-2">
+                      <h3 className="text-base font-bold text-stone-900 dark:text-white truncate">
+                        {p.productName}
+                      </h3>
+                      <p className="text-[11px] text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
+                        {p.totalProductionKg.toFixed(1)} kg · {p.batchCount} ബാച്ച് · {p.totalPacketsPacked} പാക്കറ്റുകൾ
+                      </p>
                     </div>
 
                     {/* Details Box - EXACTLY as requested */}
@@ -1065,6 +1058,14 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
                         </div>
                       )}
                     </div>
+
+                    {/* Bottom Details Button */}
+                    <button
+                      onClick={() => handleOpenDetail(p)}
+                      className="w-full mt-2 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 text-xs font-bold transition-all shadow-sm active:scale-95 cursor-pointer font-malayalam"
+                    >
+                      <span>വിശദാംശങ്ങൾ →</span>
+                    </button>
                   </div>
                 </div>
               );

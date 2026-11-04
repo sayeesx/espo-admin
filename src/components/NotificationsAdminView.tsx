@@ -77,12 +77,12 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
           type: 'critical_stock',
           severity: 'critical',
           title: ing.name,
-          subtitle: 'സ്റ്റോക്ക് തീർന്നു (Out of Stock)',
-          description: `Current stock is 0 ${ing.unit}. Safety limit is ${ing.minStock} ${ing.unit}.`,
+          subtitle: 'സ്റ്റോക്ക് തീർന്നു',
+          description: `നിലവിലെ സ്റ്റോക്ക് 0 ${ing.unit} ആണ്. മിനിമം പരിധി ${ing.minStock} ${ing.unit}.`,
           timestamp: ing.updatedAt || 'Now',
           referenceId: ing.id,
           actionTab: 'ingredients',
-          actionLabel: 'Restock',
+          actionLabel: 'സ്റ്റോക്ക് ചേർക്കുക',
           meta: {
             current: 0,
             required: ing.minStock,
@@ -97,12 +97,12 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
           type: 'low_stock',
           severity: 'warning',
           title: ing.name,
-          subtitle: 'കുറഞ്ഞ സ്റ്റോക്ക് (Low Stock)',
-          description: `Stock has reached ${ing.currentStock} ${ing.unit} (Below minimum ${ing.minStock} ${ing.unit}).`,
+          subtitle: 'കുറഞ്ഞ സ്റ്റോക്ക്',
+          description: `സ്റ്റോക്ക് ${ing.currentStock} ${ing.unit} ആയി കുറഞ്ഞു (മിനിമം പരിധി ${ing.minStock} ${ing.unit}).`,
           timestamp: ing.updatedAt || 'Now',
           referenceId: ing.id,
           actionTab: 'ingredients',
-          actionLabel: 'Adjust Stock',
+          actionLabel: 'സ്റ്റോക്ക് മാറ്റുക',
           meta: {
             current: ing.currentStock,
             required: ing.minStock,
@@ -121,11 +121,11 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
           type: 'recipe_missing',
           severity: 'info',
           title: prod.name,
-          subtitle: 'റെസിപ്പി ചേർത്തിട്ടില്ല (Missing Recipe)',
-          description: 'No bill of materials recipe assigned to this product.',
+          subtitle: 'റെസിപ്പി ചേർത്തിട്ടില്ല',
+          description: 'ഈ ഉൽപ്പന്നത്തിന് റെസിപ്പി നിർവചിച്ചിട്ടില്ല.',
           referenceId: prod.id,
           actionTab: 'recipes',
-          actionLabel: 'Add Recipe',
+          actionLabel: 'റെസിപ്പി ചേർക്കുക',
         });
       }
     });
@@ -138,12 +138,12 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
           type: 'batch_variance',
           severity: 'warning',
           title: `${run.productName} (#${run.runNumber})`,
-          subtitle: 'റദ്ദാക്കിയ ബാച്ച് (Cancelled)',
-          description: `Cancelled by ${run.operatorName}. Reason: ${run.cancellationReason || run.notes || 'None stated'}.`,
+          subtitle: 'റദ്ദാക്കിയ ബാച്ച്',
+          description: `${run.operatorName} റദ്ദാക്കി. കാരണം: ${run.cancellationReason || run.notes || 'നൽകിയിട്ടില്ല'}.`,
           timestamp: run.productionDate,
           referenceId: run.id,
           actionTab: 'movements',
-          actionLabel: 'View Run',
+          actionLabel: 'പരിശോധിക്കുക',
         });
       } else if (run.plannedQuantity > 0 && run.actualQuantity < run.plannedQuantity * 0.85) {
         const shortKg = Number((run.plannedQuantity - run.actualQuantity).toFixed(1));
@@ -152,12 +152,12 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
           type: 'batch_variance',
           severity: 'warning',
           title: `${run.productName} (#${run.runNumber})`,
-          subtitle: 'അളവ് കുറവ് (Yield Shortage)',
-          description: `Output was ${shortKg} ${run.unit} below planned target (${run.actualQuantity}/${run.plannedQuantity} ${run.unit}).`,
+          subtitle: 'ഉൽപ്പാദനം കുറവ്',
+          description: `ലക്ഷ്യത്തേക്കാൾ ${shortKg} ${run.unit} കുറവാണ് ലഭിച്ചത് (യഥാർത്ഥ അളവ്: ${run.actualQuantity}/${run.plannedQuantity} ${run.unit}).`,
           timestamp: run.productionDate,
           referenceId: run.id,
           actionTab: 'movements',
-          actionLabel: 'Inspect',
+          actionLabel: 'പരിശോധിക്കുക',
         });
       }
     });
@@ -213,28 +213,28 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => setPurchaseListModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-amber-300 dark:border-amber-800/80 bg-amber-50/80 dark:bg-amber-950/30 text-amber-900 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-colors cursor-pointer"
-            title="Print purchase list for items"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border border-amber-300 dark:border-amber-800/80 bg-amber-50/80 dark:bg-amber-950/30 text-amber-900 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-colors cursor-pointer font-malayalam"
+            title="പർച്ചേസ് ലിസ്റ്റ് പ്രിന്റ് ചെയ്യുക"
           >
             <FiPrinter className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-            <span>Purchase List</span>
+            <span>പർച്ചേസ് ലിസ്റ്റ്</span>
           </button>
 
           {activeDismissed.size > 0 && onRestore && (
             <button
               onClick={onRestore}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer font-malayalam"
             >
-              Restore Dismissed ({activeDismissed.size})
+              ഒഴിവാക്കിയവ പുനഃസ്ഥാപിക്കുക ({activeDismissed.size})
             </button>
           )}
 
           {filteredNotifications.length > 0 && (
             <button
               onClick={handleDismissAll}
-              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer font-malayalam"
             >
-              Clear
+              എല്ലാം ക്ലിയർ ചെയ്യുക
             </button>
           )}
 
@@ -259,18 +259,18 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
       {/* Sleek Minimal Tab Filter Bar */}
       <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
         {[
-          { id: 'all', label: 'All', count: activeNotifications.length },
-          { id: 'critical', label: 'Critical', count: criticalCount, isCritical: true },
-          { id: 'stock', label: 'Low Stock', count: lowStockCount, isWarning: true },
-          { id: 'batches', label: 'Batches', count: batchCount },
-          { id: 'recipes', label: 'Recipes', count: recipeCount },
+          { id: 'all', label: 'എല്ലാം', count: activeNotifications.length },
+          { id: 'critical', label: 'അടിയന്തിരം', count: criticalCount, isCritical: true },
+          { id: 'stock', label: 'കുറഞ്ഞ സ്റ്റോക്ക്', count: lowStockCount, isWarning: true },
+          { id: 'batches', label: 'ബാച്ചുകൾ', count: batchCount },
+          { id: 'recipes', label: 'റെസിപ്പികൾ', count: recipeCount },
         ].map((tab) => {
           const isActive = filter === tab.id;
           return (
             <button
               key={tab.id}
               onClick={() => setFilter(tab.id as NotificationFilter)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer font-malayalam ${
                 isActive
                   ? 'bg-stone-900 text-white dark:bg-white dark:text-stone-900 shadow-2xs'
                   : 'bg-white dark:bg-[#1E1B1B] text-stone-600 dark:text-stone-400 border border-stone-200 dark:border-[#2E2828] hover:bg-stone-50 dark:hover:bg-[#252020]'
@@ -304,8 +304,8 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
             <div className="w-10 h-10 mx-auto rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-2">
               <FiCheck className="w-5 h-5" />
             </div>
-            <h3 className="text-sm font-bold text-stone-900 dark:text-white">
-              All Clear
+            <h3 className="text-sm font-bold text-stone-900 dark:text-white font-malayalam">
+              എല്ലാം കൃത്യമാണ്
             </h3>
             <p className="text-xs text-stone-400 font-malayalam mt-0.5">
               നിലവിൽ പ്രശ്നങ്ങളോ അലേർട്ടുകളോ ഇല്ല
@@ -347,22 +347,22 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
                       )}
                     </div>
 
-                    <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                    <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mt-0.5">
                       {n.description}
                     </p>
 
-                    {/* Compact tabular meta metrics if available */}
+                    {/* Compact tabular meta metrics in Malayalam */}
                     {n.meta && (
-                      <div className="flex items-center gap-2 mt-2 flex-wrap text-[11px]">
+                      <div className="flex items-center gap-2 mt-2 flex-wrap text-[11px] font-malayalam">
                         <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-[#282323] text-stone-600 dark:text-stone-300 font-medium">
-                          Current: <strong className="text-stone-900 dark:text-white font-bold">{n.meta.current} {n.meta.unit}</strong>
+                          ഇപ്പോഴത്തെ സ്റ്റോക്ക്: <strong className="text-stone-900 dark:text-white font-bold">{n.meta.current} {n.meta.unit}</strong>
                         </span>
                         <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-[#282323] text-stone-600 dark:text-stone-300 font-medium">
-                          Min Limit: <strong className="text-stone-900 dark:text-white font-bold">{n.meta.required} {n.meta.unit}</strong>
+                          മിനിമം പരിധി: <strong className="text-stone-900 dark:text-white font-bold">{n.meta.required} {n.meta.unit}</strong>
                         </span>
                         {n.meta.deficit !== undefined && n.meta.deficit > 0 && (
                           <span className="px-2 py-0.5 rounded-md bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 font-bold">
-                            Shortage: {n.meta.deficit} {n.meta.unit}
+                            കുറവ്: {n.meta.deficit} {n.meta.unit}
                           </span>
                         )}
                       </div>

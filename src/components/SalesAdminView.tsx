@@ -900,7 +900,7 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                 className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#252020] dark:hover:bg-[#2d2727] text-stone-800 dark:text-stone-200 text-xs font-bold transition-all cursor-pointer font-malayalam press-apple"
               >
                 <FiArrowLeft className="w-4 h-4" />
-                <span>← വിൽപ്പന ലിസ്റ്റിലേക്ക് മടങ്ങുക (Back to Sales List)</span>
+                <span>വിൽപ്പന ലിസ്റ്റിലേക്ക് മടങ്ങുക (Back to Sales List)</span>
               </button>
               <span className="text-xs font-black text-stone-900 dark:text-white font-malayalam border-l border-stone-200 dark:border-[#2E2828] pl-3 hidden sm:inline-block">
                 പുതിയ വിൽപ്പന രേഖപ്പെടുത്തൽ (New Bill)

@@ -817,17 +817,27 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
             </div>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-72 w-full">
             {ingredientConsumptionData.length === 0 ? (
               <div className="h-full flex items-center justify-center text-xs text-stone-400 font-malayalam">
                 ഉപഭോഗ രേഖകൾ കണ്ടെത്താനായില്ല
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={ingredientConsumptionData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+                <BarChart data={ingredientConsumptionData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#2E2828' : '#F1F2F4'} horizontal={false} />
-                  <XAxis type="number" stroke={isDark ? '#A39E9B' : '#6B7280'} fontSize={10} tickLine={false} />
-                  <YAxis type="category" dataKey="name" stroke={isDark ? '#A39E9B' : '#6B7280'} fontSize={11} tickLine={false} width={80} />
+                  <XAxis type="number" stroke={isDark ? '#A39E9B' : '#6B7280'} fontSize={9.5} tickLine={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    stroke={isDark ? '#A39E9B' : '#6B7280'}
+                    fontSize={9.5}
+                    tick={{ fontSize: 9.5 }}
+                    tickLine={false}
+                    interval={0}
+                    width={95}
+                    tickFormatter={(val: string) => (val && val.length > 13 ? `${val.slice(0, 12)}…` : val)}
+                  />
                   <Tooltip
                     contentStyle={{
                       backgroundColor: isDark ? '#141212' : '#FFFFFF',
