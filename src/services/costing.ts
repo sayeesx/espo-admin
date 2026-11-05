@@ -113,16 +113,18 @@ export function isBasicIngredientName(name: string): boolean {
 }
 
 /**
- * Distributes shared daily expenses (Oil, Cooking Wages, Packing Wages, Basic Ingredients)
- * across products produced that day by production weight.
+ * Distributes shared daily expenses across products produced that day:
+ * - Oil & Basic Ingredients: Allocated proportional to production weight.
+ * - Labour Wages (Cooking + Packing Wages): Allocated EQUALLY across all production batches
+ *   created on that day (each batch receives an equal share: Total Daily Wage / Total Batches).
  *
- * Important: Cooking workers (കുക്കിംഗ് തൊഴിലാളികൾ) and packing workers (പാക്കിംഗ് തൊഴിലാളികൾ)
- * are both treated as separate wage categories in daily wage expenses, and both are allocated
- * across production batches using the existing daily wage allocation method (weight ratio).
+ * Example:
+ * Total daily wage = ₹6,000.
+ * Total batches produced = 3.
+ * Labour per batch = ₹2,000 (regardless of weight or packet count).
  *
- * Formula: Product allocation = (Product production kg / Total production kg) * Total daily expense.
  * Exact reconciliation: The final product absorbs any fractional paisa rounding discrepancy
- * so that sum(allocated) strictly equals the original expense amount.
+ * so that sum(allocated) strictly equals the original expense amounts.
  */
 export function allocateDailySharedExpenses(
   productsSummary: Array<{
@@ -151,17 +153,10 @@ export function allocateDailySharedExpenses(
   productionCostPerKg: number;
 }> {
   const totalKg = productsSummary.reduce((sum, p) => sum + p.totalProductionKg, 0);
-  if (totalKg <= 0 || productsSummary.length === 0) {
-    return productsSummary.map((p) => ({
-      ...p,
-      allocatedOilCost: 0,
-      allocatedProductionWages: 0,
-      allocatedCookingWages: 0,
-      allocatedPackingWages: 0,
-      allocatedBasicIngredientsCost: 0,
-      totalProductionCost: p.ingredientCost,
-      productionCostPerKg: 0,
-    }));
+  const totalBatches = productsSummary.reduce((sum, p) => sum + (p.batchCount > 0 ? p.batchCount : 1), 0);
+
+  if (productsSummary.length === 0) {
+    return [];
   }
 
   let runningOil = 0;
@@ -177,25 +172,33 @@ export function allocateDailySharedExpenses(
     let packingAlloc: number;
     let basicAlloc: number;
 
+    const batches = p.batchCount > 0 ? p.batchCount : 1;
+
     if (isLast) {
       oilAlloc = roundCurrency(dailyOilExpense - runningOil);
       cookingAlloc = roundCurrency(dailyCookingWages - runningCookingWages);
       packingAlloc = roundCurrency(dailyPackingWages - runningPackingWages);
       basicAlloc = roundCurrency(dailyBasicIngredientsExpense - runningBasic);
     } else {
-      const ratio = p.totalProductionKg / totalKg;
-      oilAlloc = roundCurrency(ratio * dailyOilExpense);
-      cookingAlloc = roundCurrency(ratio * dailyCookingWages);
-      packingAlloc = roundCurrency(ratio * dailyPackingWages);
-      basicAlloc = roundCurrency(ratio * dailyBasicIngredientsExpense);
+      // Weight-based ratio for physical shared ingredients (Oil, Basic Ingredients)
+      const weightRatio = totalKg > 0 ? p.totalProductionKg / totalKg : 1 / count;
+      oilAlloc = roundCurrency(weightRatio * dailyOilExpense);
+      basicAlloc = roundCurrency(weightRatio * dailyBasicIngredientsExpense);
+
+      // Equal batch allocation rule for Labour Wages: Each batch gets equal share
+      const batchRatio = totalBatches > 0 ? batches / totalBatches : 1 / count;
+      cookingAlloc = roundCurrency(batchRatio * dailyCookingWages);
+      packingAlloc = roundCurrency(batchRatio * dailyPackingWages);
+
       runningOil += oilAlloc;
       runningCookingWages += cookingAlloc;
       runningPackingWages += packingAlloc;
       runningBasic += basicAlloc;
     }
 
+    const totalLabourAlloc = roundCurrency(cookingAlloc + packingAlloc);
     const totalProdCost = roundCurrency(
-      p.ingredientCost + oilAlloc + cookingAlloc + packingAlloc + basicAlloc
+      p.ingredientCost + oilAlloc + totalLabourAlloc + basicAlloc
     );
     const costPerKg = p.totalProductionKg > 0 ? roundCurrency(totalProdCost / p.totalProductionKg) : 0;
 
@@ -206,7 +209,7 @@ export function allocateDailySharedExpenses(
       batchCount: p.batchCount,
       ingredientCost: p.ingredientCost,
       allocatedOilCost: oilAlloc,
-      allocatedProductionWages: cookingAlloc,
+      allocatedProductionWages: totalLabourAlloc,
       allocatedCookingWages: cookingAlloc,
       allocatedPackingWages: packingAlloc,
       allocatedBasicIngredientsCost: basicAlloc,

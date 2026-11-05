@@ -281,14 +281,16 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
               basicIngredientsCost += roundCurrency(dayBasicCost * ratio);
             }
 
-            // Cooking workers wage (കുക്കിംഗ് തൊഴിലാളികൾ)
-            const dayProdWages = wage?.productionWageAmount ?? (closing?.productionWages || 0);
-            productionWages += roundCurrency(dayProdWages * ratio);
+            // Labour wage allocation: Equal share per batch (Total Wage / Total Batches on that date)
+            const dayTotalBatches = dayRuns.length;
+            const batchRatio = dayTotalBatches > 0 ? 1 / dayTotalBatches : 1;
 
-            // Packing workers wage (പാക്കിംഗ് തൊഴിലാളികൾ)
-            const dayPackWages = wage?.packingWageAmount ?? 0;
+            const dayProdWages = wage?.productionWageAmount ?? (closing?.productionWages ? (closing.productionWages / 2) : 0);
+            productionWages += roundCurrency(dayProdWages * batchRatio);
+
+            const dayPackWages = wage?.packingWageAmount ?? (closing?.productionWages ? (closing.productionWages / 2) : 0);
             if (dayPackWages > 0) {
-              packingWages += roundCurrency(dayPackWages * ratio);
+              packingWages += roundCurrency(dayPackWages * batchRatio);
             }
           }
         }

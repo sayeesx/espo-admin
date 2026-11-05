@@ -649,9 +649,24 @@ export async function saveRecipe(
     await supabase.from('recipe_packets').delete().eq('recipe_id', recipeId);
   }
 
-  // Insert items
+  // Insert items (deduplicate by ingredientId to prevent duplicate consumption)
   if (items.length > 0) {
-    const itemsPayload = items.map((it) => ({
+    const dedupedMap = new Map<string, { ingredientId: string; quantity: number; unit: string }>();
+    for (const it of items) {
+      if (!it.ingredientId) continue;
+      const existing = dedupedMap.get(it.ingredientId);
+      if (existing) {
+        existing.quantity += Number(it.quantity) || 0;
+      } else {
+        dedupedMap.set(it.ingredientId, {
+          ingredientId: it.ingredientId,
+          quantity: Number(it.quantity) || 0,
+          unit: it.unit || 'kg',
+        });
+      }
+    }
+
+    const itemsPayload = Array.from(dedupedMap.values()).map((it) => ({
       recipe_id: recipeId,
       ingredient_id: it.ingredientId,
       quantity: it.quantity,
@@ -1099,16 +1114,127 @@ export async function recordSale(sale: {
   payment_status?: string;
   notes?: string;
 }): Promise<any> {
-  const { data, error } = await supabase
+  const saleQty = Number(sale.quantity) || 0;
+  if (saleQty <= 0) {
+    throw new Error('Sale quantity must be greater than zero');
+  }
+
+  // 1. Locate product to validate stock and compute COGS
+  let prodId = sale.product_id;
+  let prodName = sale.product_name;
+  let currentStock = 0;
+  let unitProdCost = 0;
+
+  if (prodId) {
+    const { data: prod } = await supabase
+      .from('products')
+      .select('id, name, current_stock, cost_per_unit')
+      .eq('id', prodId)
+      .single();
+    if (prod) {
+      prodName = prod.name || prodName;
+      currentStock = Number(prod.current_stock) || 0;
+      unitProdCost = Number(prod.cost_per_unit) || 0;
+    }
+  } else if (prodName) {
+    const { data: prod } = await supabase
+      .from('products')
+      .select('id, name, current_stock, cost_per_unit')
+      .ilike('name', prodName)
+      .limit(1)
+      .maybeSingle();
+    if (prod) {
+      prodId = prod.id;
+      prodName = prod.name;
+      currentStock = Number(prod.current_stock) || 0;
+      unitProdCost = Number(prod.cost_per_unit) || 0;
+    }
+  }
+
+  // Stock validation: Prevent selling more than available stock
+  if (prodId) {
+    if (currentStock < saleQty) {
+      throw new Error(
+        `Insufficient stock for "${prodName}". Available: ${currentStock} ${sale.unit || 'kg'}, Requested: ${saleQty} ${sale.unit || 'kg'}`
+      );
+    }
+
+    // Try fetching latest allocated production cost per kg for accurate COGS
+    try {
+      const { data: latestAlloc } = await supabase
+        .from('daily_cost_allocations')
+        .select('production_cost_per_kg')
+        .eq('product_id', prodId)
+        .order('production_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestAlloc && Number(latestAlloc.production_cost_per_kg) > 0) {
+        unitProdCost = Number(latestAlloc.production_cost_per_kg);
+      }
+    } catch (e) {
+      console.warn('Could not query cost allocation for product:', prodId, e);
+    }
+  }
+
+  const cogs = Math.round(saleQty * unitProdCost * 100) / 100;
+  const salePayload: any = {
+    ...sale,
+    product_id: prodId || null,
+    product_name: prodName,
+    quantity: saleQty,
+    cogs: cogs > 0 ? cogs : null,
+    created_at: new Date().toISOString(),
+  };
+
+  let data: any = null;
+  const { data: insertData, error } = await supabase
     .from('sales')
-    .insert([sale])
+    .insert([salePayload])
     .select()
     .single();
 
-  if (error) {
+  if (error && error.message?.includes('cogs')) {
+    const { cogs, ...fallbackPayload } = salePayload;
+    const retry = await supabase.from('sales').insert([fallbackPayload]).select().single();
+    if (retry.error) {
+      console.error('Error recording sale fallback:', retry.error);
+      throw retry.error;
+    }
+    data = retry.data;
+  } else if (error) {
     console.error('Error recording sale:', error);
     throw error;
+  } else {
+    data = insertData;
   }
+
+  // Deduct inventory and log stock movement
+  if (prodId) {
+    const newStock = Math.max(0, Math.round((currentStock - saleQty) * 1000) / 1000);
+    await supabase
+      .from('products')
+      .update({ current_stock: newStock, updated_at: new Date().toISOString() })
+      .eq('id', prodId);
+
+    await supabase.from('stock_movements').insert({
+      item_id: prodId,
+      item_type: 'product',
+      item_name: prodName,
+      movement_type: 'sale',
+      quantity: -saleQty,
+      unit: sale.unit || 'kg',
+      previous_balance: currentStock,
+      new_balance: newStock,
+      cost_per_unit: unitProdCost,
+      reference: `Sale #${data.id}`,
+      reason: `Sold ${saleQty} ${sale.unit || 'kg'} to ${sale.customer_name || 'Retail'}`,
+      created_at: new Date().toISOString(),
+    });
+
+    dbCache.invalidate('admin_products');
+  }
+
   return data;
 }
 
@@ -1126,19 +1252,62 @@ export async function recordSalesBatch(sales: Array<{
   notes?: string;
 }>): Promise<any[]> {
   if (!sales || sales.length === 0) return [];
-  const { data, error } = await supabase
-    .from('sales')
-    .insert(sales)
-    .select();
 
-  if (error) {
-    console.error('Error recording sales batch:', error);
-    throw error;
+  const results: any[] = [];
+  for (const s of sales) {
+    const result = await recordSale(s);
+    results.push(result);
   }
-  return data || [];
+  return results;
 }
 
 export async function deleteSale(id: string): Promise<void> {
+  // Fetch sale before deleting to reverse stock deduction
+  try {
+    const { data: sale } = await supabase
+      .from('sales')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (sale && sale.product_id && Number(sale.quantity) > 0) {
+      const prodId = sale.product_id;
+      const qty = Number(sale.quantity);
+      const { data: prod } = await supabase
+        .from('products')
+        .select('current_stock, name')
+        .eq('id', prodId)
+        .single();
+
+      if (prod) {
+        const prevStock = Number(prod.current_stock) || 0;
+        const newStock = Math.round((prevStock + qty) * 1000) / 1000;
+        await supabase
+          .from('products')
+          .update({ current_stock: newStock, updated_at: new Date().toISOString() })
+          .eq('id', prodId);
+
+        await supabase.from('stock_movements').insert({
+          item_id: prodId,
+          item_type: 'product',
+          item_name: prod.name || sale.product_name,
+          movement_type: 'sale_reversal',
+          quantity: qty,
+          unit: sale.unit || 'kg',
+          previous_balance: prevStock,
+          new_balance: newStock,
+          reference: `Sale Reversal #${id}`,
+          reason: `Reversal of deleted sale #${id} (${qty} ${sale.unit || 'kg'} restored)`,
+          created_at: new Date().toISOString(),
+        });
+
+        dbCache.invalidate('admin_products');
+      }
+    }
+  } catch (e) {
+    console.warn('Error reversing stock for deleted sale:', e);
+  }
+
   const { error } = await supabase.from('sales').delete().eq('id', id);
   if (error) {
     console.error('Error deleting sale:', error);
@@ -1217,8 +1386,74 @@ export async function saveDailyClosing(params: {
     oilUnitCost
   );
 
-  const productionWages = params.productionWages || 0;
-  const totalSharedExpense = roundCurrency(oilTotalExpense + productionWages);
+  // Wage auto-fill: Check today's wage or auto-populate from previous day's wage
+  let productionWages = params.productionWages || 0;
+  try {
+    const { data: todayWage } = await supabase
+      .from('daily_wages')
+      .select('*')
+      .eq('production_date', productionDate)
+      .maybeSingle();
+
+    const todayBudget = Number(todayWage?.total_wage_budget) || Number(todayWage?.daily_wage_budget) || 0;
+    if (todayWage && todayBudget > 0) {
+      if (!productionWages) {
+        productionWages = todayBudget;
+      }
+    } else if (!todayWage) {
+      const { data: prevWage } = await supabase
+        .from('daily_wages')
+        .select('*')
+        .lt('production_date', productionDate)
+        .order('production_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const prevBudget = Number(prevWage?.total_wage_budget) || Number(prevWage?.daily_wage_budget) || 0;
+      if (prevWage && prevBudget > 0) {
+        if (!productionWages) {
+          productionWages = prevBudget;
+        }
+        await supabase.from('daily_wages').upsert({
+          production_date: productionDate,
+          total_wage_budget: productionWages,
+          production_wage_amount: Number(prevWage.production_wage_amount) || productionWages,
+          packing_wage_amount: Number(prevWage.packing_wage_amount) || 0,
+          num_cooks: prevWage.num_cooks || 2,
+          num_packers: prevWage.num_packers || 2,
+          wage_per_cook: prevWage.wage_per_cook || (productionWages / 2),
+          wage_per_packer: prevWage.wage_per_packer || 0,
+          notes: 'Auto-populated from previous recorded wage',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'production_date', ignoreDuplicates: true });
+      }
+    }
+  } catch (e) {
+    console.warn('Could not auto-fill daily wage:', e);
+  }
+
+  // Query basic ingredients adjustments recorded on this date (Salt, Cashew shell, Chippli, Curry leaves)
+  let dailyBasicIngredientsExpense = 0;
+  try {
+    const { data: basicMovements } = await supabase
+      .from('stock_movements')
+      .select('quantity, cost_per_unit, item_name, reason')
+      .eq('item_type', 'ingredient')
+      .ilike('reason', `%${productionDate}%`);
+
+    if (basicMovements && basicMovements.length > 0) {
+      for (const m of basicMovements) {
+        const cost = Number(m.cost_per_unit) || 0;
+        const qty = Math.abs(Number(m.quantity) || 0);
+        dailyBasicIngredientsExpense += qty * cost;
+      }
+    }
+  } catch (e) {
+    console.warn('Could not query basic ingredients expense for allocation', e);
+  }
+
+  const totalSharedExpense = roundCurrency(oilTotalExpense + productionWages + dailyBasicIngredientsExpense);
 
   // 6. Fetch completed production runs on that date
   const { data: runs, error: runsErr } = await supabase
@@ -1243,6 +1478,7 @@ export async function saveDailyClosing(params: {
     leftoverOilKg: leftoverOil,
     previousAvailableStock,
     finalOilStock,
+    basicIngredientsExpense: dailyBasicIngredientsExpense,
     userNotes: notes || '',
   };
 
@@ -1296,8 +1532,13 @@ export async function saveDailyClosing(params: {
 
   const productsSummary = Object.values(productMap);
 
-  // Distribute shared expenses proportionally by product weight
-  const allocations = allocateDailySharedExpenses(productsSummary, oilTotalExpense, productionWages);
+  // Distribute shared expenses: wages equally per batch, oil and basics proportionally by weight
+  const allocations = allocateDailySharedExpenses(
+    productsSummary,
+    oilTotalExpense,
+    productionWages,
+    dailyBasicIngredientsExpense
+  );
 
   await supabase.from('daily_cost_allocations').delete().eq('closing_id', closingId);
 
@@ -1312,14 +1553,21 @@ export async function saveDailyClosing(params: {
       ingredient_cost: a.ingredientCost,
       allocated_oil_cost: a.allocatedOilCost,
       allocated_production_wages: a.allocatedProductionWages,
+      allocated_basic_ingredients_cost: a.allocatedBasicIngredientsCost || 0,
       total_production_cost: a.totalProductionCost,
       production_cost_per_kg: a.productionCostPerKg,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }));
 
-    const { error: allocErr } = await supabase.from('daily_cost_allocations').insert(allocationsPayload);
-    if (allocErr) console.error('Failed to insert allocations', allocErr);
+    let { error: allocErr } = await supabase.from('daily_cost_allocations').insert(allocationsPayload);
+    if (allocErr && allocErr.message?.includes('allocated_basic_ingredients_cost')) {
+      const fallbackPayload = allocationsPayload.map(({ allocated_basic_ingredients_cost, ...rest }: any) => rest);
+      const retry = await supabase.from('daily_cost_allocations').insert(fallbackPayload);
+      if (retry.error) console.error('Failed to insert allocations fallback', retry.error);
+    } else if (allocErr) {
+      console.error('Failed to insert allocations', allocErr);
+    }
   }
 
   // 7. Update common oil inventory in ingredients table to final calculated stock

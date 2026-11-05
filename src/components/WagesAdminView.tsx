@@ -135,11 +135,45 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
         setNumPackers(Number(existing.numPackers) || 2);
         setNotes(existing.notes || '');
       } else {
-        setExistingWage(null);
-        setTotalWageBudget('4000');
-        setNumCooks(2);
-        setNumPackers(2);
-        setNotes('');
+        // Automatically default to the previous day's recorded wage
+        const prevWage = history.find((w: any) => w.productionDate < date);
+        const defaultBudget = prevWage ? Number(prevWage.totalWageBudget) || 4000 : 4000;
+        const defaultCooks = prevWage ? Number(prevWage.numCooks) || 2 : 2;
+        const defaultPackers = prevWage ? Number(prevWage.numPackers) || 2 : 2;
+        const defaultNotes = prevWage?.notes ? `${prevWage.notes}` : '';
+
+        setTotalWageBudget(String(defaultBudget));
+        setNumCooks(defaultCooks);
+        setNumPackers(defaultPackers);
+        setNotes(defaultNotes);
+
+        // If today and no wage record exists, automatically create/populate today's wage record
+        const todayStr = getTodayStr();
+        if (date === todayStr) {
+          const prodWage = defaultBudget * (defaultCooks / Math.max(1, defaultCooks + defaultPackers));
+          const packWage = defaultBudget - prodWage;
+          try {
+            const autoCreated = await saveDailyWage({
+              productionDate: todayStr,
+              totalWageBudget: defaultBudget,
+              numCooks: defaultCooks,
+              numPackers: defaultPackers,
+              totalPacketsProduced: packets,
+              totalProductionKg: prodKg,
+              productionWageAmount: roundCurrency(prodWage),
+              packingWageAmount: roundCurrency(packWage),
+              wagePerCook: defaultCooks > 0 ? roundCurrency(prodWage / defaultCooks) : 0,
+              wagePerPacker: defaultPackers > 0 ? roundCurrency(packWage / defaultPackers) : 0,
+              notes: defaultNotes || 'Auto-populated from previous day',
+            });
+            setExistingWage(autoCreated);
+          } catch (autoErr) {
+            console.warn('Auto-populate today wage note:', autoErr);
+            setExistingWage(null);
+          }
+        } else {
+          setExistingWage(null);
+        }
       }
     } catch (err) {
       console.error('Failed to load wage data:', err);
@@ -220,6 +254,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
         ? totalProductionKg
         : dayBatches.reduce((sum, r) => sum + (Number(r.actualQuantity) || 0), 0);
 
+    const totalBatches = dayBatches.length;
     const cookingBudget = calculations.productionWageAmount;
     const packingBudget = calculations.packingWageAmount;
 
@@ -227,26 +262,26 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
     let runningPacking = 0;
 
     return dayBatches.map((run, idx) => {
-      const isLast = idx === dayBatches.length - 1;
+      const isLast = idx === totalBatches - 1;
       const weight = Number(run.actualQuantity) || 0;
-      const weightRatio = effectiveTotalKg > 0 ? weight / effectiveTotalKg : 1 / dayBatches.length;
 
       let cookingAlloc = 0;
       let packingAlloc = 0;
 
+      // Equal batch allocation rule: Each batch receives an equal share of the daily wage
       if (isLast) {
         cookingAlloc = roundCurrency(cookingBudget - runningCooking);
         packingAlloc = roundCurrency(packingBudget - runningPacking);
       } else {
-        cookingAlloc = roundCurrency(weightRatio * cookingBudget);
-        packingAlloc = roundCurrency(weightRatio * packingBudget);
+        cookingAlloc = roundCurrency(cookingBudget / totalBatches);
+        packingAlloc = roundCurrency(packingBudget / totalBatches);
         runningCooking += cookingAlloc;
         runningPacking += packingAlloc;
       }
 
       const totalBatchWage = roundCurrency(cookingAlloc + packingAlloc);
       const wagePerKg = weight > 0 ? roundCurrency(totalBatchWage / weight) : 0;
-      const sharePercent = effectiveTotalKg > 0 ? roundCurrency((weight / effectiveTotalKg) * 100) : 0;
+      const sharePercent = totalBatches > 0 ? roundCurrency((1 / totalBatches) * 100) : 0;
       const packetsCount =
         run.totalPacketsPacked ||
         run.packingRecords?.reduce((s, p) => s + (p.packetsPacked || 0), 0) ||
