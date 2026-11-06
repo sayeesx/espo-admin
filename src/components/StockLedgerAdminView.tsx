@@ -19,9 +19,105 @@ import {
   FiArrowUp,
   FiArrowDown,
   FiRotateCcw,
+  FiX,
 } from 'react-icons/fi';
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
+
+// Helper to format technical IDs / internal codes into clean, human-readable labels
+export const formatHumanReference = (
+  reference?: string,
+  reason?: string,
+  movementType?: string,
+  category?: string
+): string => {
+  const ref = (reference || '').trim();
+  const reasonText = (reason || '').trim();
+
+  // 1. Wage references: WAGE-YYYY-MM-DD or wage-...
+  if (/^wage[-_]/i.test(ref) || category === 'wages') {
+    const dateMatch = ref.match(/\d{4}-\d{2}-\d{2}/);
+    return dateMatch ? `കൂലി വിഹിതം (${dateMatch[0]})` : 'കൂലി വിഹിതം';
+  }
+
+  // 2. Admin adjustment codes: ADMIN-PRD-ADJ-123456, ADMIN-ADJ-123456
+  if (/^admin[-_]prd[-_]adj/i.test(ref)) {
+    return 'പ്രൊഡക്ഷൻ അഡ്ജസ്റ്റ്മെന്റ്';
+  }
+  if (/^admin[-_]adj/i.test(ref)) {
+    return 'സ്റ്റോക്ക് അഡ്ജസ്റ്റ്മെന്റ്';
+  }
+
+  // 3. Cover / packaging codes: COVER-123456
+  if (/^cover[-_]/i.test(ref) || category === 'packets') {
+    return 'കവർ / പാക്കിംഗ് ഉപയോഗം';
+  }
+
+  // 4. Sales references: Sale #uuid, Sale Reversal #uuid
+  if (/^sale reversal/i.test(ref)) {
+    return 'വിൽപ്പന റദ്ദാക്കൽ';
+  }
+  if (/^sale\s*#/i.test(ref)) {
+    return 'സ്നാക്ക് വിൽപ്പന';
+  }
+
+  // 5. Daily closing references: Daily Closing YYYY-MM-DD
+  if (/^daily closing/i.test(ref)) {
+    const dateMatch = ref.match(/\d{4}-\d{2}-\d{2}/);
+    return dateMatch ? `ദിവസേനയുള്ള കണക്ക് (${dateMatch[0]})` : 'ദിവസേനയുള്ള കണക്ക്';
+  }
+
+  // 6. Packing references: Packing YYYY-MM-DD
+  if (/^packing\b/i.test(ref)) {
+    const dateMatch = ref.match(/\d{4}-\d{2}-\d{2}/);
+    return dateMatch ? `പാക്കിംഗ് (${dateMatch[0]})` : 'പാക്കിംഗ് രേഖ';
+  }
+
+  // 7. Run delete / reversal references
+  if (/^del run\s*(\S+)\s*reversal/i.test(ref)) {
+    const m = ref.match(/^del run\s*(\S+)\s*reversal/i);
+    return `ബാച്ച് ${m ? m[1] : ''} തിരിച്ചിടൽ`;
+  }
+  if (/^del run\s*(\S+)/i.test(ref)) {
+    const m = ref.match(/^del run\s*(\S+)/i);
+    return `ബാച്ച് ${m ? m[1] : ''} ഒഴിവാക്കൽ`;
+  }
+  if (/^reversal of\s*(\S+)/i.test(ref)) {
+    const m = ref.match(/^reversal of\s*(\S+)/i);
+    return `ബാച്ച് ${m ? m[1] : ''} തിരിച്ചിടൽ`;
+  }
+  if (/^run\s*(\S+)\s*edit/i.test(ref)) {
+    const m = ref.match(/^run\s*(\S+)\s*edit/i);
+    return `ബാച്ച് ${m ? m[1] : ''} മാറ്റം`;
+  }
+  if (/^run\s*(\S+)/i.test(ref)) {
+    const m = ref.match(/^run\s*(\S+)/i);
+    return `ബാച്ച് ${m ? m[1] : ''} ഉൽപ്പാദനം`;
+  }
+
+  // 8. UUID or contains UUID: Hide raw UUID and display clean label
+  const isUuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(ref);
+  if (isUuid) {
+    if (movementType === 'production_consumption') return 'ബാച്ച് ചേരുവ ഉപയോഗം';
+    if (movementType === 'production_output') return 'ബാച്ച് ഉൽപ്പാദനം';
+    if (movementType === 'purchase') return 'പർച്ചേസ് എൻട്രി';
+    if (movementType === 'adjust') return 'സ്റ്റോക്ക് ക്രമീകരണം';
+    if (category === 'products') return 'ഉൽപ്പാദന ബാച്ച്';
+    if (category === 'basic') return 'അടിസ്ഥാന ചേരുവ ഉപയോഗം';
+    if (reasonText && !/[0-9a-f]{8}-[0-9a-f]{4}/i.test(reasonText)) {
+      return reasonText;
+    }
+    return 'പ്രൊഡക്ഷൻ രേഖ';
+  }
+
+  return ref || 'സ്റ്റോക്ക് രേഖ';
+};
+
+// Clean UUIDs from reason string if present
+export const cleanHumanReason = (reason?: string): string => {
+  if (!reason) return '';
+  return reason.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '').trim();
+};
 
 export type LedgerCategory = 'all' | 'basic' | 'packets' | 'wages' | 'ingredients' | 'products';
 export type SortField = 'date' | 'name' | 'quantity' | 'type' | 'category';
@@ -95,6 +191,16 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
     const refLower = (m.reference || '').toLowerCase();
     const reasonLower = (m.reason || '').toLowerCase();
 
+    // Black Salt must ALWAYS be classified under raw ingredients, NEVER basic!
+    const isBlackSalt =
+      nameLower.includes('black') ||
+      nameLower.includes('കറുത്ത') ||
+      nameLower.includes('ബ്ലാക്ക്');
+
+    if (isBlackSalt) {
+      return 'ingredients';
+    }
+
     // 1. Packets & Packaging items
     if (
       m.itemType === ('packaging' as any) ||
@@ -112,17 +218,19 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
 
     // 2. Basic Ingredients (Oil, Salt, Cashew Shell, Curry leaves, Chippli, etc.)
     const isBasicName =
-      nameLower.includes('വെളിച്ചെണ്ണ') ||
-      nameLower.includes('oil') ||
-      nameLower.includes('എണ്ണ') ||
-      nameLower.includes('ഉപ്പ്') ||
-      nameLower.includes('salt') ||
-      nameLower.includes('കറിവേപ്പില') ||
-      nameLower.includes('curry') ||
-      nameLower.includes('കശുവണ്ടി') ||
-      nameLower.includes('cashew') ||
-      nameLower.includes('ചിപ്പിലി') ||
-      nameLower.includes('chippli');
+      !isBlackSalt && (
+        nameLower.includes('വെളിച്ചെണ്ണ') ||
+        nameLower.includes('oil') ||
+        nameLower.includes('എണ്ണ') ||
+        nameLower.includes('ഉപ്പ്') ||
+        nameLower.includes('salt') ||
+        nameLower.includes('കറിവേപ്പില') ||
+        nameLower.includes('curry') ||
+        nameLower.includes('കശുവണ്ടി') ||
+        nameLower.includes('cashew') ||
+        nameLower.includes('ചിപ്പിലി') ||
+        nameLower.includes('chippli')
+      );
 
     if (
       ing?.category === 'basic' ||
@@ -341,24 +449,69 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
     return sortedEntries.slice(startIndex, startIndex + pageSize);
   }, [sortedEntries, safeCurrentPage, pageSize]);
 
-  // Quick action: Sort by Ingredients (Alphabetical)
+  // Quick action: Sort by Ingredients (Alphabetical) - Click cycles: asc -> desc -> cancel (default date desc)
   const handleSortByIngredients = () => {
     if (sortField === 'name') {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+      if (sortOrder === 'asc') {
+        setSortOrder('desc');
+      } else {
+        // Cancel / reset sort back to default
+        setSortField('date');
+        setSortOrder('desc');
+      }
     } else {
       setSortField('name');
       setSortOrder('asc');
     }
   };
 
+  const handleCancelIngredientSort = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSortField('date');
+    setSortOrder('desc');
+  };
+
   // Toggle column sort
   const handleToggleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+      if (sortOrder === 'asc') {
+        setSortOrder('desc');
+      } else {
+        // 3rd click cancels and resets to default date desc
+        setSortField('date');
+        setSortOrder('desc');
+      }
     } else {
       setSortField(field);
       setSortOrder(field === 'name' ? 'asc' : 'desc');
     }
+  };
+
+  const handleCategoryClick = (cat: LedgerCategory) => {
+    setSelectedCategory((prev) => (prev === cat ? 'all' : cat));
+  };
+
+  const handleFilterTypeClick = (type: 'in' | 'out' | 'adjust') => {
+    setFilterType((prev) => (prev === type ? 'all' : type));
+  };
+
+  const hasActiveFilters = Boolean(
+    search.trim() ||
+    selectedCategory !== 'all' ||
+    selectedIngredient !== 'all' ||
+    filterType !== 'all' ||
+    sortField !== 'date' ||
+    sortOrder !== 'desc'
+  );
+
+  const handleResetFilters = () => {
+    setSearch('');
+    setSelectedCategory('all');
+    setSelectedIngredient('all');
+    setFilterType('all');
+    setSortField('date');
+    setSortOrder('desc');
+    setCurrentPage(1);
   };
 
   const handleRefresh = async () => {
@@ -521,12 +674,13 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
         </button>
 
         <button
-          onClick={() => setSelectedCategory('basic')}
+          onClick={() => handleCategoryClick('basic')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             selectedCategory === 'basic'
               ? 'bg-amber-600 text-white shadow-sm dark:bg-amber-500 dark:text-stone-950'
               : 'bg-white dark:bg-[#1E1B1B] text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/40 hover:bg-amber-50 dark:hover:bg-amber-950/30'
           }`}
+          title={selectedCategory === 'basic' ? 'ഫിൽട്ടർ ഒഴിവാക്കാൻ വീണ്ടും ക്ലിക്ക് ചെയ്യുക' : 'അടിസ്ഥാന ചേരുവകൾ മാത്രം കാണിക്കുക'}
         >
           <FiDroplet className="w-3.5 h-3.5" />
           <span>അടിസ്ഥാന ചേരുവകൾ (Basic)</span>
@@ -536,12 +690,13 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
         </button>
 
         <button
-          onClick={() => setSelectedCategory('packets')}
+          onClick={() => handleCategoryClick('packets')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             selectedCategory === 'packets'
               ? 'bg-purple-600 text-white shadow-sm dark:bg-purple-500 dark:text-white'
               : 'bg-white dark:bg-[#1E1B1B] text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-900/40 hover:bg-purple-50 dark:hover:bg-purple-950/30'
           }`}
+          title={selectedCategory === 'packets' ? 'ഫിൽട്ടർ ഒഴിവാക്കാൻ വീണ്ടും ക്ലിക്ക് ചെയ്യുക' : 'പാക്കറ്റുകൾ മാത്രം കാണിക്കുക'}
         >
           <FiPackage className="w-3.5 h-3.5" />
           <span>പാക്കറ്റുകൾ & കവർ (Packets)</span>
@@ -551,12 +706,13 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
         </button>
 
         <button
-          onClick={() => setSelectedCategory('wages')}
+          onClick={() => handleCategoryClick('wages')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             selectedCategory === 'wages'
               ? 'bg-indigo-600 text-white shadow-sm dark:bg-indigo-500 dark:text-white'
               : 'bg-white dark:bg-[#1E1B1B] text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900/40 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
           }`}
+          title={selectedCategory === 'wages' ? 'ഫിൽട്ടർ ഒഴിവാക്കാൻ വീണ്ടും ക്ലിക്ക് ചെയ്യുക' : 'കൂലി വിഹിതം മാത്രം കാണിക്കുക'}
         >
           <FiDollarSign className="w-3.5 h-3.5" />
           <span>കൂലി വിഹിതം (Wages)</span>
@@ -566,12 +722,13 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
         </button>
 
         <button
-          onClick={() => setSelectedCategory('ingredients')}
+          onClick={() => handleCategoryClick('ingredients')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             selectedCategory === 'ingredients'
               ? 'bg-emerald-600 text-white shadow-sm dark:bg-emerald-500 dark:text-stone-950'
               : 'bg-white dark:bg-[#1E1B1B] text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
           }`}
+          title={selectedCategory === 'ingredients' ? 'ഫിൽട്ടർ ഒഴിവാക്കാൻ വീണ്ടും ക്ലിക്ക് ചെയ്യുക' : 'മറ്റ് ചേരുവകൾ മാത്രം കാണിക്കുക'}
         >
           <FiLayers className="w-3.5 h-3.5" />
           <span>മറ്റ് ചേരുവകൾ (Ingredients)</span>
@@ -581,12 +738,13 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
         </button>
 
         <button
-          onClick={() => setSelectedCategory('products')}
+          onClick={() => handleCategoryClick('products')}
           className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             selectedCategory === 'products'
               ? 'bg-blue-600 text-white shadow-sm dark:bg-blue-500 dark:text-white'
               : 'bg-white dark:bg-[#1E1B1B] text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-900/40 hover:bg-blue-50 dark:hover:bg-blue-950/30'
           }`}
+          title={selectedCategory === 'products' ? 'ഫിൽട്ടർ ഒഴിവാക്കാൻ വീണ്ടും ക്ലിക്ക് ചെയ്യുക' : 'സ്നാക്കുകൾ മാത്രം കാണിക്കുക'}
         >
           <FiBox className="w-3.5 h-3.5" />
           <span>സ്നാക്കുകൾ (Products)</span>
@@ -621,42 +779,65 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
         </div>
 
         {/* Filter by Specific Ingredient Dropdown */}
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedIngredient}
-            onChange={(e) => setSelectedIngredient(e.target.value)}
-            className="px-3 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-xs font-bold text-stone-800 dark:text-stone-200 focus:outline-none cursor-pointer max-w-[200px]"
-            title="Filter by specific item or ingredient"
-          >
-            <option value="all">എല്ലാ ഇനങ്ങളും (All Items)</option>
-            {uniqueItemNames.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="relative flex items-center">
+            <select
+              value={selectedIngredient}
+              onChange={(e) => setSelectedIngredient(e.target.value)}
+              className="px-3 py-2.5 pr-7 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-xs font-bold text-stone-800 dark:text-stone-200 focus:outline-none cursor-pointer max-w-[200px]"
+              title="Filter by specific item or ingredient"
+            >
+              <option value="all">എല്ലാ ഇനങ്ങളും (All Items)</option>
+              {uniqueItemNames.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            {selectedIngredient !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setSelectedIngredient('all')}
+                className="absolute right-2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 cursor-pointer p-0.5"
+                title="ചേരുവ ഫിൽട്ടർ ഒഴിവാക്കുക (Clear ingredient filter)"
+              >
+                <FiX className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
 
           {/* Quick "Sort by Ingredients" Button */}
           <button
+            type="button"
             onClick={handleSortByIngredients}
             className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer whitespace-nowrap ${
               sortField === 'name'
                 ? 'bg-amber-100 border-amber-300 text-amber-900 dark:bg-amber-950/60 dark:border-amber-800 dark:text-amber-300 shadow-xs'
                 : 'bg-white dark:bg-[#1E1B1B] border-stone-200 dark:border-[#2E2828] text-stone-700 dark:text-stone-300 hover:bg-stone-50'
             }`}
-            title="Sort alphabetically by ingredient name"
+            title={sortField === 'name' ? 'അക്ഷരമാലാക്രമം മാറ്റാൻ ക്ലിക്ക് ചെയ്യുക (3rd ക്ലിക്കിൽ പഴയപടിയാകും)' : 'ചേരുവകൾ പ്രകാരം അടുക്കുക (Sort by ingredients)'}
           >
             <FiFilter className="w-3.5 h-3.5 text-epso-orange" />
             <span>ചേരുവകൾ പ്രകാരം അടുക്കുക</span>
             {sortField === 'name' && (
               sortOrder === 'asc' ? <FiArrowUp className="w-3 h-3" /> : <FiArrowDown className="w-3 h-3" />
             )}
+            {sortField === 'name' && (
+              <span
+                onClick={handleCancelIngredientSort}
+                className="ml-1 p-0.5 rounded-full hover:bg-amber-200 dark:hover:bg-amber-900/50 cursor-pointer"
+                title="അടുക്കൽ റദ്ദാക്കുക (Cancel sort)"
+              >
+                <FiX className="w-3 h-3 text-amber-800 dark:text-amber-300" />
+              </span>
+            )}
           </button>
         </div>
 
         {/* Direction Tabs: All, In, Out, Adjust */}
-        <div className="flex items-center gap-1 p-1 bg-stone-100 dark:bg-[#1E1B1B] rounded-xl border border-stone-200 dark:border-[#2E2828]">
+        <div className="flex items-center gap-1 p-1 bg-stone-100 dark:bg-[#1E1B1B] rounded-xl border border-stone-200 dark:border-[#2E2828] shrink-0">
           <button
+            type="button"
             onClick={() => setFilterType('all')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               filterType === 'all'
@@ -667,36 +848,55 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
             All
           </button>
           <button
-            onClick={() => setFilterType('in')}
+            type="button"
+            onClick={() => handleFilterTypeClick('in')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               filterType === 'in'
                 ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 shadow-sm'
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
             }`}
+            title={filterType === 'in' ? 'ഫിൽട്ടർ ഒഴിവാക്കാൻ വീണ്ടും ക്ലിക്ക് ചെയ്യുക' : 'വരവ് മാത്രം കാണിക്കുക'}
           >
             In (വരവ്)
           </button>
           <button
-            onClick={() => setFilterType('out')}
+            type="button"
+            onClick={() => handleFilterTypeClick('out')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               filterType === 'out'
                 ? 'bg-red-100 dark:bg-red-950/60 text-red-800 dark:text-red-300 shadow-sm'
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
             }`}
+            title={filterType === 'out' ? 'ഫിൽട്ടർ ഒഴിവാക്കാൻ വീണ്ടും ക്ലിക്ക് ചെയ്യുക' : 'ചിലവ് മാത്രം കാണിക്കുക'}
           >
             Out (ചിലവ്)
           </button>
           <button
-            onClick={() => setFilterType('adjust')}
+            type="button"
+            onClick={() => handleFilterTypeClick('adjust')}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
               filterType === 'adjust'
                 ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 shadow-sm'
                 : 'text-stone-500 hover:text-stone-800 dark:text-stone-400'
             }`}
+            title={filterType === 'adjust' ? 'ഫിൽട്ടർ ഒഴിവാക്കാൻ വീണ്ടും ക്ലിക്ക് ചെയ്യുക' : 'അഡ്ജസ്റ്റ്മെന്റ് മാത്രം കാണിക്കുക'}
           >
             Adjust (മാറ്റം)
           </button>
         </div>
+
+        {/* Global Reset Filters Button if any filter or custom sort is active */}
+        {hasActiveFilters && (
+          <button
+            type="button"
+            onClick={handleResetFilters}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#322c2c] text-stone-700 dark:text-stone-300 font-bold text-xs press-apple transition-colors cursor-pointer shrink-0"
+            title="എല്ലാ ഫിൽട്ടറുകളും പഴയപടിയാക്കുക (Reset all filters & sorting)"
+          >
+            <FiRotateCcw className="w-3.5 h-3.5 text-epso-red dark:text-amber-400" />
+            <span>റീസെറ്റ് (Reset)</span>
+          </button>
+        )}
       </div>
 
       {/* ======================================================== */}
@@ -820,8 +1020,8 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
                         <span className="font-bold text-stone-900 dark:text-white font-malayalam block">
                           {m.itemName}
                         </span>
-                        <span className="text-[10px] text-stone-400">
-                          {m.reference ? m.reference : 'ലോഗ് ചെയ്ത എൻട്രി'}
+                        <span className="text-[10px] text-stone-400 font-medium">
+                          {formatHumanReference(m.reference, m.reason, m.movementType, m.category)}
                         </span>
                       </td>
 
@@ -887,12 +1087,12 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
 
                       {/* Reference / Reason */}
                       <td className="py-3 px-4 max-w-xs">
-                        <span className="font-mono text-[10px] text-stone-500 dark:text-stone-400 block truncate" title={m.reference}>
-                          {m.reference}
+                        <span className="text-[11px] font-semibold text-stone-700 dark:text-stone-300 block truncate" title={formatHumanReference(m.reference, m.reason, m.movementType, m.category)}>
+                          {formatHumanReference(m.reference, m.reason, m.movementType, m.category)}
                         </span>
-                        {m.reason && (
-                          <span className="text-[11px] text-stone-700 dark:text-stone-300 font-malayalam block line-clamp-2" title={m.reason}>
-                            {m.reason}
+                        {m.reason && cleanHumanReason(m.reason) && cleanHumanReason(m.reason) !== formatHumanReference(m.reference, m.reason, m.movementType, m.category) && (
+                          <span className="text-[10px] text-stone-400 dark:text-stone-500 font-malayalam block line-clamp-2" title={cleanHumanReason(m.reason)}>
+                            {cleanHumanReason(m.reason)}
                           </span>
                         )}
                       </td>

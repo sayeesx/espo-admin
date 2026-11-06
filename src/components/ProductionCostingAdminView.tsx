@@ -393,6 +393,26 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     setDetailIngredients(Object.values(ingMap));
   }, [productionRuns, selectedDate]);
 
+  // Refresh handler to reload latest data without reloading the whole page
+  const handleRefresh = async () => {
+    setIsLoading(true);
+    try {
+      if (onRefresh) {
+        await onRefresh();
+      }
+      await loadCostingData(selectedDate);
+      if (selectedProduct) {
+        await loadProductDetail(selectedProduct.productId);
+      }
+      showToast('കോസ്റ്റിംഗ് വിവരങ്ങൾ പുതുക്കി', 'success');
+    } catch (err) {
+      console.error('Failed to refresh costing data:', err);
+      showToast('വിവരങ്ങൾ പുതുക്കുന്നതിൽ പരാജയപ്പെട്ടു', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Persist selected product in URL
   const handleOpenDetail = (product: ProductCostSummary) => {
     setSelectedProduct(product);
@@ -640,15 +660,29 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
 
     return (
       <div className="space-y-6 pb-8 font-malayalam max-w-6xl mx-auto">
-        {/* Back Button and Date Segmented Control inside Detail Page */}
+        {/* Back Button, Refresh Button and Date Segmented Control inside Detail Page */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <button
-            onClick={handleCloseDetail}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] text-xs font-bold text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-[#282323] transition-colors cursor-pointer press-apple w-fit"
-          >
-            <FiArrowLeft className="w-4 h-4" />
-            <span>തിരികെ ലിസ്റ്റിലേക്ക്</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCloseDetail}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-stone-100 dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] text-xs font-bold text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-[#282323] transition-colors cursor-pointer press-apple w-fit"
+            >
+              <FiArrowLeft className="w-4 h-4" />
+              <span>തിരികെ ലിസ്റ്റിലേക്ക്</span>
+            </button>
+
+            {/* Refresh Button inside Costing Details */}
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={isLoading}
+              className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] transition-colors cursor-pointer disabled:opacity-50 text-xs font-bold press-apple shadow-2xs shrink-0"
+              title="കോസ്റ്റിംഗ് വിവരങ്ങൾ പുതുക്കുക (Refresh Costing Details)"
+            >
+              <FiRefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-epso-red dark:text-amber-400' : ''}`} />
+              <span className="hidden sm:inline">പുതുക്കുക</span>
+            </button>
+          </div>
 
           {/* Costing View Options inside Product Detail */}
           <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-stone-100 dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] overflow-x-auto no-scrollbar shrink-0">
@@ -1096,7 +1130,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
 
           {/* Refresh button */}
           <button
-            onClick={() => loadCostingData(selectedDate)}
+            onClick={handleRefresh}
             disabled={isLoading}
             className="p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] transition-colors cursor-pointer disabled:opacity-50 shrink-0"
             title="Refresh Costing"

@@ -437,7 +437,7 @@ export const App: React.FC = () => {
                   ingredients={ingredients}
                   productionRuns={productionRuns}
                   stockMovements={stockMovements}
-                  onRefresh={loadAllData}
+                  onRefresh={() => loadAllData(true)}
                 />
               )}
 
@@ -490,7 +490,7 @@ export const App: React.FC = () => {
                   wages={dailyWages}
                   movements={stockMovements}
                   ingredients={ingredients}
-                  onRefresh={loadAllData}
+                  onRefresh={() => loadAllData(true)}
                 />
               )}
 

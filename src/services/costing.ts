@@ -98,6 +98,20 @@ export function calculateContinuousOilExpense(
 export function isBasicIngredientName(name: string): boolean {
   if (!name) return false;
   const n = name.toLowerCase().trim();
+
+  // Black Salt must NEVER be treated as a basic ingredient
+  if (
+    n.includes('black salt') ||
+    n.includes('black') ||
+    n.includes('കറുത്ത ഉപ്പ്') ||
+    n.includes('കറുത്ത') ||
+    n.includes('ബ്ലാക്ക്') ||
+    n.includes('കാലാ നമക്') ||
+    n.includes('kala namak')
+  ) {
+    return false;
+  }
+
   return (
     n.includes('ഉപ്പ്') ||
     n.includes('salt') ||

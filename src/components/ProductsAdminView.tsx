@@ -35,9 +35,26 @@ interface ProductsAdminViewProps {
   onRefresh: () => void;
 }
 
+export const isBlackSalt = (name?: string): boolean => {
+  if (!name) return false;
+  const n = name.trim().toLowerCase();
+  return (
+    n.includes('black salt') ||
+    n.includes('black') ||
+    n.includes('കറുത്ത ഉപ്പ്') ||
+    n.includes('കറുത്ത') ||
+    n.includes('ബ്ലാക്ക്') ||
+    n.includes('കാലാ നമക്') ||
+    n.includes('kala namak')
+  );
+};
+
 export const isExcludedRecipeIngredient = (ing: { name?: string; category?: string }) => {
   const n = (ing.name || '').trim().toLowerCase();
   const c = (ing.category || '').trim().toLowerCase();
+
+  // Black Salt must NEVER be excluded from recipe creation
+  if (isBlackSalt(ing.name)) return false;
 
   // Basic categories and operational wages
   if (c === 'basic' || c === 'packaging' || c === 'wages') return true;
@@ -52,7 +69,7 @@ export const isExcludedRecipeIngredient = (ing: { name?: string; category?: stri
     n.includes('സൺഫ്ലവർ') ||
     n.includes('വെളിച്ചെണ്ണ') ||
     n.includes('ഉപ്പ്') ||
-    (n.includes('salt') && !n.includes('black salt')) ||
+    n.includes('salt') ||
     n.includes('അണ്ടി തോട്') ||
     n.includes('തോട്') ||
     n.includes('കവർ') ||
