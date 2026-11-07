@@ -346,19 +346,17 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   }, [products, productionRuns, ingredients, stockMovements]);
 
   useEffect(() => {
-    if (onRefresh) onRefresh();
     loadCostingData(selectedDate);
-  }, [selectedDate, loadCostingData, onRefresh]);
+  }, [selectedDate, loadCostingData]);
 
   // Auto-fetch when window gains focus (no manual reload needed)
   useEffect(() => {
     const handleFocus = () => {
-      if (onRefresh) onRefresh();
       loadCostingData(selectedDate);
     };
     window.addEventListener('focus', handleFocus);
     return () => window.removeEventListener('focus', handleFocus);
-  }, [selectedDate, loadCostingData, onRefresh]);
+  }, [selectedDate, loadCostingData]);
 
   // Load detail ingredients for a product
   const loadProductDetail = useCallback(async (productId: string) => {
@@ -424,8 +422,6 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     } catch {
       // ignore
     }
-    if (onRefresh) onRefresh();
-    loadCostingData(selectedDate);
     loadProductDetail(product.productId);
   };
 

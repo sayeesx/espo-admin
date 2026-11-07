@@ -274,6 +274,8 @@ export const App: React.FC = () => {
     }
   }, []);
 
+  const handleForceRefresh = useCallback(() => loadAllData(true), [loadAllData]);
+
   useEffect(() => {
     if (isAuthenticated) {
       loadAllData();
@@ -437,7 +439,7 @@ export const App: React.FC = () => {
                   ingredients={ingredients}
                   productionRuns={productionRuns}
                   stockMovements={stockMovements}
-                  onRefresh={() => loadAllData(true)}
+                  onRefresh={handleForceRefresh}
                 />
               )}
 
@@ -490,7 +492,7 @@ export const App: React.FC = () => {
                   wages={dailyWages}
                   movements={stockMovements}
                   ingredients={ingredients}
-                  onRefresh={() => loadAllData(true)}
+                  onRefresh={handleForceRefresh}
                 />
               )}
 
