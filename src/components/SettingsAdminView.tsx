@@ -296,7 +296,42 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
           }
         }
 
-        // 2. Clear all packing records for products (so packets are not kept active on costing)
+        // 2. Restore packet stock and clear all packing records for products (so packets are not kept active on costing)
+        try {
+          const { data: allPackingRecs } = await supabase
+            .from('packing_records')
+            .select('packet_size, packets_packed, cover_unit_cost');
+          if (allPackingRecs && allPackingRecs.length > 0) {
+            const pktRestoreMap = new Map<string, number>();
+            for (const rec of allPackingRecs) {
+              if (rec.packet_size && Number(rec.packets_packed) > 0) {
+                pktRestoreMap.set(rec.packet_size, (pktRestoreMap.get(rec.packet_size) || 0) + Number(rec.packets_packed));
+              }
+            }
+            for (const [pktName, restoreQty] of pktRestoreMap.entries()) {
+              const { data: pt } = await supabase
+                .from('packet_types')
+                .select('id, bundle_quantity, cost_per_packet')
+                .eq('name', pktName)
+                .maybeSingle();
+              if (pt) {
+                const newQty = Math.max(0, Number(pt.bundle_quantity ?? 0)) + restoreQty;
+                const unitCost = Number(pt.cost_per_packet) || 0;
+                await supabase
+                  .from('packet_types')
+                  .update({
+                    bundle_quantity: newQty,
+                    bundle_cost: Number((newQty * unitCost).toFixed(2)),
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('id', pt.id);
+              }
+            }
+          }
+        } catch (restorePktErr) {
+          console.warn('Restore packet stock on batch reset error:', restorePktErr);
+        }
+
         const { error: pkrErr } = await supabase
           .from('packing_records')
           .delete()

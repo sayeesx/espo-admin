@@ -417,7 +417,7 @@ export async function fetchPacketTypes(force = false): Promise<PacketType[]> {
       id: row.id,
       name: row.name,
       bundleCost: Number(row.bundle_cost) || 0,
-      bundleQuantity: Number(row.bundle_quantity) || 1,
+      bundleQuantity: Math.max(0, Number(row.bundle_quantity ?? 0)),
       costPerPacket: Number(row.cost_per_packet) || 0,
       isActive: row.is_active ?? true,
       createdAt: row.created_at,
@@ -427,14 +427,17 @@ export async function fetchPacketTypes(force = false): Promise<PacketType[]> {
 }
 
 export async function savePacketType(packet: Partial<PacketType> & { name: string }): Promise<PacketType> {
-  const bundleCost = Number(packet.bundleCost) || 0;
-  const bundleQuantity = Math.max(1, Number(packet.bundleQuantity) || 1);
-  const costPerPacket = packet.costPerPacket !== undefined && packet.costPerPacket > 0
+  const bundleCost = Math.max(0, Number(packet.bundleCost) || 0);
+  const bundleQuantity = Math.max(0, Number(packet.bundleQuantity ?? 0));
+  const costPerPacket = packet.costPerPacket !== undefined && Number(packet.costPerPacket) > 0
     ? Number(packet.costPerPacket)
-    : bundleQuantity > 0 ? Number((bundleCost / bundleQuantity).toFixed(4)) : 0;
+    : bundleQuantity > 0 && bundleCost > 0
+      ? Number((bundleCost / bundleQuantity).toFixed(4))
+      : Number(packet.costPerPacket) || 0;
 
+  const trimmedName = packet.name.trim();
   const payload = {
-    name: packet.name.trim(),
+    name: trimmedName,
     bundle_cost: bundleCost,
     bundle_quantity: bundleQuantity,
     cost_per_packet: costPerPacket,
@@ -445,11 +448,24 @@ export async function savePacketType(packet: Partial<PacketType> & { name: strin
   dbCache.invalidate('admin_packet_types');
   dbCache.invalidate('admin_recipes');
 
-  if (packet.id) {
+  let targetId = packet.id;
+  if (!targetId) {
+    const { data: existing } = await supabase
+      .from('packet_types')
+      .select('id')
+      .ilike('name', trimmedName)
+      .limit(1)
+      .maybeSingle();
+    if (existing?.id) {
+      targetId = existing.id;
+    }
+  }
+
+  if (targetId) {
     const { data, error } = await supabase
       .from('packet_types')
       .update(payload)
-      .eq('id', packet.id)
+      .eq('id', targetId)
       .select()
       .single();
 
@@ -458,7 +474,7 @@ export async function savePacketType(packet: Partial<PacketType> & { name: strin
       id: data.id,
       name: data.name,
       bundleCost: Number(data.bundle_cost) || 0,
-      bundleQuantity: Number(data.bundle_quantity) || 1,
+      bundleQuantity: Math.max(0, Number(data.bundle_quantity ?? 0)),
       costPerPacket: Number(data.cost_per_packet) || 0,
       isActive: data.is_active,
       createdAt: data.created_at,
@@ -479,7 +495,7 @@ export async function savePacketType(packet: Partial<PacketType> & { name: strin
       id: data.id,
       name: data.name,
       bundleCost: Number(data.bundle_cost) || 0,
-      bundleQuantity: Number(data.bundle_quantity) || 1,
+      bundleQuantity: Math.max(0, Number(data.bundle_quantity ?? 0)),
       costPerPacket: Number(data.cost_per_packet) || 0,
       isActive: data.is_active,
       createdAt: data.created_at,
@@ -2247,6 +2263,8 @@ export async function resetAllStocksToZero(): Promise<{ success: boolean; messag
     if (iErr) throw iErr;
     const { error: packErr } = await supabase.from('packaging_items').update({ current_stock: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
     if (packErr) throw packErr;
+    const { error: ptErr } = await supabase.from('packet_types').update({ bundle_quantity: 0, bundle_cost: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
+    if (ptErr) throw ptErr;
     invalidateAdminCache();
     return { success: true, message: 'All stocks have been reset to zero successfully.' };
   } catch (err: any) {

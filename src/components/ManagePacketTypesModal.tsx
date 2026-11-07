@@ -51,7 +51,7 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
   const loadData = async () => {
     try {
       setLoading(true);
-      const data = await fetchPacketTypes();
+      const data = await fetchPacketTypes(true);
       setPacketTypes(data);
       if (initialPacket?.id) {
         const fresh = data.find((p) => p.id === initialPacket.id);
@@ -90,7 +90,7 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
     setEditingId(pkt.id);
     setName(pkt.name);
     setBundleCost(pkt.bundleCost || 0);
-    setBundleQuantity(pkt.bundleQuantity || 100);
+    setBundleQuantity(Math.max(0, Number(pkt.bundleQuantity ?? 0)));
     setCostPerPacket(pkt.costPerPacket || 0);
     setErrorMsg('');
   };
@@ -99,7 +99,7 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
   const handleBundleCostChange = (val: string) => {
     setBundleCost(val);
     const cost = parseFloat(val) || 0;
-    const qty = parseFloat(String(bundleQuantity)) || 1;
+    const qty = parseFloat(String(bundleQuantity)) || 0;
     if (qty > 0) {
       setCostPerPacket(parseFloat((cost / qty).toFixed(4)));
     }
@@ -107,18 +107,38 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
 
   const handleBundleQuantityChange = (val: string) => {
     setBundleQuantity(val);
-    const qty = parseFloat(val) || 1;
+    const qty = parseFloat(val) || 0;
     const cost = parseFloat(String(bundleCost)) || 0;
+    const currentUnitCost = parseFloat(String(costPerPacket)) || 0;
     if (qty > 0) {
-      setCostPerPacket(parseFloat((cost / qty).toFixed(4)));
+      if (cost > 0) {
+        setCostPerPacket(parseFloat((cost / qty).toFixed(4)));
+      } else if (currentUnitCost > 0) {
+        setBundleCost(parseFloat((currentUnitCost * qty).toFixed(2)));
+      }
+    }
+  };
+
+  const handleQuickAddStock = (delta: number) => {
+    const currentQty = Math.max(0, parseInt(String(bundleQuantity), 10) || 0);
+    const nextQty = Math.max(0, currentQty + delta);
+    setBundleQuantity(nextQty);
+    const currentUnitCost = parseFloat(String(costPerPacket)) || 0;
+    const cost = parseFloat(String(bundleCost)) || 0;
+    if (currentUnitCost > 0) {
+      setBundleCost(parseFloat((currentUnitCost * nextQty).toFixed(2)));
+    } else if (cost > 0 && nextQty > 0) {
+      setCostPerPacket(parseFloat((cost / nextQty).toFixed(4)));
     }
   };
 
   const handleCostPerPacketDirectChange = (val: string) => {
     setCostPerPacket(val);
     const singleCost = parseFloat(val) || 0;
-    const qty = parseFloat(String(bundleQuantity)) || 100;
-    setBundleCost(parseFloat((singleCost * qty).toFixed(2)));
+    const qty = parseFloat(String(bundleQuantity)) || 0;
+    if (qty > 0) {
+      setBundleCost(parseFloat((singleCost * qty).toFixed(2)));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -132,18 +152,19 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
       setIsSubmitting(true);
       setErrorMsg('');
 
-      const bCost = parseFloat(String(bundleCost)) || 0;
-      const bQty = Math.max(1, parseInt(String(bundleQuantity)) || 1);
+      const bQty = Math.max(0, parseInt(String(bundleQuantity), 10) || 0);
+      const bCost = Math.max(0, parseFloat(String(bundleCost)) || 0);
       const cPerPacket = parseFloat(String(costPerPacket)) || (bQty > 0 ? bCost / bQty : 0);
 
       await savePacketType({
         id: editingId || undefined,
         name: name.trim(),
-        bundleCost: bCost,
+        bundleCost: bQty === 0 ? 0 : bCost,
         bundleQuantity: bQty,
         costPerPacket: cPerPacket,
       });
 
+      showToast(`${name.trim()} സ്റ്റോക്ക് (${bQty} pkts) വിജയകരമായി സൂക്ഷിച്ചു`, 'success');
       resetForm();
       await loadData();
       if (onUpdated) onUpdated();
@@ -271,20 +292,43 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
                   />
                 </div>
 
-                {/* Bundle Quantity (No. of packets whole added) */}
+                {/* Bundle Quantity (No. of packets in stock) */}
                 <div>
                   <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                    ബണ്ടിലിലെ പാക്കറ്റുകളുടെ എണ്ണം (Packets in Bundle)
+                    ലഭ്യമായ പാക്കറ്റ് സ്റ്റോക്ക് (Packets in Stock)
                   </label>
                   <input
                     type="number"
                     step="1"
-                    min="1"
-                    placeholder="e.g. 100"
-                    value={bundleQuantity === 0 ? '' : bundleQuantity}
+                    min="0"
+                    placeholder="0"
+                    value={bundleQuantity === '' ? '' : bundleQuantity}
                     onChange={(e) => handleBundleQuantityChange(e.target.value)}
                     className="w-full google-input text-stone-900 dark:text-white font-bold font-mono"
                   />
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    <span className="text-[10px] font-bold text-stone-400">വേഗത്തിൽ ചേർക്കാൻ:</span>
+                    {[50, 100, 200, 500].map((addAmt) => (
+                      <button
+                        key={addAmt}
+                        type="button"
+                        onClick={() => handleQuickAddStock(addAmt)}
+                        className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-bold font-mono text-[10px] transition-colors cursor-pointer"
+                      >
+                        +{addAmt}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBundleQuantity(0);
+                        setBundleCost(0);
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-red-50 dark:bg-red-950/40 hover:bg-red-100 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/60 font-bold font-mono text-[10px] transition-colors cursor-pointer"
+                    >
+                      0 (Clear)
+                    </button>
+                  </div>
                 </div>
 
                 {/* Cost Per Packet (Direct / Calculated) */}
@@ -346,7 +390,9 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {packetTypes.map((pkt) => {
                   const isCurrentlyEditing = editingId === pkt.id;
-                  const cPerPkt = Number(pkt.costPerPacket) || (pkt.bundleQuantity > 0 ? pkt.bundleCost / pkt.bundleQuantity : 0);
+                  const stockCount = Math.max(0, Number(pkt.bundleQuantity ?? 0));
+                  const isOutOfStock = stockCount <= 0;
+                  const cPerPkt = Number(pkt.costPerPacket) || (stockCount > 0 ? pkt.bundleCost / stockCount : 0);
 
                   return (
                     <div
@@ -359,13 +405,24 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <h4 className="font-black text-stone-900 dark:text-white text-sm">
-                            {pkt.name}
-                          </h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-black text-stone-900 dark:text-white text-sm">
+                              {pkt.name}
+                            </h4>
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
+                                isOutOfStock
+                                  ? 'bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400'
+                                  : 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
+                              }`}
+                            >
+                              {isOutOfStock ? 'സ്റ്റോക്കില്ല (0)' : `${stockCount} pkts`}
+                            </span>
+                          </div>
                           <div className="flex items-center gap-2 mt-0.5 text-stone-500 dark:text-stone-400 font-mono text-[11px]">
-                            <span>ബണ്ടിൽ: ₹{Number(pkt.bundleCost || 0).toFixed(0)}</span>
+                            <span>മൂല്യം: ₹{Number(pkt.bundleCost || 0).toFixed(0)}</span>
                             <span>•</span>
-                            <span>{pkt.bundleQuantity || 100} pkts</span>
+                            <span>സ്റ്റോക്ക്: {stockCount} എണ്ണം</span>
                           </div>
                         </div>
 
@@ -384,7 +441,7 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
                           className="px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#342e2e] text-stone-700 dark:text-stone-300 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
                         >
                           <FiEdit2 className="w-3 h-3" />
-                          <span>തിരുത്തുക</span>
+                          <span>സ്റ്റോക്ക് ചേർക്കുക / തിരുത്തുക</span>
                         </button>
                         <button
                           type="button"

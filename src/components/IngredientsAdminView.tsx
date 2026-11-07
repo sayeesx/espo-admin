@@ -173,7 +173,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     try {
       const [items, types] = await Promise.all([
         fetchPackagingItems(),
-        fetchPacketTypes(),
+        fetchPacketTypes(true),
       ]);
       setPackagingItems(items);
       setPacketTypes(types);
@@ -186,7 +186,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
   useEffect(() => {
     loadPackagingItems();
-  }, []);
+  }, [activeIngredientTab]);
 
   const openCreatePacketModal = () => {
     setSelectedPackagingItem(null);
@@ -839,7 +839,10 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
             <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card">
               <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">ആകെ കവർ സ്റ്റോക്ക്</span>
               <span className="text-xl font-black text-epso-orange font-mono">
-                {packagingItems.reduce((acc, p) => acc + (p.currentStock || 0), 0).toLocaleString('en-IN')}
+                {(
+                  packetTypes.reduce((acc, pt) => acc + Math.max(0, Number(pt.bundleQuantity ?? 0)), 0) +
+                  packagingItems.reduce((acc, p) => acc + (p.currentStock || 0), 0)
+                ).toLocaleString('en-IN')}
               </span>
               <span className="text-[10px] text-stone-400 block mt-0.5 font-sans">Total Covers (pcs)</span>
             </div>
@@ -847,7 +850,10 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
             <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card">
               <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">കവർ സ്റ്റോക്ക് മൂല്യം</span>
               <span className="text-xl font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                ₹{packagingItems.reduce((acc, p) => acc + ((p.currentStock || 0) * (p.unitCost || 0)), 0).toLocaleString('en-IN')}
+                ₹{(
+                  packetTypes.reduce((acc, pt) => acc + (Math.max(0, Number(pt.bundleQuantity ?? 0)) * (Number(pt.costPerPacket) || 0)), 0) +
+                  packagingItems.reduce((acc, p) => acc + ((p.currentStock || 0) * (p.unitCost || 0)), 0)
+                ).toLocaleString('en-IN')}
               </span>
               <span className="text-[10px] text-stone-400 block mt-0.5 font-sans">Inventory valuation</span>
             </div>
@@ -855,9 +861,10 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
             <div className="p-3.5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card">
               <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wider block">കുറഞ്ഞ കവറുകൾ</span>
               <span className="text-xl font-black text-amber-500 font-mono">
-                {packagingItems.filter(p => (p.currentStock || 0) <= 100).length}
+                {packetTypes.filter(pt => Math.max(0, Number(pt.bundleQuantity ?? 0)) <= 50).length +
+                  packagingItems.filter(p => (p.currentStock || 0) <= 100).length}
               </span>
-              <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5 font-sans">≤ 100 pcs left</span>
+              <span className="text-[10px] text-amber-600 dark:text-amber-400 block mt-0.5 font-sans">≤ 50 pcs left / Out of stock</span>
             </div>
           </div>
 
@@ -873,7 +880,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   </span>
                 </h3>
                 <p className="text-xs text-stone-400 mt-0.5">
-                  ഈ പാക്കറ്റ് തരങ്ങൾ പ്രൊഡക്ഷൻ പാക്കിംഗിലും റെസിപ്പിയിലും ലഭ്യമാണ്
+                  പാക്കറ്റ് സ്റ്റോക്ക് ചേർക്കുന്നതിനോ തിരുത്തുന്നതിനോ കാർഡിൽ ക്ലിക്ക് ചെയ്യുക
                 </p>
               </div>
 
@@ -886,35 +893,53 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 className="text-xs text-epso-orange hover:underline font-bold flex items-center gap-1 cursor-pointer"
               >
                 <FiEdit2 className="w-3.5 h-3.5" />
-                <span>മാനേജ് ചെയ്യുക / തിരുത്തുക</span>
+                <span>സ്റ്റോക്ക് ചേർക്കുക / തിരുത്തുക</span>
               </button>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2.5">
-              {packetTypes.map((pt) => (
-                <div
-                  key={pt.id}
-                  onClick={() => {
-                    setSelectedPacketTypeForEdit(pt);
-                    setManagePacketsOpen(true);
-                  }}
-                  className="p-3 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] hover:border-orange-400 dark:hover:border-orange-600 transition-all cursor-pointer group shadow-2xs select-none"
-                  title="ക്ലിക്ക് ചെയ്ത് തിരുത്തുക"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-[10px] text-stone-400 font-mono">
-                      ₹{(pt.costPerPacket || 0).toFixed(2)}/pkt
+              {packetTypes.map((pt) => {
+                const pktStock = Math.max(0, Number(pt.bundleQuantity ?? 0));
+                const isOutOfStock = pktStock <= 0;
+                return (
+                  <div
+                    key={pt.id}
+                    onClick={() => {
+                      setSelectedPacketTypeForEdit(pt);
+                      setManagePacketsOpen(true);
+                    }}
+                    className={`p-3 rounded-2xl bg-stone-50 dark:bg-[#141212] border transition-all cursor-pointer group shadow-2xs select-none ${
+                      isOutOfStock
+                        ? 'border-red-200 dark:border-red-900/50 hover:border-red-400'
+                        : 'border-stone-200 dark:border-[#282323] hover:border-orange-400 dark:hover:border-orange-600'
+                    }`}
+                    title="ക്ലിക്ക് ചെയ്ത് സ്റ്റോക്ക് ചേർക്കുക / തിരുത്തുക"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span
+                        className={`w-2 h-2 rounded-full ${
+                          isOutOfStock ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'
+                        }`}
+                      />
+                      <span className="text-[10px] text-stone-400 font-mono">
+                        ₹{(pt.costPerPacket || 0).toFixed(2)}/pkt
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-xs text-stone-900 dark:text-white truncate font-mono group-hover:text-epso-orange transition-colors">
+                      {pt.name}
+                    </h4>
+                    <span
+                      className={`text-[10px] font-bold block mt-0.5 font-mono ${
+                        isOutOfStock
+                          ? 'text-red-600 dark:text-red-400'
+                          : 'text-emerald-600 dark:text-emerald-400'
+                      }`}
+                    >
+                      {isOutOfStock ? 'സ്റ്റോക്കില്ല (0)' : `${pktStock} pkts`}
                     </span>
                   </div>
-                  <h4 className="font-bold text-xs text-stone-900 dark:text-white truncate font-mono group-hover:text-epso-orange transition-colors">
-                    {pt.name}
-                  </h4>
-                  <span className="text-[10px] text-stone-400 block mt-0.5 font-sans">
-                    {pt.bundleCost ? `₹${pt.bundleCost}/${pt.bundleQuantity}` : 'Default'}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -1047,7 +1072,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
               })}
           </div>
 
-          {packagingItems.length === 0 && !loadingPackaging && (
+          {packagingItems.length === 0 && packetTypes.length === 0 && !loadingPackaging && (
             <div className="p-8 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] text-center space-y-3">
               <div className="w-12 h-12 rounded-2xl bg-orange-100 dark:bg-orange-950/50 text-epso-orange flex items-center justify-center mx-auto">
                 <FiPackage className="w-6 h-6" />
@@ -1678,6 +1703,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
         onUpdated={() => {
           loadPackagingItems();
           fetchPacketTypes(true).then((pts) => setPacketTypes(pts));
+          onRefresh();
         }}
       />
 
