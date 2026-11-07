@@ -2,20 +2,13 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   FiCalendar,
   FiSave,
-  FiUsers,
-  FiPackage,
   FiDollarSign,
   FiChevronDown,
   FiChevronUp,
   FiRefreshCw,
   FiCheckCircle,
-  FiPlus,
-  FiMinus,
   FiLayers,
   FiClock,
-  FiTrendingUp,
-  FiArrowRight,
-  FiFileText,
 } from 'react-icons/fi';
 import {
   fetchDailyWages,
@@ -25,7 +18,13 @@ import {
   fetchTotalProductionKgForDate,
   fetchProductionRuns,
 } from '../services/supabase';
-import { roundCurrency } from '../services/costing';
+import {
+  roundCurrency,
+  roundStock,
+  isEligibleProductionBatch,
+  getEffectiveDailyWage,
+  allocateDailyWageToBatches,
+} from '../services/costing';
 import { LoadingSpinner } from './LoadingSpinner';
 import { useFeedback } from '../context/FeedbackContext';
 import { ProductionRun } from '../types';
@@ -47,10 +46,8 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
   const [showHistory, setShowHistory] = useState(false);
   const [wageLedgerTab, setWageLedgerTab] = useState<'batches' | 'days'>('batches');
 
-  // Form state
+  // Form state (Total Daily Wage only — cooking/packing split removed)
   const [totalWageBudget, setTotalWageBudget] = useState<string>('4000');
-  const [numCooks, setNumCooks] = useState<number>(2);
-  const [numPackers, setNumPackers] = useState<number>(2);
   const [totalPackets, setTotalPackets] = useState<number>(0);
   const [totalProductionKg, setTotalProductionKg] = useState<number>(0);
   const [notes, setNotes] = useState<string>('');
@@ -61,55 +58,12 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
   const [allRuns, setAllRuns] = useState<ProductionRun[]>(initialProductionRuns || []);
 
   useEffect(() => {
-    if (initialProductionRuns && initialProductionRuns.length > 0) {
+    if (initialProductionRuns) {
       setAllRuns(initialProductionRuns);
     }
   }, [initialProductionRuns]);
 
-  // Derived wage calculations for workers
-  const calculations = useMemo(() => {
-    const budget = Number(totalWageBudget) || 0;
-    const cooks = Math.max(0, numCooks);
-    const packers = Math.max(0, numPackers);
-
-    if (budget <= 0) {
-      return {
-        productionWageAmount: 0,
-        packingWageAmount: 0,
-        wagePerCook: 0,
-        wagePerPacker: 0,
-      };
-    }
-
-    let productionWageAmount = 0;
-    let packingWageAmount = 0;
-
-    const totalWorkers = cooks + packers;
-    if (totalWorkers > 0) {
-      if (cooks > 0 && packers > 0) {
-        productionWageAmount = roundCurrency((cooks / totalWorkers) * budget);
-        packingWageAmount = roundCurrency(budget - productionWageAmount);
-      } else if (cooks > 0) {
-        productionWageAmount = budget;
-        packingWageAmount = 0;
-      } else if (packers > 0) {
-        productionWageAmount = 0;
-        packingWageAmount = budget;
-      }
-    }
-
-    const wagePerCook = cooks > 0 ? roundCurrency(productionWageAmount / cooks) : 0;
-    const wagePerPacker = packers > 0 ? roundCurrency(packingWageAmount / packers) : 0;
-
-    return {
-      productionWageAmount,
-      packingWageAmount,
-      wagePerCook,
-      wagePerPacker,
-    };
-  }, [totalWageBudget, numCooks, numPackers]);
-
-  // Load wage data and production runs for date
+  // Load wage data and live production runs for date
   const loadDateData = useCallback(async (date: string) => {
     setIsLoading(true);
     try {
@@ -117,53 +71,45 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
         fetchDailyWage(date),
         fetchTotalPacketsForDate(date),
         fetchTotalProductionKgForDate(date),
-        fetchDailyWages(60),
-        fetchProductionRuns(),
+        fetchDailyWages(90, true),
+        fetchProductionRuns(true),
       ]);
 
       setTotalPackets(packets);
       setTotalProductionKg(prodKg);
       setWageHistory(history);
-      if (fetchedRuns && fetchedRuns.length > 0) {
+      if (fetchedRuns) {
         setAllRuns(fetchedRuns);
       }
 
       if (existing) {
         setExistingWage(existing);
-        setTotalWageBudget(String(existing.totalWageBudget));
-        setNumCooks(Number(existing.numCooks) || 2);
-        setNumPackers(Number(existing.numPackers) || 2);
+        setTotalWageBudget(String(getEffectiveDailyWage(existing)));
         setNotes(existing.notes || '');
       } else {
         // Automatically default to the previous day's recorded wage
         const prevWage = history.find((w: any) => w.productionDate < date);
-        const defaultBudget = prevWage ? Number(prevWage.totalWageBudget) || 4000 : 4000;
-        const defaultCooks = prevWage ? Number(prevWage.numCooks) || 2 : 2;
-        const defaultPackers = prevWage ? Number(prevWage.numPackers) || 2 : 2;
+        const defaultBudget = prevWage ? getEffectiveDailyWage(prevWage) || 4000 : 4000;
         const defaultNotes = prevWage?.notes ? `${prevWage.notes}` : '';
 
         setTotalWageBudget(String(defaultBudget));
-        setNumCooks(defaultCooks);
-        setNumPackers(defaultPackers);
         setNotes(defaultNotes);
 
         // If today and no wage record exists, automatically create/populate today's wage record
         const todayStr = getTodayStr();
         if (date === todayStr) {
-          const prodWage = defaultBudget * (defaultCooks / Math.max(1, defaultCooks + defaultPackers));
-          const packWage = defaultBudget - prodWage;
           try {
             const autoCreated = await saveDailyWage({
               productionDate: todayStr,
               totalWageBudget: defaultBudget,
-              numCooks: defaultCooks,
-              numPackers: defaultPackers,
+              numCooks: 0,
+              numPackers: 0,
               totalPacketsProduced: packets,
               totalProductionKg: prodKg,
-              productionWageAmount: roundCurrency(prodWage),
-              packingWageAmount: roundCurrency(packWage),
-              wagePerCook: defaultCooks > 0 ? roundCurrency(prodWage / defaultCooks) : 0,
-              wagePerPacker: defaultPackers > 0 ? roundCurrency(packWage / defaultPackers) : 0,
+              productionWageAmount: roundCurrency(defaultBudget),
+              packingWageAmount: 0,
+              wagePerCook: 0,
+              wagePerPacker: 0,
               notes: defaultNotes || 'Auto-populated from previous day',
             });
             setExistingWage(autoCreated);
@@ -186,14 +132,48 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
     loadDateData(selectedDate);
   }, [selectedDate, loadDateData]);
 
+  // Auto-refresh when window regains focus so new/completed batches update allocations immediately
+  useEffect(() => {
+    const handleFocus = () => {
+      loadDateData(selectedDate);
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [selectedDate, loadDateData]);
+
+  // Eligible batches on the selected date (excludes cancelled and requires actualQuantity > 0)
+  const dayBatches = useMemo(() => {
+    return allRuns.filter(
+      (r) => r.productionDate === selectedDate && isEligibleProductionBatch(r)
+    );
+  }, [allRuns, selectedDate]);
+
+  // Live production kg and packets computed from current eligible batches
+  const liveProductionKg = useMemo(() => {
+    if (dayBatches.length > 0) {
+      return roundStock(dayBatches.reduce((sum, r) => sum + (Number(r.actualQuantity) || 0), 0));
+    }
+    return roundStock(totalProductionKg);
+  }, [dayBatches, totalProductionKg]);
+
+  const livePackets = useMemo(() => {
+    const fromBatches = dayBatches.reduce(
+      (sum, r) =>
+        sum +
+        (r.totalPacketsPacked ||
+          r.packingRecords?.reduce((s, p) => s + (p.packetsPacked || 0), 0) ||
+          0),
+      0
+    );
+    return Math.max(fromBatches, totalPackets);
+  }, [dayBatches, totalPackets]);
+
   // Save wage details to Supabase
   const handleSave = async () => {
-    const budget = Number(totalWageBudget) || 0;
-    const cooks = Math.max(0, numCooks);
-    const packers = Math.max(0, numPackers);
+    const budget = roundCurrency(Number(totalWageBudget) || 0);
 
     if (budget <= 0) {
-      showToast('ദയവായി സാധുവായ ഒരു കൂലി ബഡ്ജറ്റ് തുക നൽകുക', 'warning');
+      showToast('ദയവായി സാധുവായ ഒരു കൂലി തുക നൽകുക', 'warning');
       return;
     }
 
@@ -202,14 +182,14 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
       await saveDailyWage({
         productionDate: selectedDate,
         totalWageBudget: budget,
-        numCooks: cooks,
-        numPackers: packers,
-        totalPacketsProduced: totalPackets,
-        totalProductionKg: totalProductionKg,
-        productionWageAmount: calculations.productionWageAmount,
-        packingWageAmount: calculations.packingWageAmount,
-        wagePerCook: calculations.wagePerCook,
-        wagePerPacker: calculations.wagePerPacker,
+        numCooks: 0,
+        numPackers: 0,
+        totalPacketsProduced: livePackets,
+        totalProductionKg: liveProductionKg,
+        productionWageAmount: budget,
+        packingWageAmount: 0,
+        wagePerCook: 0,
+        wagePerPacker: 0,
         notes: notes.trim() || undefined,
       });
 
@@ -238,89 +218,52 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
 
   const isToday = selectedDate === getTodayStr();
 
-  // Find all batches completed on the selected date
-  const dayBatches = useMemo(() => {
-    return allRuns.filter(
-      (r) => r.productionDate === selectedDate && r.status !== 'cancelled'
-    );
-  }, [allRuns, selectedDate]);
-
-  // Calculate proportional wage allocation per batch for selected date
+  // Weight-based wage allocation per eligible batch for selected date:
+  // Batch Wage = (Batch Production kg / Total Eligible Daily Production kg) × Total Daily Wage
   const batchWageAllocations = useMemo(() => {
     if (dayBatches.length === 0) return [];
+    const budget = roundCurrency(Number(totalWageBudget) || 0);
+    const allocated = allocateDailyWageToBatches(dayBatches, budget);
 
-    const effectiveTotalKg =
-      totalProductionKg > 0
-        ? totalProductionKg
-        : dayBatches.reduce((sum, r) => sum + (Number(r.actualQuantity) || 0), 0);
-
-    const totalBatches = dayBatches.length;
-    const cookingBudget = calculations.productionWageAmount;
-    const packingBudget = calculations.packingWageAmount;
-
-    let runningCooking = 0;
-    let runningPacking = 0;
-
-    return dayBatches.map((run, idx) => {
-      const isLast = idx === totalBatches - 1;
-      const weight = Number(run.actualQuantity) || 0;
-
-      let cookingAlloc = 0;
-      let packingAlloc = 0;
-
-      // Equal batch allocation rule: Each batch receives an equal share of the daily wage
-      if (isLast) {
-        cookingAlloc = roundCurrency(cookingBudget - runningCooking);
-        packingAlloc = roundCurrency(packingBudget - runningPacking);
-      } else {
-        cookingAlloc = roundCurrency(cookingBudget / totalBatches);
-        packingAlloc = roundCurrency(packingBudget / totalBatches);
-        runningCooking += cookingAlloc;
-        runningPacking += packingAlloc;
-      }
-
-      const totalBatchWage = roundCurrency(cookingAlloc + packingAlloc);
-      const wagePerKg = weight > 0 ? roundCurrency(totalBatchWage / weight) : 0;
-      const sharePercent = totalBatches > 0 ? roundCurrency((1 / totalBatches) * 100) : 0;
+    return allocated.map((item) => {
       const packetsCount =
-        run.totalPacketsPacked ||
-        run.packingRecords?.reduce((s, p) => s + (p.packetsPacked || 0), 0) ||
+        item.run.totalPacketsPacked ||
+        item.run.packingRecords?.reduce((s, p) => s + (p.packetsPacked || 0), 0) ||
         0;
 
       return {
-        run,
-        weight,
-        sharePercent,
-        cookingAlloc,
-        packingAlloc,
-        totalBatchWage,
-        wagePerKg,
+        ...item,
         packetsCount,
       };
     });
-  }, [dayBatches, totalProductionKg, calculations]);
+  }, [dayBatches, totalWageBudget]);
 
-  // Multi-day accumulation ledger
+  // Multi-day accumulation ledger using LIVE production data (never stale snapshots)
   const multiDayLedger = useMemo(() => {
     return wageHistory.map((w) => {
       const runsForDay = allRuns.filter(
-        (r) => r.productionDate === w.productionDate && r.status !== 'cancelled'
+        (r) => r.productionDate === w.productionDate && isEligibleProductionBatch(r)
       );
-      const dayKg = Number(w.totalProductionKg) || 0;
-      const dayBudget = Number(w.totalWageBudget) || 0;
+      const dayKg = roundStock(
+        runsForDay.reduce((sum, r) => sum + (Number(r.actualQuantity) || 0), 0)
+      );
+      const dayPacketsFromRuns = runsForDay.reduce(
+        (sum, r) =>
+          sum +
+          (r.totalPacketsPacked ||
+            r.packingRecords?.reduce((s, p) => s + (p.packetsPacked || 0), 0) ||
+            0),
+        0
+      );
+      const dayBudget = getEffectiveDailyWage(w);
       const wageRateKg = dayKg > 0 ? roundCurrency(dayBudget / dayKg) : 0;
 
       return {
+        id: w.id,
         date: w.productionDate,
         totalBudget: dayBudget,
-        numCooks: Number(w.numCooks) || 0,
-        numPackers: Number(w.numPackers) || 0,
-        productionWageAmount: Number(w.productionWageAmount) || 0,
-        packingWageAmount: Number(w.packingWageAmount) || 0,
-        wagePerCook: Number(w.wagePerCook) || 0,
-        wagePerPacker: Number(w.wagePerPacker) || 0,
         totalProductionKg: dayKg,
-        totalPackets: Number(w.totalPacketsProduced) || 0,
+        totalPackets: dayPacketsFromRuns > 0 || runsForDay.length > 0 ? dayPacketsFromRuns : Number(w.totalPacketsProduced) || 0,
         batchesCount: runsForDay.length,
         wageRateKg,
         notes: w.notes,
@@ -420,8 +363,8 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
                   ഈ തീയതിയിലെ ഫാക്ടറി ഉൽപ്പാദന കണക്ക്
                 </p>
                 <p className="text-sm sm:text-base font-black text-stone-900 dark:text-white mt-0.5">
-                  <span className="font-mono text-epso-red dark:text-amber-400">{totalProductionKg.toFixed(1)} kg</span> ഉൽപ്പാദനം ·{' '}
-                  <span className="font-mono text-indigo-600 dark:text-indigo-400">{totalPackets}</span> പാക്കറ്റുകൾ പാക്ക് ചെയ്തു ·{' '}
+                  <span className="font-mono text-epso-red dark:text-amber-400">{liveProductionKg.toFixed(1)} kg</span> ഉൽപ്പാദനം ·{' '}
+                  <span className="font-mono text-indigo-600 dark:text-indigo-400">{livePackets}</span> പാക്കറ്റുകൾ പാക്ക് ചെയ്തു ·{' '}
                   <span className="font-mono text-amber-700 dark:text-amber-300">{dayBatches.length}</span> ബാച്ചുകൾ
                 </p>
               </div>
@@ -433,7 +376,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
           </div>
 
           {/* ======================================================== */}
-          {/* WAGE BUDGET & WORKERS FORM                               */}
+          {/* TOTAL DAILY WAGE FORM                                    */}
           {/* ======================================================== */}
           <div className="p-6 sm:p-7 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-6">
             <div className="border-b border-stone-100 dark:border-[#282323] pb-4">
@@ -442,14 +385,14 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
                 <span>ദിവസേനയുള്ള ആകെ കൂലി തുക</span>
               </h2>
               <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-                ഇന്നത്തെ പ്രൊഡക്ഷൻ & പാക്കിംഗ് തൊഴിലാളികൾക്കുള്ള ആകെ ബഡ്ജറ്റ് രേഖപ്പെടുത്തുക
+                ഈ ദിവസത്തെ ആകെ കൂലി തുക രേഖപ്പെടുത്തുക (ഉൽപ്പാദിപ്പിച്ച ബാച്ചുകളുടെ ഭാരത്തിനനുസരിച്ച് സ്വയം വിതരണം ചെയ്യപ്പെടും)
               </p>
             </div>
 
             {/* Total Budget Input */}
             <div className="space-y-3">
               <label className="block text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300">
-                ആകെ കൂലി ബഡ്ജറ്റ് (Total Daily Wage Budget) *
+                ആകെ കൂലി (Total Daily Wage) *
               </label>
 
               <div className="relative">
@@ -487,97 +430,6 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
               </div>
             </div>
 
-            {/* Workers Count Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
-              {/* Cooking Team (Cooks) */}
-              <div className="p-5 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 flex items-center justify-center font-black">
-                    <FiUsers className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-stone-900 dark:text-white">
-                      കുക്കിംഗ് തൊഴിലാളികൾ (Cooks)
-                    </h3>
-                    <p className="text-xs text-stone-500 dark:text-stone-400">
-                      ചേരുവകൾ വറുക്കുന്നവരും കുക്കുകളും
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setNumCooks(Math.max(0, numCooks - 1))}
-                    className="w-11 h-11 rounded-xl bg-white dark:bg-[#1E1B1B] border border-stone-300 dark:border-[#3E3838] text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] flex items-center justify-center font-bold text-lg cursor-pointer transition-colors"
-                  >
-                    <FiMinus className="w-4 h-4" />
-                  </button>
-
-                  <input
-                    type="number"
-                    value={numCooks}
-                    onChange={(e) => setNumCooks(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                    min="0"
-                    step="1"
-                    className="flex-1 py-2.5 px-3 rounded-xl border border-stone-300 dark:border-[#3E3838] bg-white dark:bg-[#1E1B1B] text-center font-mono font-bold text-lg text-stone-900 dark:text-white focus:outline-none focus:border-epso-red"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => setNumCooks(numCooks + 1)}
-                    className="w-11 h-11 rounded-xl bg-white dark:bg-[#1E1B1B] border border-stone-300 dark:border-[#3E3838] text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] flex items-center justify-center font-bold text-lg cursor-pointer transition-colors"
-                  >
-                    <FiPlus className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Packing Team (Packers) */}
-              <div className="p-5 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-black">
-                    <FiPackage className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-stone-900 dark:text-white">
-                      പാക്കിംഗ് തൊഴിലാളികൾ (Packers)
-                    </h3>
-                    <p className="text-xs text-stone-500 dark:text-stone-400">
-                      പാക്കറ്റുകൾ സീൽ ചെയ്യുന്നവർ
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => setNumPackers(Math.max(0, numPackers - 1))}
-                    className="w-11 h-11 rounded-xl bg-white dark:bg-[#1E1B1B] border border-stone-300 dark:border-[#3E3838] text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] flex items-center justify-center font-bold text-lg cursor-pointer transition-colors"
-                  >
-                    <FiMinus className="w-4 h-4" />
-                  </button>
-
-                  <input
-                    type="number"
-                    value={numPackers}
-                    onChange={(e) => setNumPackers(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                    min="0"
-                    step="1"
-                    className="flex-1 py-2.5 px-3 rounded-xl border border-stone-300 dark:border-[#3E3838] bg-white dark:bg-[#1E1B1B] text-center font-mono font-bold text-lg text-stone-900 dark:text-white focus:outline-none focus:border-indigo-500"
-                  />
-
-                  <button
-                    type="button"
-                    onClick={() => setNumPackers(numPackers + 1)}
-                    className="w-11 h-11 rounded-xl bg-white dark:bg-[#1E1B1B] border border-stone-300 dark:border-[#3E3838] text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] flex items-center justify-center font-bold text-lg cursor-pointer transition-colors"
-                  >
-                    <FiPlus className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
             {/* Notes Input */}
             <div className="pt-2">
               <label className="block text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300 mb-1.5">
@@ -590,104 +442,6 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
                 placeholder="ഇന്നത്തെ ദിവസത്തെ കൂലി സംബന്ധിച്ച കുറിപ്പുകൾ..."
                 className="w-full px-4 py-3 rounded-2xl border border-stone-300 dark:border-[#3E3838] bg-stone-50 dark:bg-[#141212] text-sm text-stone-900 dark:text-white focus:bg-white dark:focus:bg-[#1E1B1B] focus:border-stone-500 focus:outline-none transition-all"
               />
-            </div>
-          </div>
-
-          {/* ======================================================== */}
-          {/* WAGE ALLOCATION BREAKDOWN (COOKS VS PACKERS)             */}
-          {/* ======================================================== */}
-          <div className="p-6 sm:p-7 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-5">
-            <div className="flex items-center justify-between border-b border-stone-100 dark:border-[#282323] pb-4">
-              <div>
-                <h3 className="text-base sm:text-lg font-black text-stone-900 dark:text-white flex items-center gap-2">
-                  <FiUsers className="w-5 h-5 text-emerald-600" />
-                  <span>കൂലി വിഹിത വിതരണ കണക്ക് (Wage Split)</span>
-                </h3>
-                <p className="text-xs text-stone-500 dark:text-stone-400 mt-1">
-                  ഓരോ ജീവനക്കാരനും ലഭിക്കുന്ന വ്യക്തമായ കൂലി തുക
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-stone-500">ആകെ ജീവനക്കാർ:</span>
-                <span className="font-mono font-black text-sm px-2.5 py-0.5 rounded-lg bg-stone-100 dark:bg-[#282323] text-stone-800 dark:text-stone-200">
-                  {numCooks + numPackers} പേർ
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* Cooking Team Breakdown */}
-              <div className="p-5 rounded-2xl bg-orange-50/60 dark:bg-orange-950/20 border-2 border-orange-200/80 dark:border-orange-900/40 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black uppercase tracking-wider text-orange-800 dark:text-orange-300">
-                    പ്രൊഡക്ഷൻ ടീം (കുക്കുകൾ)
-                  </span>
-                  <span className="text-xs font-bold text-orange-700 dark:text-orange-400 font-mono">
-                    {numCooks > 0 ? `${numCooks} പേർ` : 'ജീവനക്കാരില്ല'}
-                  </span>
-                </div>
-
-                <div>
-                  <span className="text-2xl sm:text-3xl font-black text-orange-950 dark:text-orange-200 font-mono">
-                    ₹{calculations.productionWageAmount.toLocaleString('en-IN')}
-                  </span>
-                  <span className="text-xs text-orange-700 dark:text-orange-400 block mt-0.5 font-medium">
-                    ആകെ കുക്കിംഗ് കൂലി വിഹിതം
-                  </span>
-                </div>
-
-                <div className="pt-3 border-t border-orange-200/60 dark:border-orange-900/40 flex items-center justify-between text-xs sm:text-sm">
-                  <span className="text-stone-600 dark:text-stone-300 font-medium">ഒരാൾക്ക് ലഭിക്കുന്നത്:</span>
-                  <span className="font-mono font-black text-base text-orange-900 dark:text-orange-300">
-                    ₹{calculations.wagePerCook.toLocaleString('en-IN')}
-                  </span>
-                </div>
-              </div>
-
-              {/* Packing Team Breakdown */}
-              <div className="p-5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/20 border-2 border-indigo-200/80 dark:border-indigo-900/40 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black uppercase tracking-wider text-indigo-800 dark:text-indigo-300">
-                    പാക്കിംഗ് ടീം (പാക്കർമാർ)
-                  </span>
-                  <span className="text-xs font-bold text-indigo-700 dark:text-indigo-400 font-mono">
-                    {numPackers > 0 ? `${numPackers} പേർ` : 'ജീവനക്കാരില്ല'}
-                  </span>
-                </div>
-
-                <div>
-                  <span className="text-2xl sm:text-3xl font-black text-indigo-950 dark:text-indigo-200 font-mono">
-                    ₹{calculations.packingWageAmount.toLocaleString('en-IN')}
-                  </span>
-                  <span className="text-xs text-indigo-700 dark:text-indigo-400 block mt-0.5 font-medium">
-                    ആകെ പാക്കിംഗ് കൂലി വിഹിതം
-                  </span>
-                </div>
-
-                <div className="pt-3 border-t border-indigo-200/60 dark:border-indigo-900/40 flex items-center justify-between text-xs sm:text-sm">
-                  <span className="text-stone-600 dark:text-stone-300 font-medium">ഒരാൾക്ക് ലഭിക്കുന്നത്:</span>
-                  <span className="font-mono font-black text-base text-indigo-900 dark:text-indigo-300">
-                    ₹{calculations.wagePerPacker.toLocaleString('en-IN')}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Reconciliation Banner */}
-            <div className="flex items-center justify-between p-4 rounded-2xl bg-stone-100 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828]">
-              <div className="flex items-center gap-2">
-                <FiCheckCircle className="w-5 h-5 text-emerald-600" />
-                <span className="text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300">
-                  വിതരണം ചെയ്ത ആകെ തുക:
-                </span>
-              </div>
-              <span className="text-base sm:text-lg font-black text-emerald-700 dark:text-emerald-400 font-mono">
-                ₹{(calculations.productionWageAmount + calculations.packingWageAmount).toLocaleString('en-IN')}
-                <span className="text-xs font-medium text-stone-400 ml-1">
-                  / ₹{Number(totalWageBudget || 0).toLocaleString('en-IN')}
-                </span>
-              </span>
             </div>
           </div>
 
@@ -714,8 +468,8 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
                     ലേബർ ചെലവ് / കിലോ
                   </span>
                   <span className="text-lg sm:text-xl font-black font-mono text-amber-950 dark:text-amber-100">
-                    {totalProductionKg > 0
-                      ? `₹${(Number(totalWageBudget || 0) / totalProductionKg).toFixed(2)} / kg`
+                    {liveProductionKg > 0
+                      ? `₹${roundCurrency(Number(totalWageBudget || 0) / liveProductionKg).toFixed(2)} / kg`
                       : '₹0.00 / kg'}
                   </span>
                 </div>
@@ -723,18 +477,18 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
             </div>
 
             {/* Formula Explanation Banner */}
-            {totalProductionKg > 0 ? (
+            {liveProductionKg > 0 ? (
               <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-900/40 space-y-2 text-xs">
                 <div className="font-mono text-xs flex flex-wrap items-center justify-between gap-2 text-amber-900 dark:text-amber-200">
                   <span>
-                    സൂത്രവാക്യം: ആകെ കൂലി (₹{Number(totalWageBudget || 0).toLocaleString('en-IN')}) ÷ ആകെ ഉൽപ്പാദനം ({totalProductionKg.toFixed(1)} kg)
+                    സൂത്രവാക്യം: (ബാച്ച് ഭാരം ÷ ആകെ ഉൽപ്പാദനം {liveProductionKg.toFixed(1)} kg) × ആകെ കൂലി (₹{Number(totalWageBudget || 0).toLocaleString('en-IN')})
                   </span>
                   <span className="font-bold text-amber-800 dark:text-amber-300">
-                    = ₹{(Number(totalWageBudget || 0) / totalProductionKg).toFixed(2)} / kg
+                    = ₹{roundCurrency(Number(totalWageBudget || 0) / liveProductionKg).toFixed(2)} / kg
                   </span>
                 </div>
                 <p className="text-stone-600 dark:text-stone-400">
-                  ഇന്ന് ഉണ്ടാക്കിയ ഓരോ ബാച്ചിന്റെയും അസംസ്കൃത വസ്തുക്കളുടെ ചെലവിനൊപ്പം ഈ ലേബർ നിരക്ക് (<span className="font-mono font-bold text-stone-800 dark:text-stone-200">ബാച്ച് ഭാരം × ₹{(Number(totalWageBudget || 0) / totalProductionKg).toFixed(2)}</span>) കോസ്റ്റിംഗിൽ സ്വയം ചേർക്കപ്പെടും.
+                  ഇന്ന് ഉണ്ടാക്കിയ ഓരോ ബാച്ചിന്റെയും അസംസ്കൃത വസ്തുക്കളുടെ ചെലവിനൊപ്പം ഈ ലേബർ നിരക്ക് (<span className="font-mono font-bold text-stone-800 dark:text-stone-200">ബാച്ച് ഭാരം × ₹{roundCurrency(Number(totalWageBudget || 0) / liveProductionKg).toFixed(2)}</span>) കോസ്റ്റിംഗിൽ സ്വയം ചേർക്കപ്പെടും.
                 </p>
               </div>
             ) : (
@@ -803,8 +557,6 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
                           <th className="py-3 px-4">ബാച്ച് നമ്പർ & ഉൽപ്പന്നം</th>
                           <th className="py-3 px-4 text-right">ബാച്ച് ഭാരം</th>
                           <th className="py-3 px-4 text-right">വിഹിതം (%)</th>
-                          <th className="py-3 px-4 text-right">കുക്കിംഗ് കൂലി</th>
-                          <th className="py-3 px-4 text-right">പാക്കിംഗ് കൂലി</th>
                           <th className="py-3 px-4 text-right">ആകെ ബാച്ച് കൂലി</th>
                           <th className="py-3 px-4 text-right">കിലോ നിരക്ക്</th>
                           <th className="py-3 px-4 text-center">പാക്കറ്റുകൾ</th>
@@ -838,19 +590,9 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
                               </span>
                             </td>
 
-                            {/* Cooking Wage */}
-                            <td className="py-3 px-4 text-right font-mono text-orange-700 dark:text-orange-400">
-                              ₹{item.cookingAlloc.toLocaleString('en-IN')}
-                            </td>
-
-                            {/* Packing Wage */}
-                            <td className="py-3 px-4 text-right font-mono text-indigo-700 dark:text-indigo-400">
-                              ₹{item.packingAlloc.toLocaleString('en-IN')}
-                            </td>
-
                             {/* Total Batch Wage */}
                             <td className="py-3 px-4 text-right font-mono font-black text-sm text-stone-900 dark:text-white">
-                              ₹{item.totalBatchWage.toLocaleString('en-IN')}
+                              ₹{item.totalBatchWage.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
 
                             {/* Rate / kg */}
@@ -873,19 +615,15 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
                             {batchWageAllocations.reduce((s, b) => s + b.weight, 0).toFixed(1)} kg
                           </td>
                           <td className="py-3 px-4 text-right font-mono">100.0%</td>
-                          <td className="py-3 px-4 text-right font-mono text-orange-700 dark:text-orange-400">
-                            ₹{calculations.productionWageAmount.toLocaleString('en-IN')}
-                          </td>
-                          <td className="py-3 px-4 text-right font-mono text-indigo-700 dark:text-indigo-400">
-                            ₹{calculations.packingWageAmount.toLocaleString('en-IN')}
-                          </td>
                           <td className="py-3 px-4 text-right font-mono font-black text-sm text-emerald-700 dark:text-emerald-400">
-                            ₹{(Number(totalWageBudget) || 0).toLocaleString('en-IN')}
+                            ₹{batchWageAllocations
+                              .reduce((s, b) => roundCurrency(s + b.totalBatchWage), 0)
+                              .toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                           <td className="py-3 px-4 text-right font-mono">
-                            ₹{(totalProductionKg > 0 ? Number(totalWageBudget) / totalProductionKg : 0).toFixed(2)}/kg
+                            ₹{(liveProductionKg > 0 ? roundCurrency(Number(totalWageBudget || 0) / liveProductionKg) : 0).toFixed(2)}/kg
                           </td>
-                          <td className="py-3 px-4 text-center font-mono">{totalPackets} pcs</td>
+                          <td className="py-3 px-4 text-center font-mono">{livePackets} pcs</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -913,7 +651,6 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
                         <tr className="bg-stone-50 dark:bg-[#161414] border-b border-stone-200 dark:border-[#2E2828] text-stone-500 dark:text-stone-400 font-bold font-malayalam">
                           <th className="py-3 px-4">തീയതി</th>
                           <th className="py-3 px-4 text-right">ആകെ കൂലി</th>
-                          <th className="py-3 px-4">തൊഴിലാളികൾ</th>
                           <th className="py-3 px-4 text-right">ഉൽപ്പാദനം</th>
                           <th className="py-3 px-4 text-center">ബാച്ചുകൾ</th>
                           <th className="py-3 px-4 text-right">കിലോ നിരക്ക്</th>
@@ -949,18 +686,6 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
                               {/* Accumulated Wage */}
                               <td className="py-3 px-4 text-right font-mono font-black text-sm text-stone-900 dark:text-white">
                                 ₹{row.totalBudget.toLocaleString('en-IN')}
-                              </td>
-
-                              {/* Workers split */}
-                              <td className="py-3 px-4 text-stone-600 dark:text-stone-300">
-                                <div className="text-[11px] space-y-0.5">
-                                  <span className="block text-orange-700 dark:text-orange-400">
-                                    {row.numCooks} കുക്കുകൾ (₹{row.wagePerCook}/ഒരാൾക്ക്)
-                                  </span>
-                                  <span className="block text-indigo-700 dark:text-indigo-400">
-                                    {row.numPackers} പാക്കർമാർ (₹{row.wagePerPacker}/ഒരാൾക്ക്)
-                                  </span>
-                                </div>
                               </td>
 
                               {/* Production Kg */}
@@ -1028,40 +753,48 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
             >
               <div className="flex items-center gap-2.5">
                 <FiClock className="w-4 h-4 text-stone-400" />
-                <span>കൂലി വിവരങ്ങളുടെ മുൻകാല സംഗ്രഹം ({wageHistory.length} രേഖകൾ)</span>
+                <span>കൂലി വിവരങ്ങളുടെ മുൻകാല സംഗ്രഹം ({multiDayLedger.length} രേഖകൾ)</span>
               </div>
               {showHistory ? <FiChevronUp className="w-5 h-5" /> : <FiChevronDown className="w-5 h-5" />}
             </button>
 
             {showHistory && (
               <div className="p-5 pt-0 border-t border-stone-100 dark:border-[#282323] space-y-2.5">
-                {wageHistory.length === 0 ? (
+                {multiDayLedger.length === 0 ? (
                   <p className="text-center text-xs text-stone-400 py-6">മുൻകാല രേഖകൾ ലഭ്യമല്ല.</p>
                 ) : (
-                  wageHistory.map((w) => (
+                  multiDayLedger.map((row) => (
                     <button
-                      key={w.id}
-                      onClick={() => setSelectedDate(w.productionDate)}
+                      key={row.id || row.date}
+                      onClick={() => setSelectedDate(row.date)}
                       className={`w-full text-left p-4 rounded-2xl border transition-all cursor-pointer ${
-                        selectedDate === w.productionDate
+                        selectedDate === row.date
                           ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-300 dark:border-amber-800'
                           : 'bg-stone-50 dark:bg-[#141212] border-stone-200 dark:border-[#282323] hover:bg-stone-100 dark:hover:bg-[#201C1C]'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-xs sm:text-sm font-bold text-stone-900 dark:text-white">
-                          {formatDate(w.productionDate)}
+                          {formatDate(row.date)}
                         </span>
                         <span className="text-sm sm:text-base font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                          ₹{w.totalWageBudget.toLocaleString('en-IN')}
+                          ₹{row.totalBudget.toLocaleString('en-IN')}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 text-xs text-stone-500 dark:text-stone-400 flex-wrap">
-                        <span>{w.numCooks} കുക്കുകൾ (₹{w.wagePerCook}/ഒരാൾക്ക്)</span>
+                        <span>{row.totalProductionKg.toFixed(1)} kg ഉൽപ്പാദനം</span>
                         <span>•</span>
-                        <span>{w.numPackers} പാക്കർമാർ (₹{w.wagePerPacker}/ഒരാൾക്ക്)</span>
+                        <span>{row.batchesCount} ബാച്ചുകൾ</span>
                         <span>•</span>
-                        <span>{w.totalPacketsProduced} പാക്കറ്റുകൾ</span>
+                        <span>{row.totalPackets} പാക്കറ്റുകൾ</span>
+                        {row.totalProductionKg > 0 && (
+                          <>
+                            <span>•</span>
+                            <span className="font-mono font-bold text-amber-700 dark:text-amber-400">
+                              ₹{row.wageRateKg.toFixed(2)}/kg
+                            </span>
+                          </>
+                        )}
                       </div>
                     </button>
                   ))

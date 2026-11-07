@@ -14,6 +14,7 @@ import {
   FiCheck,
 } from 'react-icons/fi';
 import { Product, Ingredient, ProductionRun, StockMovement, Recipe } from '../types';
+import { isEligibleProductionBatch } from '../services/costing';
 
 interface AIAdminAssistantProps {
   products: Product[];
@@ -86,7 +87,7 @@ export const AIAdminAssistant: React.FC<AIAdminAssistantProps> = ({
 
   // Compute live metrics for AI context
   const todayStr = new Date().toISOString().split('T')[0];
-  const todayRuns = productionRuns.filter((r) => r.productionDate === todayStr && r.status === 'completed');
+  const todayRuns = productionRuns.filter((r) => r.productionDate === todayStr && isEligibleProductionBatch(r));
   const todayOutputKg = todayRuns.reduce((sum, r) => sum + (Number(r.actualQuantity) || 0), 0);
   const lowStockIngredients = ingredients.filter(
     (i) => i.isActive && i.minStock > 0 && i.currentStock <= i.minStock

@@ -43,6 +43,7 @@ import { useTheme } from '../context/ThemeContext';
 import { AnimatedNumber } from './AnimatedNumber';
 import { useFeedback } from '../context/FeedbackContext';
 import { useFullCostStockValuation } from '../hooks/useFullCostStockValuation';
+import { isEligibleProductionBatch, getEffectiveDailyWage } from '../services/costing';
 
 interface DashboardViewProps {
   products: Product[];
@@ -271,7 +272,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const productProducedKgMap = useMemo(() => {
     const map = new Map<string, number>();
     productionRuns
-      .filter((r) => r.status === 'completed')
+      .filter((r) => isEligibleProductionBatch(r))
       .forEach((r) => {
         map.set(r.productId, (map.get(r.productId) || 0) + (r.actualQuantity || 0));
       });
@@ -290,18 +291,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   }, [salesList]);
 
   // Financial & inventory calculations - dynamic valuation based on actual finished inventory
+  const { costPerKgMap, totalValuation: fullCostStockValuation } = useFullCostStockValuation(products, productionRuns);
   const totalFinishedGoodsValuation = useMemo(() => {
     return products.reduce((acc, p) => {
       const produced = productProducedKgMap.get(p.id) || 0;
       const sold = productSoldKgMap.get(p.id) || 0;
       const netStock = p.currentStock > 0 ? p.currentStock : Math.max(0, produced - sold);
-      const effectivePrice = p.wholesalePrice > 0 ? p.wholesalePrice : 160;
+      const effectivePrice = p.wholesalePrice > 0 ? p.wholesalePrice : (costPerKgMap[p.id] || 0);
       return acc + Math.round(netStock * effectivePrice);
     }, 0);
-  }, [products, productProducedKgMap, productSoldKgMap]);
+  }, [products, productProducedKgMap, productSoldKgMap, costPerKgMap]);
 
   // Total stock valuation at full manufacturing cost (ingredients + oil + wages + packaging)
-  const { totalValuation: fullCostStockValuation } = useFullCostStockValuation(products, productionRuns);
+  // fullCostStockValuation computed above via useFullCostStockValuation
 
   const totalRawValuation = ingredients.reduce((acc, ing) => {
     return acc + ing.currentStock * ing.avgCostPerUnit;
@@ -390,7 +392,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }
 
     productionRuns.forEach((run) => {
-      if (run.status === 'completed' && run.productionDate) {
+      if (isEligibleProductionBatch(run) && run.productionDate) {
         const item = dateMap.get(run.productionDate);
         if (item) {
           item.output += run.actualQuantity;
@@ -441,7 +443,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       const produced = productProducedKgMap.get(p.id) || 0;
       const sold = productSoldKgMap.get(p.id) || 0;
       const netStock = p.currentStock > 0 ? p.currentStock : Math.max(0, produced - sold);
-      const effectivePrice = p.wholesalePrice > 0 ? p.wholesalePrice : 160;
+      const effectivePrice = p.wholesalePrice > 0 ? p.wholesalePrice : (costPerKgMap[p.id] || 0);
       const valuation = Math.round(netStock * effectivePrice);
 
       return {
@@ -461,7 +463,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     const fromRuns = Array.from(productProducedKgMap.entries()).map(([pId, qty]) => {
       const p = products.find((prod) => prod.id === pId);
       const name = p?.name || 'Product';
-      const price = p?.wholesalePrice && p.wholesalePrice > 0 ? p.wholesalePrice : 160;
+      const price = p?.wholesalePrice && p.wholesalePrice > 0 ? p.wholesalePrice : (costPerKgMap[pId] || 0);
       return {
         name,
         value: Math.round(qty * price),
@@ -474,7 +476,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       return fromRuns.sort((a, b) => b.value - a.value).slice(0, 8);
     }
     return items.slice(0, 8);
-  }, [products, productProducedKgMap, productSoldKgMap]);
+  }, [products, productProducedKgMap, productSoldKgMap, costPerKgMap]);
 
   return (
     <div className="space-y-6 pb-20">
@@ -700,7 +702,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 ? 'bg-stone-950 text-amber-300'
                 : 'bg-orange-200/80 dark:bg-orange-900/80 text-orange-950 dark:text-orange-200'
             }`}>
-              {todayWage && !isTodayWagePending ? `₹${todayWage.totalWageBudget}` : 'ചേർക്കുക'}
+              {todayWage && !isTodayWagePending ? `₹${getEffectiveDailyWage(todayWage)}` : 'ചേർക്കുക'}
             </span>
           </button>
           <button
@@ -1064,7 +1066,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   ? 'bg-stone-950 text-amber-300'
                   : 'bg-orange-200/80 dark:bg-orange-900/80 text-orange-950 dark:text-orange-200'
               }`}>
-                {todayWage && !isTodayWagePending ? `₹${todayWage.totalWageBudget}` : 'ചേർക്കുക'}
+                {todayWage && !isTodayWagePending ? `₹${getEffectiveDailyWage(todayWage)}` : 'ചേർക്കുക'}
               </span>
             </button>
             <button

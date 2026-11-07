@@ -14,7 +14,13 @@ import {
   saveProductSellingPrice,
   fetchStockMovements,
 } from '../services/supabase';
-import { roundCurrency, roundStock, isBasicIngredientName } from '../services/costing';
+import {
+  roundCurrency,
+  roundStock,
+  isBasicIngredientName,
+  isEligibleProductionBatch,
+  computeDailyBatchCostMaps,
+} from '../services/costing';
 import { LoadingSpinner } from './LoadingSpinner';
 import { useFeedback } from '../context/FeedbackContext';
 import {
@@ -82,7 +88,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     const dates = Array.from(
       new Set(
         productionRuns
-          .filter((r) => r.status === 'completed' && r.productionDate)
+          .filter((r) => isEligibleProductionBatch(r) && r.productionDate)
           .map((r) => r.productionDate)
       )
     ).sort().reverse();
@@ -202,25 +208,25 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
       }
       setClosingDataMap(closingMap);
 
-      // Completed runs
-      const completedRuns = productionRuns.filter((r) => r.status === 'completed');
+      // Precompute daily weight-based batch allocations (wages, oil, basic ingredients) with exact rounding reconciliation
+      const {
+        eligibleRuns,
+        batchWageMap,
+        batchOilMap,
+        batchBasicMap,
+      } = computeDailyBatchCostMaps(productionRuns, wageMap, closingMap, basicCostByDate);
 
       // 2. Compute costing for ALL products in catalog
       const summaries: ProductCostSummary[] = [];
 
       for (const prod of products) {
-        let pRuns = completedRuns.filter((r) => r.productId === prod.id);
+        let pRuns = eligibleRuns.filter((r) => r.productId === prod.id);
 
         if (dateFilter !== 'all') {
-          const dateRuns = pRuns.filter((r) => r.productionDate === dateFilter);
-          if (dateRuns.length > 0) {
-            pRuns = dateRuns;
-          } else {
-            pRuns = [];
-          }
+          pRuns = pRuns.filter((r) => r.productionDate === dateFilter);
         }
 
-        const totalKg = pRuns.reduce((sum, r) => sum + (r.actualQuantity || 0), 0);
+        const totalKg = pRuns.reduce((sum, r) => sum + (Number(r.actualQuantity) || 0), 0);
         const batchCount = pRuns.length;
 
         // Ingredients cost from runs (excluding basic ingredients to avoid double-counting)
@@ -254,51 +260,21 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           }, 0)
         );
 
-        // Oil, Basic Ingredients, Cooking and Packing Wages allocation: proportional to production weight on respective dates
+        // Oil, Basic Ingredients, and Daily Wages allocation: proportional to production weight on respective dates
         let oilCost = 0;
         let basicIngredientsCost = 0;
-        let productionWages = 0; // Cooking workers wage (കുക്കിംഗ് തൊഴിലാളികൾ)
-        let packingWages = 0;    // Packing workers wage (പാക്കിംഗ് തൊഴിലാളികൾ)
+        let productionWages = 0; // Total daily wage share allocated by batch production weight
+        const packingWages = 0;
 
-        if (pRuns.length > 0) {
-          for (const run of pRuns) {
-            const rDate = run.productionDate;
-            const closing = rDate ? closingMap[rDate] : null;
-            const wage = rDate ? wageMap[rDate] : null;
-
-            // Day total production weight
-            const dayRuns = completedRuns.filter((r) => r.productionDate === rDate);
-            const dayTotalKg = dayRuns.reduce((s, r) => s + (r.actualQuantity || 0), 0);
-            const ratio = dayTotalKg > 0 ? (run.actualQuantity || 0) / dayTotalKg : 1;
-
-            if (closing && closing.oilConsumed > 0) {
-              const dayOilCost = roundCurrency(closing.oilConsumed * (closing.oilCostPerKg || 150));
-              oilCost += roundCurrency(dayOilCost * ratio);
-            }
-
-            const dayBasicCost = basicCostByDate[rDate] || 0;
-            if (dayBasicCost > 0) {
-              basicIngredientsCost += roundCurrency(dayBasicCost * ratio);
-            }
-
-            // Labour wage allocation: Equal share per batch (Total Wage / Total Batches on that date)
-            const dayTotalBatches = dayRuns.length;
-            const batchRatio = dayTotalBatches > 0 ? 1 / dayTotalBatches : 1;
-
-            const dayProdWages = wage?.productionWageAmount ?? (closing?.productionWages ? (closing.productionWages / 2) : 0);
-            productionWages += roundCurrency(dayProdWages * batchRatio);
-
-            const dayPackWages = wage?.packingWageAmount ?? (closing?.productionWages ? (closing.productionWages / 2) : 0);
-            if (dayPackWages > 0) {
-              packingWages += roundCurrency(dayPackWages * batchRatio);
-            }
-          }
+        for (const run of pRuns) {
+          oilCost += batchOilMap.get(run.id) || 0;
+          basicIngredientsCost += batchBasicMap.get(run.id) || 0;
+          productionWages += batchWageMap.get(run.id) || 0;
         }
 
         oilCost = roundCurrency(oilCost);
         basicIngredientsCost = roundCurrency(basicIngredientsCost);
         productionWages = roundCurrency(productionWages);
-        packingWages = roundCurrency(packingWages);
 
         const totalManufacturingCost = roundCurrency(
           ingredientCost + oilCost + basicIngredientsCost + productionWages + packingWages + packagingMaterialCost
@@ -363,7 +339,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     const runs = productionRuns.filter(
       (r) =>
         r.productId === productId &&
-        r.status === 'completed' &&
+        isEligibleProductionBatch(r) &&
         (selectedDate === 'all' || r.productionDate === selectedDate)
     );
 
@@ -531,8 +507,15 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   const productDailyTrends = useMemo(() => {
     if (!selectedProduct) return [];
     const prodId = selectedProduct.productId;
-    const prodRuns = productionRuns.filter(
-      (r) => r.productId === prodId && r.status === 'completed' && r.productionDate
+    const {
+      eligibleRuns,
+      batchWageMap,
+      batchOilMap,
+      batchBasicMap,
+    } = computeDailyBatchCostMaps(productionRuns, wageDataMap, closingDataMap, dailyBasicMap);
+
+    const prodRuns = eligibleRuns.filter(
+      (r) => r.productId === prodId && r.productionDate
     );
 
     const dateMap = new Map<string, { runs: ProductionRun[]; totalKg: number }>();
@@ -543,7 +526,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
       }
       const entry = dateMap.get(d)!;
       entry.runs.push(r);
-      entry.totalKg += (r.actualQuantity || 0);
+      entry.totalKg += (Number(r.actualQuantity) || 0);
     }
 
     const trends: {
@@ -560,31 +543,34 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
       const { runs, totalKg } = dateMap.get(d)!;
       let ingCost = 0;
       for (const r of runs) {
-        if (r.ingredientsConsumed && Array.isArray(r.ingredientsConsumed)) {
+        if (r.ingredientsConsumed && Array.isArray(r.ingredientsConsumed) && r.ingredientsConsumed.length > 0) {
           for (const ing of r.ingredientsConsumed) {
+            if (isBasicIngredientName(ing.ingredientName || '')) continue;
             ingCost += (ing.totalCost || 0);
           }
         } else if (r.totalIngredientCost) {
           ingCost += r.totalIngredientCost;
         }
       }
+      ingCost = roundCurrency(ingCost);
 
-      const dayAllRuns = productionRuns.filter((r) => r.status === 'completed' && r.productionDate === d);
-      const dayTotalKgAll = dayAllRuns.reduce((s, r) => s + (r.actualQuantity || 0), 0);
-      const ratio = dayTotalKgAll > 0 ? totalKg / dayTotalKgAll : 1;
+      const dayOil = roundCurrency(runs.reduce((s, r) => s + (batchOilMap.get(r.id) || 0), 0));
+      const dayBasicCost = roundCurrency(runs.reduce((s, r) => s + (batchBasicMap.get(r.id) || 0), 0));
+      const dayWages = roundCurrency(runs.reduce((s, r) => s + (batchWageMap.get(r.id) || 0), 0));
 
-      const closing = closingDataMap[d];
-      const wage = wageDataMap[d];
+      const dayPackings = allPackings.filter((pr) => pr.productId === prodId && pr.packingDate === d);
+      const dayPackagingCost = roundCurrency(
+        dayPackings.reduce((sum, pr) => {
+          const sizeKey = (pr.packetSize || '').toLowerCase().trim();
+          const unitCost = Number(pr.coverUnitCost) || packetTypeCostMap[sizeKey] || 0;
+          const cost = (pr.packagingCost && pr.packagingCost > 0)
+            ? Number(pr.packagingCost)
+            : roundCurrency((pr.packetsPacked || 0) * unitCost);
+          return sum + cost;
+        }, 0)
+      );
 
-      let dayOil = 0;
-      if (closing && closing.oilConsumed > 0) {
-        dayOil = roundCurrency((closing.oilConsumed * (closing.oilCostPerKg || 150)) * ratio);
-      }
-      const dayBasicCost = roundCurrency((dailyBasicMap[d] || 0) * ratio);
-      const dayProdWages = roundCurrency(((wage?.productionWageAmount ?? closing?.productionWages) || 0) * ratio);
-      const dayPackWages = roundCurrency((wage?.packingWageAmount || 0) * ratio);
-
-      const mfgCost = roundCurrency(ingCost + dayOil + dayBasicCost + dayProdWages + dayPackWages);
+      const mfgCost = roundCurrency(ingCost + dayOil + dayBasicCost + dayWages + dayPackagingCost);
       const costPerKg = totalKg > 0 ? roundCurrency(mfgCost / totalKg) : 0;
 
       trends.push({
@@ -597,13 +583,14 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     }
 
     return trends;
-  }, [selectedProduct, productionRuns, closingDataMap, wageDataMap, dailyBasicMap]);
+  }, [selectedProduct, productionRuns, closingDataMap, wageDataMap, dailyBasicMap, allPackings, packetTypeCostMap]);
 
   // Ingredient sensitivity breakdown: how each ingredient affects 1 kg finished product cost
   const ingredientImpactList = useMemo(() => {
     if (!selectedProduct || !detailIngredients.length) return [];
-    const totalProdKg = selectedProduct.totalProductionKg || 1;
-    const totalMfgCost = selectedProduct.totalManufacturingCost || 1;
+    const currentProd = productCosts.find((pc) => pc.productId === selectedProduct.productId) || selectedProduct;
+    const totalProdKg = currentProd.totalProductionKg || 1;
+    const totalMfgCost = currentProd.totalManufacturingCost || 1;
 
     return detailIngredients
       .map((ing) => {
@@ -969,8 +956,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
             { label: 'ചേരുവകളുടെ ചെലവ്', value: p.ingredientCost, icon: FiBox, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/20' },
             { label: 'ഉപയോഗിച്ച ഓയിലിന്റെ ചെലവ്', value: p.oilCost, icon: FiDroplet, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/20' },
             { label: 'അടിസ്ഥാന ചേരുവകൾ (ഉപ്പ്, തോട്..)', value: p.basicIngredientsCost, icon: FiLayers, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/20' },
-            { label: 'കുക്കിംഗ് തൊഴിലാളികളുടെ കൂലി', value: p.productionWages, icon: FiUsers, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/20' },
-            { label: 'പാക്കിംഗ് തൊഴിലാളികളുടെ കൂലി', value: p.packingWages, icon: FiUsers, color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950/20' },
+            { label: 'ദിവസേനയുള്ള കൂലി വിഹിതം (Daily Wages)', value: p.productionWages, icon: FiUsers, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/20' },
             { label: 'പാക്കിംഗ് കവർ / മെറ്റീരിയലുകൾ', value: p.packagingMaterialCost, icon: FiPackage, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-950/20' },
           ].map((item, idx) => {
             const Icon = item.icon;

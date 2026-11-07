@@ -428,7 +428,7 @@ export const App: React.FC = () => {
               {activeTab === 'wages' && (
                 <WagesAdminView
                   productionRuns={productionRuns}
-                  onRefresh={loadAllData}
+                  onRefresh={handleForceRefresh}
                 />
               )}
 
@@ -492,6 +492,7 @@ export const App: React.FC = () => {
                   wages={dailyWages}
                   movements={stockMovements}
                   ingredients={ingredients}
+                  productionRuns={productionRuns}
                   onRefresh={handleForceRefresh}
                 />
               )}

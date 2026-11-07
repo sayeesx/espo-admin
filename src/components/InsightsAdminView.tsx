@@ -33,6 +33,8 @@ import {
 } from 'recharts';
 import { useTheme } from '../context/ThemeContext';
 import { AnimatedNumber } from './AnimatedNumber';
+import { isEligibleProductionBatch } from '../services/costing';
+import { useFullCostStockValuation } from '../hooks/useFullCostStockValuation';
 
 interface InsightsAdminViewProps {
   products: Product[];
@@ -109,13 +111,17 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
   }, [stockMovements, fromDate, toDate]);
 
   // Real financial calculations
-  const totalFinishedGoodsValuation = products.reduce((acc, p) => acc + p.currentStock * p.wholesalePrice, 0);
+  const { costPerKgMap } = useFullCostStockValuation(products, productionRuns);
+  const totalFinishedGoodsValuation = products.reduce((acc, p) => {
+    const effectivePrice = p.wholesalePrice > 0 ? p.wholesalePrice : (costPerKgMap[p.id] || 0);
+    return acc + Math.max(0, p.currentStock || 0) * effectivePrice;
+  }, 0);
   const totalRawValuation = ingredients.reduce((acc, ing) => acc + ing.currentStock * ing.avgCostPerUnit, 0);
   const totalWorkingCapital = totalFinishedGoodsValuation + totalRawValuation;
 
   // Output stats in selected range
   const completedRunsInRange = useMemo(
-    () => filteredProductionRuns.filter((r) => r.status === 'completed'),
+    () => filteredProductionRuns.filter((r) => isEligibleProductionBatch(r)),
     [filteredProductionRuns]
   );
   const totalOutputInRangeKg = useMemo(
@@ -145,7 +151,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
     }
 
     filteredProductionRuns.forEach((run) => {
-      if (run.status === 'completed' && run.productionDate) {
+      if (isEligibleProductionBatch(run) && run.productionDate) {
         const iso = run.productionDate;
         const displayDate = new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         const item = dateMap.get(iso) || { date: displayDate, outputKg: 0, count: 0 };
@@ -218,7 +224,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
     const prodMap = new Map<string, { id: string; name: string; outputKg: number; batchCount: number }>();
 
     filteredProductionRuns
-      .filter((r) => r.status === 'completed')
+      .filter((r) => isEligibleProductionBatch(r))
       .forEach((r) => {
         const pId = r.productId;
         const pName = r.productName || products.find((p) => p.id === pId)?.name || 'ഉൽപ്പന്നം';
@@ -268,7 +274,7 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
   const topProfitableProducts = useMemo(() => {
     const productCostMap = new Map<string, number>();
     productionRuns
-      .filter((r) => r.status === 'completed' && (r.actualQuantity || 0) > 0 && (r.totalIngredientCost || 0) > 0)
+      .filter((r) => isEligibleProductionBatch(r) && (r.totalIngredientCost || 0) > 0)
       .forEach((r) => {
         const pName = r.productName || products.find((p) => p.id === r.productId)?.name;
         if (pName && !productCostMap.has(pName)) {

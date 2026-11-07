@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { StockMovement, Ingredient, Product } from '../types';
+import { StockMovement, Ingredient, Product, ProductionRun } from '../types';
+import { isEligibleProductionBatch, getEffectiveDailyWage, roundCurrency } from '../services/costing';
 import {
   FiSearch,
   FiArrowDownRight,
@@ -146,6 +147,7 @@ interface StockLedgerAdminViewProps {
   ingredients?: Ingredient[];
   products?: Product[];
   wages?: any[];
+  productionRuns?: ProductionRun[];
   onRefresh: () => void;
 }
 
@@ -154,6 +156,7 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
   ingredients = [],
   products = [],
   wages = [],
+  productionRuns = [],
   onRefresh,
 }) => {
   const [search, setSearch] = useState('');
@@ -266,83 +269,38 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
     if (Array.isArray(wages)) {
       wages.forEach((w) => {
         if (!w || !w.productionDate) return;
-        const totalBudget = Number(w.totalWageBudget) || 0;
+        const totalBudget = getEffectiveDailyWage(w);
         if (totalBudget <= 0) return;
 
-        const cooks = Number(w.numCooks) || 0;
-        const packers = Number(w.numPackers) || 0;
-        const prodWage = Number(w.productionWageAmount) || 0;
-        const packWage = Number(w.packingWageAmount) || 0;
-        const prodKg = Number(w.totalProductionKg) || 0;
-        const packets = Number(w.totalPacketsProduced) || 0;
+        const dayEligibleRuns = (productionRuns || []).filter(
+          (r) => r.productionDate === w.productionDate && isEligibleProductionBatch(r)
+        );
+        const liveKg = dayEligibleRuns.reduce((s, r) => s + (Number(r.actualQuantity) || 0), 0);
+        const prodKg = liveKg > 0 ? liveKg : (Number(w.totalProductionKg) || 0);
+        const wagePerKg = prodKg > 0 ? roundCurrency(totalBudget / prodKg) : 0;
 
-        // If cooking wage was allocated
-        if (prodWage > 0) {
-          list.push({
-            id: `wage-cook-${w.id || w.productionDate}`,
-            itemId: `wage-cook-${w.productionDate}`,
-            itemType: 'wage',
-            itemName: 'കുക്കിംഗ് കൂലി (Cooking Wages)',
-            category: 'wages',
-            movementType: 'out',
-            quantity: prodWage,
-            unit: '₹',
-            previousBalance: 0,
-            newBalance: prodWage,
-            costPerUnit: Number(w.wagePerCook) || 0,
-            reference: `WAGE-${w.productionDate}`,
-            operatorName: `${cooks} കുക്കുകൾ · ₹${w.wagePerCook || 0}/ഒരാൾക്ക്`,
-            reason: `${prodKg.toFixed(1)} kg ഉൽപ്പാദനത്തിനായുള്ള കുക്കിംഗ് ലേബർ വിഹിതം`,
-            createdAt: `${w.productionDate}T17:30:00.000Z`,
-          });
-        }
-
-        // If packing wage was allocated
-        if (packWage > 0) {
-          list.push({
-            id: `wage-pack-${w.id || w.productionDate}`,
-            itemId: `wage-pack-${w.productionDate}`,
-            itemType: 'wage',
-            itemName: 'പാക്കിംഗ് കൂലി (Packing Wages)',
-            category: 'wages',
-            movementType: 'out',
-            quantity: packWage,
-            unit: '₹',
-            previousBalance: 0,
-            newBalance: packWage,
-            costPerUnit: Number(w.wagePerPacker) || 0,
-            reference: `WAGE-${w.productionDate}`,
-            operatorName: `${packers} പാക്കർമാർ · ₹${w.wagePerPacker || 0}/ഒരാൾക്ക്`,
-            reason: `${packets} പാക്കറ്റുകൾ പാക്ക് ചെയ്തതിൻ്റെ കൂലി വിഹിതം`,
-            createdAt: `${w.productionDate}T18:00:00.000Z`,
-          });
-        }
-
-        // If no split was made, show total
-        if (prodWage === 0 && packWage === 0 && totalBudget > 0) {
-          list.push({
-            id: `wage-tot-${w.id || w.productionDate}`,
-            itemId: `wage-tot-${w.productionDate}`,
-            itemType: 'wage',
-            itemName: 'ആകെ കൂലി (Daily Total Wage)',
-            category: 'wages',
-            movementType: 'out',
-            quantity: totalBudget,
-            unit: '₹',
-            previousBalance: 0,
-            newBalance: totalBudget,
-            costPerUnit: totalBudget,
-            reference: `WAGE-${w.productionDate}`,
-            operatorName: `${cooks + packers} തൊഴിലാളികൾ`,
-            reason: `${prodKg.toFixed(1)} kg ഉൽപ്പാദനം · ${packets} പാക്കറ്റുകൾ`,
-            createdAt: `${w.productionDate}T18:00:00.000Z`,
-          });
-        }
+        list.push({
+          id: `wage-tot-${w.id || w.productionDate}`,
+          itemId: `wage-tot-${w.productionDate}`,
+          itemType: 'wage',
+          itemName: 'ദിവസേനയുള്ള ആകെ കൂലി (Daily Total Wage)',
+          category: 'wages',
+          movementType: 'out',
+          quantity: totalBudget,
+          unit: '₹',
+          previousBalance: 0,
+          newBalance: totalBudget,
+          costPerUnit: wagePerKg,
+          reference: `WAGE-${w.productionDate}`,
+          operatorName: prodKg > 0 ? `₹${wagePerKg.toFixed(2)} / kg (${dayEligibleRuns.length} ബാച്ചുകൾ)` : 'തൂക്കം അടിസ്ഥാനത്തിൽ (Weight-based)',
+          reason: `${prodKg.toFixed(1)} kg ആകെ ഉൽപ്പാദനത്തിന് ആനുപാതികമായി വിഭജിച്ച കൂലി`,
+          createdAt: `${w.productionDate}T18:00:00.000Z`,
+        });
       });
     }
 
     return list;
-  }, [movements, wages, ingredientMap]);
+  }, [movements, wages, productionRuns, ingredientMap]);
 
   // Unique list of ingredient & item names for the specific filter dropdown
   const uniqueItemNames = useMemo(() => {

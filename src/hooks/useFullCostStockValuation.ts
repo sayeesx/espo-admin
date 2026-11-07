@@ -8,7 +8,11 @@ import {
   fetchStockMovements,
   fetchIngredients,
 } from '../services/supabase';
-import { roundCurrency, isBasicIngredientName } from '../services/costing';
+import {
+  roundCurrency,
+  isBasicIngredientName,
+  computeDailyBatchCostMaps,
+} from '../services/costing';
 
 /**
  * Full-cost stock valuation.
@@ -92,12 +96,19 @@ export function useFullCostStockValuation(products: Product[], productionRuns: P
           basicCostByDate[movDate] = roundCurrency((basicCostByDate[movDate] || 0) + cost);
         }
 
-        const completedRuns = productionRuns.filter((r) => r.status === 'completed');
+        // Precompute daily weight-based batch allocations (wages, oil, basic ingredients) with exact rounding reconciliation
+        const {
+          eligibleRuns,
+          batchWageMap,
+          batchOilMap,
+          batchBasicMap,
+        } = computeDailyBatchCostMaps(productionRuns, wageMap, closingMap, basicCostByDate);
+
         const map: Record<string, number> = {};
 
         for (const prod of products) {
-          const pRuns = completedRuns.filter((r) => r.productId === prod.id);
-          const totalKg = pRuns.reduce((sum, r) => sum + (r.actualQuantity || 0), 0);
+          const pRuns = eligibleRuns.filter((r) => r.productId === prod.id);
+          const totalKg = pRuns.reduce((sum, r) => sum + (Number(r.actualQuantity) || 0), 0);
           if (totalKg <= 0) {
             map[prod.id] = 0;
             continue;
@@ -131,38 +142,15 @@ export function useFullCostStockValuation(products: Product[], productionRuns: P
             }, 0)
           );
 
-          // Oil, basic ingredients, cooking wages, and packing wages: proportional to production weight on respective dates
+          // Oil, basic ingredients, and daily wages: proportional to production weight on respective dates
           let oilCost = 0;
           let basicIngredientsCost = 0;
           let productionWages = 0;
-          let packingWages = 0;
 
           for (const run of pRuns) {
-            const rDate = run.productionDate;
-            const closing = rDate ? closingMap[rDate] : null;
-            const wage = rDate ? wageMap[rDate] : null;
-
-            const dayRuns = completedRuns.filter((r) => r.productionDate === rDate);
-            const dayTotalKg = dayRuns.reduce((s, r) => s + (r.actualQuantity || 0), 0);
-            const ratio = dayTotalKg > 0 ? (run.actualQuantity || 0) / dayTotalKg : 1;
-
-            if (closing && closing.oilConsumed > 0) {
-              const dayOilCost = roundCurrency(closing.oilConsumed * (closing.oilCostPerKg || 150));
-              oilCost += roundCurrency(dayOilCost * ratio);
-            }
-
-            const dayBasicCost = basicCostByDate[rDate] || 0;
-            if (dayBasicCost > 0) {
-              basicIngredientsCost += roundCurrency(dayBasicCost * ratio);
-            }
-
-            const dayProdWages = wage?.productionWageAmount ?? (closing?.productionWages || 0);
-            productionWages += roundCurrency(dayProdWages * ratio);
-
-            const dayPackWages = wage?.packingWageAmount ?? 0;
-            if (dayPackWages > 0) {
-              packingWages += roundCurrency(dayPackWages * ratio);
-            }
+            oilCost += batchOilMap.get(run.id) || 0;
+            basicIngredientsCost += batchBasicMap.get(run.id) || 0;
+            productionWages += batchWageMap.get(run.id) || 0;
           }
 
           const totalManufacturingCost = roundCurrency(
@@ -170,7 +158,6 @@ export function useFullCostStockValuation(products: Product[], productionRuns: P
               roundCurrency(oilCost) +
               roundCurrency(basicIngredientsCost) +
               roundCurrency(productionWages) +
-              roundCurrency(packingWages) +
               packagingMaterialCost
           );
 

@@ -875,7 +875,7 @@ export async function fetchProductionRuns(force = false): Promise<ProductionRun[
           )
         `)
         .order('created_at', { ascending: false })
-        .limit(100),
+        .limit(500),
       supabase
         .from('packing_records')
         .select('id, production_run_id, packet_size, packets_packed, weight_packed_kg, notes')
@@ -1411,7 +1411,11 @@ export async function saveDailyClosing(params: {
       .eq('production_date', productionDate)
       .maybeSingle();
 
-    const todayBudget = Number(todayWage?.total_wage_budget) || Number(todayWage?.daily_wage_budget) || 0;
+    const todayBudget =
+      Number(todayWage?.total_wage_budget) ||
+      Number(todayWage?.daily_wage_budget) ||
+      ((Number(todayWage?.production_wage_amount) || 0) + (Number(todayWage?.packing_wage_amount) || 0)) ||
+      0;
     if (todayWage && todayBudget > 0) {
       if (!productionWages) {
         productionWages = todayBudget;
@@ -1425,7 +1429,11 @@ export async function saveDailyClosing(params: {
         .limit(1)
         .maybeSingle();
 
-      const prevBudget = Number(prevWage?.total_wage_budget) || Number(prevWage?.daily_wage_budget) || 0;
+      const prevBudget =
+        Number(prevWage?.total_wage_budget) ||
+        Number(prevWage?.daily_wage_budget) ||
+        ((Number(prevWage?.production_wage_amount) || 0) + (Number(prevWage?.packing_wage_amount) || 0)) ||
+        0;
       if (prevWage && prevBudget > 0) {
         if (!productionWages) {
           productionWages = prevBudget;
@@ -1433,12 +1441,12 @@ export async function saveDailyClosing(params: {
         await supabase.from('daily_wages').upsert({
           production_date: productionDate,
           total_wage_budget: productionWages,
-          production_wage_amount: Number(prevWage.production_wage_amount) || productionWages,
-          packing_wage_amount: Number(prevWage.packing_wage_amount) || 0,
-          num_cooks: prevWage.num_cooks || 2,
-          num_packers: prevWage.num_packers || 2,
-          wage_per_cook: prevWage.wage_per_cook || (productionWages / 2),
-          wage_per_packer: prevWage.wage_per_packer || 0,
+          production_wage_amount: productionWages,
+          packing_wage_amount: 0,
+          num_cooks: 0,
+          num_packers: 0,
+          wage_per_cook: 0,
+          wage_per_packer: 0,
           notes: 'Auto-populated from previous recorded wage',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -1471,7 +1479,7 @@ export async function saveDailyClosing(params: {
 
   const totalSharedExpense = roundCurrency(oilTotalExpense + productionWages + dailyBasicIngredientsExpense);
 
-  // 6. Fetch completed production runs on that date
+  // 6. Fetch eligible production runs on that date
   const { data: runs, error: runsErr } = await supabase
     .from('production_runs')
     .select(`
@@ -1482,7 +1490,8 @@ export async function saveDailyClosing(params: {
       products (name)
     `)
     .eq('production_date', productionDate)
-    .eq('status', 'completed');
+    .neq('status', 'cancelled')
+    .gt('actual_quantity', 0);
 
   if (runsErr) throw runsErr;
 
@@ -1844,7 +1853,7 @@ export async function recordPacking(params: {
   const prodName = prod?.name || 'Product';
 
   let unitCost = 0;
-  let labourRate = 1.0;
+  let labourRate = 0;
   let sizeGrams = 100;
   let currStock = 0;
 
@@ -1857,7 +1866,6 @@ export async function recordPacking(params: {
 
     if (packItem) {
       unitCost = Number(packItem.unit_cost) || 0;
-      labourRate = Number(packItem.packing_labour_rate) || 1.0;
       sizeGrams = Number(packItem.size_grams) || 100;
       currStock = Number(packItem.current_stock) || 0;
 
@@ -1885,27 +1893,70 @@ export async function recordPacking(params: {
         created_at: new Date().toISOString(),
       });
     }
+  } else if (packetSize) {
+    const match = packetSize.match(/(\d+(?:\.\d+)?)\s*(kg|g|gm)?/i);
+    if (match) {
+      const val = parseFloat(match[1]);
+      const unit = (match[2] || 'g').toLowerCase();
+      sizeGrams = unit === 'kg' ? val * 1000 : val;
+    }
   }
 
-  if (unitCost <= 0) {
+  if (packetSize) {
     try {
       const { data: pt } = await supabase
         .from('packet_types')
-        .select('cost_per_packet, bundle_cost, bundle_quantity')
+        .select('id, name, cost_per_packet, bundle_cost, bundle_quantity')
         .eq('name', packetSize)
         .limit(1)
         .maybeSingle();
       if (pt) {
-        unitCost = Number(pt.cost_per_packet) || (Number(pt.bundle_cost) / Math.max(1, Number(pt.bundle_quantity))) || 0;
+        const ptUnitCost = Number(pt.cost_per_packet) || (Number(pt.bundle_cost) / Math.max(1, Number(pt.bundle_quantity))) || 0;
+        if (unitCost <= 0) {
+          unitCost = ptUnitCost;
+        }
+        if (packetsPacked > 0) {
+          const currPktStock = Math.max(0, Number(pt.bundle_quantity ?? 0));
+          const newPktStock = Math.max(0, currPktStock - packetsPacked);
+          const preservedUnitCost = Number(pt.cost_per_packet) || unitCost;
+          const newBundleCost = roundCurrency(newPktStock * preservedUnitCost);
+
+          await supabase
+            .from('packet_types')
+            .update({
+              bundle_quantity: newPktStock,
+              bundle_cost: newBundleCost,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', pt.id);
+
+          if (!packagingItemId) {
+            await supabase.from('stock_movements').insert({
+              item_id: pt.id,
+              item_type: 'ingredient',
+              item_name: pt.name,
+              movement_type: 'production_consumption',
+              quantity: -packetsPacked,
+              unit: 'pcs',
+              previous_balance: currPktStock,
+              new_balance: newPktStock,
+              cost_per_unit: unitCost,
+              reference: productionRunId || `Packing ${packingDate}`,
+              operator_name: operatorName,
+              reason: `Packaging covers consumed for ${packetsPacked} packets (${prodName})`,
+              created_at: new Date().toISOString(),
+            });
+          }
+        }
       }
     } catch (e) {
-      console.warn('Could not query packet_types cost for', packetSize, e);
+      console.warn('Could not query or update packet_types for', packetSize, e);
     }
   }
 
   const packagingCost = roundCurrency(packetsPacked * unitCost);
-  const packingLabourCost = roundCurrency(packetsPacked * labourRate);
-  const totalPackingCost = roundCurrency(packagingCost + packingLabourCost);
+  const packingLabourCost = 0;
+  const totalPackingCost = packagingCost;
   const weightPackedKg = roundStock((packetsPacked * sizeGrams) / 1000.0);
 
   const { data: created, error } = await supabase
@@ -2121,7 +2172,8 @@ export async function fetchTotalProductionKgForDate(date: string): Promise<numbe
     .from('production_runs')
     .select('actual_quantity')
     .eq('production_date', date)
-    .eq('status', 'completed');
+    .neq('status', 'cancelled')
+    .gt('actual_quantity', 0);
 
   if (error) return 0;
   return (data || []).reduce((sum: number, r: any) => sum + (Number(r.actual_quantity) || 0), 0);
