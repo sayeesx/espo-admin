@@ -15,6 +15,7 @@ import {
   FiShoppingBag,
   FiPercent,
   FiPackage,
+  FiRefreshCw,
 } from 'react-icons/fi';
 import {
   ResponsiveContainer,
@@ -32,6 +33,7 @@ import {
   Legend,
 } from 'recharts';
 import { useTheme } from '../context/ThemeContext';
+import { useFeedback } from '../context/FeedbackContext';
 import { AnimatedNumber } from './AnimatedNumber';
 import { isEligibleProductionBatch } from '../services/costing';
 import { useFullCostStockValuation } from '../hooks/useFullCostStockValuation';
@@ -42,6 +44,7 @@ interface InsightsAdminViewProps {
   productionRuns: ProductionRun[];
   stockMovements: StockMovement[];
   onNavigateTab: (tab: any) => void;
+  onRefresh?: () => Promise<void> | void;
 }
 
 export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
@@ -50,8 +53,27 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
   productionRuns,
   stockMovements,
   onNavigateTab,
+  onRefresh,
 }) => {
   const { isDark } = useTheme();
+  const { showToast } = useFeedback();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [salesList, setSalesList] = useState<any[]>([]);
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      if (onRefresh) await onRefresh();
+      const s = await fetchSales();
+      setSalesList(s);
+      showToast('ഇൻസൈറ്റ്സ് വിവരങ്ങൾ പുതുക്കി', 'success');
+    } catch {
+      showToast('പുതുക്കുന്നതിൽ പരാജയപ്പെട്ടു', 'error');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
   const [timeRange, setTimeRange] = useState<'today' | '7d' | '30d' | 'all' | 'custom'>('7d');
   const [customStartDate, setCustomStartDate] = useState<string>(() => {
     const d = new Date();
@@ -201,8 +223,6 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
       .slice(0, 6);
   }, [filteredProductionRuns, filteredStockMovements]);
 
-  const [salesList, setSalesList] = useState<any[]>([]);
-
   useEffect(() => {
     fetchSales().then((data) => setSalesList(data)).catch((err) => console.error(err));
   }, []);
@@ -333,59 +353,83 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
     <div className="space-y-6 pb-20 max-w-6xl">
       {/* Top Header & Date Range Toolbar */}
       <div className="flex flex-col gap-4 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3">
-          {/* Preset Buttons */}
-          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 dark:bg-[#1E1B1B] rounded-xl border border-stone-200 dark:border-[#2E2828]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg sm:text-xl font-black text-stone-900 dark:text-white flex items-center gap-2">
+              <FiActivity className="w-5 h-5 text-epso-orange" />
+              <span>അനലിറ്റിക്സ് & ഇൻസൈറ്റ്സ് (Analytics)</span>
+            </h2>
+            <p className="text-xs text-stone-400 font-malayalam mt-0.5">
+              ഉൽപ്പാദന പ്രവണതകളും സാമ്പത്തിക റിപ്പോർട്ടുകളും
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Preset Buttons */}
+            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 dark:bg-[#1E1B1B] rounded-xl border border-stone-200 dark:border-[#2E2828]">
+              <button
+                onClick={() => setTimeRange('today')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  timeRange === 'today'
+                    ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
+                    : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+                }`}
+              >
+                Today
+              </button>
+              <button
+                onClick={() => setTimeRange('7d')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  timeRange === '7d'
+                    ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
+                    : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+                }`}
+              >
+                7 Days
+              </button>
+              <button
+                onClick={() => setTimeRange('30d')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  timeRange === '30d'
+                    ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
+                    : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+                }`}
+              >
+                30 Days
+              </button>
+              <button
+                onClick={() => setTimeRange('all')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  timeRange === 'all'
+                    ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
+                    : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+                }`}
+              >
+                All Time
+              </button>
+              <button
+                onClick={() => setTimeRange('custom')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  timeRange === 'custom'
+                    ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
+                    : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+                }`}
+              >
+                <FiCalendar className="w-3.5 h-3.5" />
+                Custom Range
+              </button>
+            </div>
+
+            {/* Refresh Button */}
             <button
-              onClick={() => setTimeRange('today')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                timeRange === 'today'
-                  ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
-                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
-              }`}
+              type="button"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] text-xs font-bold press-apple transition-colors cursor-pointer disabled:opacity-50 shadow-2xs font-malayalam"
+              title="ഇൻസൈറ്റ്സ് പുതുക്കുക"
             >
-              Today
-            </button>
-            <button
-              onClick={() => setTimeRange('7d')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                timeRange === '7d'
-                  ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
-                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
-              }`}
-            >
-              7 Days
-            </button>
-            <button
-              onClick={() => setTimeRange('30d')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                timeRange === '30d'
-                  ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
-                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
-              }`}
-            >
-              30 Days
-            </button>
-            <button
-              onClick={() => setTimeRange('all')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                timeRange === 'all'
-                  ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
-                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
-              }`}
-            >
-              All Time
-            </button>
-            <button
-              onClick={() => setTimeRange('custom')}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                timeRange === 'custom'
-                  ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs'
-                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
-              }`}
-            >
-              <FiCalendar className="w-3.5 h-3.5" />
-              Custom Range
+              <FiRefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-epso-orange' : ''}`} />
+              <span>പുതുക്കുക</span>
             </button>
           </div>
         </div>

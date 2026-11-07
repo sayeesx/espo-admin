@@ -20,6 +20,7 @@ import {
   FiSliders,
   FiArrowUp,
   FiArrowDown,
+  FiRefreshCw,
 } from 'react-icons/fi';
 import { saveProduct, deleteProduct, saveRecipe, deleteRecipe, fetchPacketTypes, adjustProductStock } from '../services/supabase';
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
@@ -102,6 +103,20 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
   const [filterActive, setFilterActive] = useState<'all' | 'active' | 'inactive'>('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [purchaseListModalOpen, setPurchaseListModalOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      if (onRefresh) await onRefresh();
+      showToast('ഉൽപ്പന്നങ്ങളുടെ വിവരങ്ങൾ പുതുക്കി', 'success');
+    } catch {
+      showToast('പുതുക്കുന്നതിൽ പരാജയപ്പെട്ടു', 'error');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeletingProductId, setIsDeletingProductId] = useState<string | null>(null);
@@ -570,6 +585,16 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
       {/* Top Action Toolbar (Tab Title Removed) */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-end gap-3 pb-2 border-b border-stone-200 dark:border-[#2E2828]">
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer disabled:opacity-50 font-malayalam"
+            title="ഉൽപ്പന്നങ്ങൾ പുതുക്കുക"
+          >
+            <FiRefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-epso-orange' : ''}`} />
+            <span>പുതുക്കുക</span>
+          </button>
           {ingredients.length > 0 && (
             <button
               onClick={() => setPurchaseListModalOpen(true)}

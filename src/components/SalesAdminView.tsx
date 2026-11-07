@@ -31,6 +31,7 @@ import { useFeedback } from '../context/FeedbackContext';
 
 interface SalesAdminViewProps {
   products: Product[];
+  onRefresh?: () => Promise<void> | void;
 }
 
 interface BuyerInfo {
@@ -72,7 +73,7 @@ export interface BillData {
   gstBreakdown: Record<number, number>;
 }
 
-export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
+export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, onRefresh }) => {
   const { showToast, confirm } = useFeedback();
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [costingPrices, setCostingPrices] = useState<Record<string, number>>({});
@@ -232,6 +233,17 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products }) => {
       console.error('Failed to load sales data:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (isLoading) return;
+    try {
+      if (onRefresh) await onRefresh();
+      await loadData();
+      showToast('വിൽപ്പന വിവരങ്ങൾ പുതുക്കി', 'success');
+    } catch {
+      showToast('പുതുക്കുന്നതിൽ പരാജയപ്പെട്ടു', 'error');
     }
   };
 
@@ -687,29 +699,42 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-stone-100 dark:bg-[#1E1B1B] p-1.5 rounded-2xl border border-stone-200 dark:border-[#2E2828]">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 bg-stone-100 dark:bg-[#1E1B1B] p-1.5 rounded-2xl border border-stone-200 dark:border-[#2E2828]">
+            <button
+              type="button"
+              onClick={handleCloseNewBill}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer font-malayalam ${
+                viewMode === 'list'
+                  ? 'bg-white dark:bg-[#252020] text-stone-900 dark:text-white shadow-xs font-black'
+                  : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-300'
+              }`}
+            >
+              വിൽപ്പന ലിസ്റ്റ് (Sales List)
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenNewBill}
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer font-malayalam ${
+                viewMode === 'new_bill'
+                  ? 'bg-epso-orange text-white dark:bg-amber-500 dark:text-stone-950 shadow-xs font-black'
+                  : 'text-stone-700 dark:text-stone-300 hover:text-epso-orange'
+              }`}
+            >
+              <FiPlus className="w-3.5 h-3.5 stroke-[3]" />
+              <span>+ വിൽപ്പന രേഖപ്പെടുത്തുക (New Bill)</span>
+            </button>
+          </div>
+
           <button
             type="button"
-            onClick={handleCloseNewBill}
-            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer font-malayalam ${
-              viewMode === 'list'
-                ? 'bg-white dark:bg-[#252020] text-stone-900 dark:text-white shadow-xs font-black'
-                : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-300'
-            }`}
+            onClick={handleRefresh}
+            disabled={isLoading}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-2xl bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-700 dark:text-stone-300 font-bold text-xs border border-stone-200 dark:border-[#2E2828] transition-colors cursor-pointer disabled:opacity-60 shadow-2xs font-malayalam"
+            title="വിൽപ്പന വിവരങ്ങൾ പുതുക്കുക"
           >
-            വിൽപ്പന ലിസ്റ്റ് (Sales List)
-          </button>
-          <button
-            type="button"
-            onClick={handleOpenNewBill}
-            className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer font-malayalam ${
-              viewMode === 'new_bill'
-                ? 'bg-epso-orange text-white dark:bg-amber-500 dark:text-stone-950 shadow-xs font-black'
-                : 'text-stone-700 dark:text-stone-300 hover:text-epso-orange'
-            }`}
-          >
-            <FiPlus className="w-3.5 h-3.5 stroke-[3]" />
-            <span>+ വിൽപ്പന രേഖപ്പെടുത്തുക (New Bill)</span>
+            <FiRefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-epso-orange' : ''}`} />
+            <span>പുതുക്കുക</span>
           </button>
         </div>
       </div>

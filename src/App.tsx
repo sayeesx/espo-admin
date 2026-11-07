@@ -5,6 +5,7 @@ if (typeof window !== 'undefined' && window.location.hostname === 'espo-admin.ve
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from './context/AuthContext';
+import { useFeedback } from './context/FeedbackContext';
 import { PinGate } from './components/PinGate';
 import { Header, AdminTab } from './components/Header';
 import { MobileAppHeader } from './components/MobileAppHeader';
@@ -36,6 +37,7 @@ import {
   fetchDailyWage,
   fetchDailyWages,
   invalidateAdminCache,
+  supabase,
 } from './services/supabase';
 import { Product, Ingredient, Recipe, ProductionRun, StockMovement, AuditLog } from './types';
 
@@ -44,6 +46,7 @@ const ACTIVE_TAB_KEY = 'epso_admin_active_tab';
 
 export const App: React.FC = () => {
   const { isAuthenticated } = useAuth();
+  const { showToast } = useFeedback();
   const { hasUpdate, isUpdating, newVersion, applyUpdateAndClearCache, checkVersion } = useUpdateChecker();
 
   // Tab persistence: check URL parameter first, then localStorage, defaulting to 'dashboard'
@@ -276,6 +279,313 @@ export const App: React.FC = () => {
 
   const handleForceRefresh = useCallback(() => loadAllData(true), [loadAllData]);
 
+  // Tab-specific targeted refresh states and handlers to avoid reloading the entire application
+  const [tabRefreshing, setTabRefreshing] = useState<Record<string, boolean>>({});
+
+  const refreshDashboardData = useCallback(async () => {
+    if (tabRefreshing['dashboard']) return;
+    setTabRefreshing((prev) => ({ ...prev, dashboard: true }));
+    try {
+      invalidateAdminCache('admin_products');
+      invalidateAdminCache('admin_ingredients');
+      invalidateAdminCache('admin_production_runs');
+      invalidateAdminCache('daily_wages');
+      const todayStr = new Date().toISOString().split('T')[0];
+      const [pRes, iRes, rRes, wRes, twRes] = await Promise.allSettled([
+        fetchProducts(true),
+        fetchIngredients(true),
+        fetchProductionRuns(true),
+        fetchDailyWages(90, true),
+        fetchDailyWage(todayStr),
+      ]);
+      if (pRes.status === 'fulfilled') setProducts(pRes.value);
+      if (iRes.status === 'fulfilled') setIngredients(iRes.value);
+      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+      if (wRes.status === 'fulfilled') setDailyWages(wRes.value);
+      if (twRes.status === 'fulfilled') {
+        const tw = twRes.value;
+        setIsTodayWageAdded(Boolean(tw && tw.totalWageBudget > 0));
+      }
+    } finally {
+      setTabRefreshing((prev) => ({ ...prev, dashboard: false }));
+    }
+  }, [tabRefreshing]);
+
+  const refreshInventoryData = useCallback(async () => {
+    if (tabRefreshing['inventory']) return;
+    setTabRefreshing((prev) => ({ ...prev, inventory: true }));
+    try {
+      invalidateAdminCache('admin_products');
+      invalidateAdminCache('admin_production_runs');
+      const [pRes, rRes] = await Promise.allSettled([
+        fetchProducts(true),
+        fetchProductionRuns(true),
+      ]);
+      if (pRes.status === 'fulfilled') setProducts(pRes.value);
+      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+    } finally {
+      setTabRefreshing((prev) => ({ ...prev, inventory: false }));
+    }
+  }, [tabRefreshing]);
+
+  const refreshInsightsData = useCallback(async () => {
+    if (tabRefreshing['insights']) return;
+    setTabRefreshing((prev) => ({ ...prev, insights: true }));
+    try {
+      invalidateAdminCache('admin_products');
+      invalidateAdminCache('admin_ingredients');
+      invalidateAdminCache('admin_production_runs');
+      invalidateAdminCache('admin_stock_movements');
+      const [pRes, iRes, rRes, mRes] = await Promise.allSettled([
+        fetchProducts(true),
+        fetchIngredients(true),
+        fetchProductionRuns(true),
+        fetchStockMovements(true),
+      ]);
+      if (pRes.status === 'fulfilled') setProducts(pRes.value);
+      if (iRes.status === 'fulfilled') setIngredients(iRes.value);
+      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+      if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
+    } finally {
+      setTabRefreshing((prev) => ({ ...prev, insights: false }));
+    }
+  }, [tabRefreshing]);
+
+  const refreshSalesData = useCallback(async () => {
+    if (tabRefreshing['sales']) return;
+    setTabRefreshing((prev) => ({ ...prev, sales: true }));
+    try {
+      invalidateAdminCache('admin_products');
+      invalidateAdminCache('sales');
+      const pRes = await fetchProducts(true);
+      setProducts(pRes);
+    } finally {
+      setTabRefreshing((prev) => ({ ...prev, sales: false }));
+    }
+  }, [tabRefreshing]);
+
+  const refreshWagesData = useCallback(async () => {
+    if (tabRefreshing['wages']) return;
+    setTabRefreshing((prev) => ({ ...prev, wages: true }));
+    try {
+      invalidateAdminCache('admin_production_runs');
+      invalidateAdminCache('daily_wages');
+      const todayStr = new Date().toISOString().split('T')[0];
+      const [rRes, wRes, twRes] = await Promise.allSettled([
+        fetchProductionRuns(true),
+        fetchDailyWages(90, true),
+        fetchDailyWage(todayStr),
+      ]);
+      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+      if (wRes.status === 'fulfilled') setDailyWages(wRes.value);
+      if (twRes.status === 'fulfilled') {
+        const tw = twRes.value;
+        setIsTodayWageAdded(Boolean(tw && tw.totalWageBudget > 0));
+      }
+    } finally {
+      setTabRefreshing((prev) => ({ ...prev, wages: false }));
+    }
+  }, [tabRefreshing]);
+
+  const refreshCostingData = useCallback(async () => {
+    if (tabRefreshing['costing']) return;
+    setTabRefreshing((prev) => ({ ...prev, costing: true }));
+    try {
+      invalidateAdminCache('admin_production_runs');
+      invalidateAdminCache('admin_stock_movements');
+      invalidateAdminCache('daily_closings');
+      invalidateAdminCache('daily_wages');
+      const [rRes, mRes] = await Promise.allSettled([
+        fetchProductionRuns(true),
+        fetchStockMovements(true),
+      ]);
+      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+      if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
+    } finally {
+      setTabRefreshing((prev) => ({ ...prev, costing: false }));
+    }
+  }, [tabRefreshing]);
+
+  const refreshNotificationsData = useCallback(async () => {
+    if (tabRefreshing['notifications']) return;
+    setTabRefreshing((prev) => ({ ...prev, notifications: true }));
+    try {
+      invalidateAdminCache('admin_audit_logs');
+      invalidateAdminCache('admin_ingredients');
+      invalidateAdminCache('admin_products');
+      invalidateAdminCache('admin_production_runs');
+      const [lRes, iRes, pRes, rRes] = await Promise.allSettled([
+        fetchAuditLogs(true),
+        fetchIngredients(true),
+        fetchProducts(true),
+        fetchProductionRuns(true),
+      ]);
+      if (lRes.status === 'fulfilled') setAuditLogs(lRes.value);
+      if (iRes.status === 'fulfilled') setIngredients(iRes.value);
+      if (pRes.status === 'fulfilled') setProducts(pRes.value);
+      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+    } finally {
+      setTabRefreshing((prev) => ({ ...prev, notifications: false }));
+    }
+  }, [tabRefreshing]);
+
+  const refreshProductsData = useCallback(async () => {
+    if (tabRefreshing['products']) return;
+    setTabRefreshing((prev) => ({ ...prev, products: true }));
+    try {
+      invalidateAdminCache('admin_products');
+      invalidateAdminCache('admin_recipes');
+      const [pRes, rRes] = await Promise.allSettled([
+        fetchProducts(true),
+        fetchRecipes(true),
+      ]);
+      if (pRes.status === 'fulfilled') setProducts(pRes.value);
+      if (rRes.status === 'fulfilled') setRecipes(rRes.value);
+    } finally {
+      setTabRefreshing((prev) => ({ ...prev, products: false }));
+    }
+  }, [tabRefreshing]);
+
+  const refreshIngredientsData = useCallback(async () => {
+    if (tabRefreshing['ingredients']) return;
+    setTabRefreshing((prev) => ({ ...prev, ingredients: true }));
+    try {
+      invalidateAdminCache('admin_ingredients');
+      invalidateAdminCache('admin_stock_movements');
+      const [iRes, mRes] = await Promise.allSettled([
+        fetchIngredients(true),
+        fetchStockMovements(true),
+      ]);
+      if (iRes.status === 'fulfilled') setIngredients(iRes.value);
+      if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
+    } finally {
+      setTabRefreshing((prev) => ({ ...prev, ingredients: false }));
+    }
+  }, [tabRefreshing]);
+
+  const refreshMovementsData = useCallback(async () => {
+    if (tabRefreshing['movements']) return;
+    setTabRefreshing((prev) => ({ ...prev, movements: true }));
+    try {
+      invalidateAdminCache('admin_stock_movements');
+      invalidateAdminCache('admin_production_runs');
+      invalidateAdminCache('admin_ingredients');
+      invalidateAdminCache('daily_wages');
+      const [mRes, rRes, iRes, wRes] = await Promise.allSettled([
+        fetchStockMovements(true),
+        fetchProductionRuns(true),
+        fetchIngredients(true),
+        fetchDailyWages(90, true),
+      ]);
+      if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
+      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+      if (iRes.status === 'fulfilled') setIngredients(iRes.value);
+      if (wRes.status === 'fulfilled') setDailyWages(wRes.value);
+    } finally {
+      setTabRefreshing((prev) => ({ ...prev, movements: false }));
+    }
+  }, [tabRefreshing]);
+
+  const refreshSettingsData = useCallback(async () => {
+    if (tabRefreshing['settings']) return;
+    setTabRefreshing((prev) => ({ ...prev, settings: true }));
+    try {
+      invalidateAdminCache('admin_products');
+      invalidateAdminCache('admin_ingredients');
+      invalidateAdminCache('admin_production_runs');
+      invalidateAdminCache('admin_audit_logs');
+      const [pRes, iRes, rRes, lRes] = await Promise.allSettled([
+        fetchProducts(true),
+        fetchIngredients(true),
+        fetchProductionRuns(true),
+        fetchAuditLogs(true),
+      ]);
+      if (pRes.status === 'fulfilled') setProducts(pRes.value);
+      if (iRes.status === 'fulfilled') setIngredients(iRes.value);
+      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+      if (lRes.status === 'fulfilled') setAuditLogs(lRes.value);
+    } finally {
+      setTabRefreshing((prev) => ({ ...prev, settings: false }));
+    }
+  }, [tabRefreshing]);
+
+  // Supabase Realtime for live production updates, inventory changes, and live order notifications
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedSync = (type: 'production' | 'inventory') => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(async () => {
+        if (type === 'production') {
+          invalidateAdminCache('admin_production_runs');
+          const runs = await fetchProductionRuns(true).catch(() => null);
+          if (runs) setProductionRuns(runs);
+        } else if (type === 'inventory') {
+          invalidateAdminCache('admin_ingredients');
+          invalidateAdminCache('admin_products');
+          const [ings, prods] = await Promise.all([
+            fetchIngredients(true).catch(() => null),
+            fetchProducts(true).catch(() => null),
+          ]);
+          if (ings) setIngredients(ings);
+          if (prods) setProducts(prods);
+        }
+      }, 400);
+    };
+
+    const channel = supabase
+      .channel('admin-core-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'production_runs' },
+        () => {
+          debouncedSync('production');
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'ingredients' },
+        () => {
+          debouncedSync('inventory');
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' },
+        () => {
+          debouncedSync('inventory');
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'sales' },
+        (payload: any) => {
+          const newOrder = payload?.new;
+          const invoice = newOrder?.invoice_number || 'Sale';
+          const amount = newOrder?.grand_total || newOrder?.total_amount || 0;
+          showToast(`പുതിയ ഓർഡർ ലഭിച്ചു! (#${invoice} - ₹${amount})`, 'info');
+        }
+      )
+      .subscribe();
+
+    // Periodic refresh for non-realtime datasets (dashboard statistics, reports, ledger)
+    // Avoids exceeding Supabase Free Plan limits while keeping background stats and ledger fresh
+    const periodicTimer = setInterval(() => {
+      fetchStockMovements(true).then((m) => setStockMovements(m)).catch(() => {});
+      const todayStr = new Date().toISOString().split('T')[0];
+      fetchDailyWage(todayStr).then((tw) => {
+        setIsTodayWageAdded(Boolean(tw && tw.totalWageBudget > 0));
+      }).catch(() => {});
+    }, 90000);
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      clearInterval(periodicTimer);
+      supabase.removeChannel(channel);
+    };
+  }, [isAuthenticated, showToast]);
+
   useEffect(() => {
     if (isAuthenticated) {
       loadAllData();
@@ -395,7 +705,8 @@ export const App: React.FC = () => {
                   ingredients={ingredients}
                   productionRuns={productionRuns}
                   onNavigateTab={handleTabChange}
-                  onRefresh={loadAllData}
+                  onRefresh={refreshDashboardData}
+                  isRefreshing={tabRefreshing['dashboard']}
                   onOpenAI={() => setIsAIOpen(true)}
                   isTodayWagePending={!isTodayWageAdded}
                 />
@@ -405,7 +716,7 @@ export const App: React.FC = () => {
                 <InventoryStockAdminView
                   products={products}
                   productionRuns={productionRuns}
-                  onRefresh={loadAllData}
+                  onRefresh={refreshInventoryData}
                 />
               )}
 
@@ -416,19 +727,21 @@ export const App: React.FC = () => {
                   productionRuns={productionRuns}
                   stockMovements={stockMovements}
                   onNavigateTab={handleTabChange}
+                  onRefresh={refreshInsightsData}
                 />
               )}
 
               {activeTab === 'sales' && (
                 <SalesAdminView
                   products={products}
+                  onRefresh={refreshSalesData}
                 />
               )}
 
               {activeTab === 'wages' && (
                 <WagesAdminView
                   productionRuns={productionRuns}
-                  onRefresh={handleForceRefresh}
+                  onRefresh={refreshWagesData}
                 />
               )}
 
@@ -439,7 +752,7 @@ export const App: React.FC = () => {
                   ingredients={ingredients}
                   productionRuns={productionRuns}
                   stockMovements={stockMovements}
-                  onRefresh={handleForceRefresh}
+                  onRefresh={refreshCostingData}
                 />
               )}
 
@@ -454,7 +767,7 @@ export const App: React.FC = () => {
                   onDismissAll={handleDismissAllNotifications}
                   onRestore={handleRestoreNotifications}
                   onNavigateTab={handleTabChange}
-                  onRefresh={loadAllData}
+                  onRefresh={refreshNotificationsData}
                 />
               )}
 
@@ -464,7 +777,8 @@ export const App: React.FC = () => {
                   ingredients={ingredients}
                   productionRuns={productionRuns}
                   onNavigateTab={handleTabChange}
-                  onRefresh={loadAllData}
+                  onRefresh={refreshDashboardData}
+                  isRefreshing={tabRefreshing['dashboard']}
                 />
               )}
 
@@ -473,7 +787,7 @@ export const App: React.FC = () => {
                   products={products}
                   ingredients={ingredients}
                   recipes={recipes}
-                  onRefresh={loadAllData}
+                  onRefresh={refreshProductsData}
                 />
               )}
 
@@ -482,7 +796,7 @@ export const App: React.FC = () => {
                   ingredients={ingredients}
                   products={products}
                   stockMovements={stockMovements}
-                  onRefresh={loadAllData}
+                  onRefresh={refreshIngredientsData}
                 />
               )}
 
@@ -493,7 +807,7 @@ export const App: React.FC = () => {
                   movements={stockMovements}
                   ingredients={ingredients}
                   productionRuns={productionRuns}
-                  onRefresh={handleForceRefresh}
+                  onRefresh={refreshMovementsData}
                 />
               )}
 
@@ -503,7 +817,7 @@ export const App: React.FC = () => {
                   ingredients={ingredients}
                   productionRuns={productionRuns}
                   stockMovements={stockMovements}
-                  onRefresh={loadAllData}
+                  onRefresh={refreshSettingsData}
                 />
               )}
             </>

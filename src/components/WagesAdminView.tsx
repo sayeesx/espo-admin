@@ -306,12 +306,25 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
           </span>
 
           <button
-            onClick={() => loadDateData(selectedDate)}
+            onClick={async () => {
+              if (isLoading) return;
+              setIsLoading(true);
+              try {
+                if (onRefresh) await onRefresh();
+                await loadDateData(selectedDate);
+                showToast('കൂലി വിവരങ്ങൾ പുതുക്കി', 'success');
+              } catch {
+                showToast('പുതുക്കുന്നതിൽ പരാജയപ്പെട്ടു', 'error');
+              } finally {
+                setIsLoading(false);
+              }
+            }}
             disabled={isLoading}
-            className="p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer disabled:opacity-50"
-            title="Refresh"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-[#282323] text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 font-malayalam shadow-2xs"
+            title="കൂലി വിവരങ്ങൾ പുതുക്കുക"
           >
-            <FiRefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-epso-red dark:text-amber-400' : ''}`} />
+            <FiRefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-epso-red dark:text-amber-400' : ''}`} />
+            <span>പുതുക്കുക</span>
           </button>
         </div>
 

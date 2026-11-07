@@ -118,6 +118,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   const [closingDataMap, setClosingDataMap] = useState<Record<string, any>>({});
   const [wageDataMap, setWageDataMap] = useState<Record<string, any>>({});
   const [dailyBasicMap, setDailyBasicMap] = useState<Record<string, number>>({});
+  const [allMovements, setAllMovements] = useState<StockMovement[]>([]);
 
   // Per-product detail data
   const [detailIngredients, setDetailIngredients] = useState<any[]>([]);
@@ -136,6 +137,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
       ]);
 
       const movements = (stockMovements && stockMovements.length > 0) ? stockMovements : (fetchedMovements || []);
+      setAllMovements(movements);
 
       // Build ingredients cost lookup
       const ingCostMap = new Map<string, number>();
@@ -334,7 +336,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     return () => window.removeEventListener('focus', handleFocus);
   }, [selectedDate, loadCostingData]);
 
-  // Load detail ingredients for a product
+  // Load detail ingredients for a product including its accurate basic ingredients
   const loadProductDetail = useCallback(async (productId: string) => {
     const runs = productionRuns.filter(
       (r) =>
@@ -343,19 +345,29 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
         (selectedDate === 'all' || r.productionDate === selectedDate)
     );
 
-    const ingMap: Record<string, { name: string; unit: string; qty: number; cost: number }> = {};
+    const ingCostMap = new Map<string, number>();
+    ingredients.forEach((ing) => {
+      const cost = Number(ing.avgCostPerUnit) || 0;
+      if (ing.id) ingCostMap.set(ing.id, cost);
+      if (ing.name) ingCostMap.set(ing.name.toLowerCase().trim(), cost);
+    });
 
+    const ingMap: Record<string, { name: string; unit: string; qty: number; cost: number; isBasic?: boolean }> = {};
+
+    // 1. Ingredients directly consumed in this product's batches
     for (const run of runs) {
       if (run.ingredientsConsumed) {
         for (const ing of run.ingredientsConsumed) {
-          if (isBasicIngredientName(ing.ingredientName || '')) continue;
-          const key = ing.ingredientId || ing.ingredientName || 'unknown';
+          const ingName = ing.ingredientName || ing.ingredientId || 'Unknown';
+          const isBasic = isBasicIngredientName(ingName);
+          const key = (ing.ingredientId || ingName).toLowerCase().trim();
           if (!ingMap[key]) {
             ingMap[key] = {
-              name: ing.ingredientName || ing.ingredientId || 'Unknown',
+              name: ingName,
               unit: ing.unit || 'kg',
               qty: 0,
               cost: 0,
+              isBasic,
             };
           }
           ingMap[key].qty += (ing.actualQuantity || 0);
@@ -364,8 +376,98 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
       }
     }
 
-    setDetailIngredients(Object.values(ingMap));
-  }, [productionRuns, selectedDate]);
+    // 2. Proportional basic ingredients & oil allocated to this product across production dates
+    const distinctDates = Array.from(new Set(runs.map((r) => r.productionDate).filter(Boolean))) as string[];
+    const movements = (stockMovements && stockMovements.length > 0) ? stockMovements : allMovements;
+
+    for (const rDate of distinctDates) {
+      // Find total eligible production on rDate
+      const dayAllEligibleRuns = productionRuns.filter(
+        (r) => r.productionDate === rDate && isEligibleProductionBatch(r)
+      );
+      const dayTotalKg = dayAllEligibleRuns.reduce((sum, r) => sum + (Number(r.actualQuantity) || 0), 0);
+      const prodDayRuns = runs.filter((r) => r.productionDate === rDate);
+      const prodDayKg = prodDayRuns.reduce((sum, r) => sum + (Number(r.actualQuantity) || 0), 0);
+
+      if (dayTotalKg <= 0 || prodDayKg <= 0) continue;
+      const ratio = prodDayKg / dayTotalKg;
+
+      // A. Oil allocation
+      const closing = closingDataMap[rDate];
+      if (closing) {
+        const netOilKg = Number(closing.oilConsumed) > 0
+          ? Number(closing.oilConsumed)
+          : Math.max(0, Number(closing.totalOilUsedKg || 0) - Number(closing.oilLeftoverKg || 0));
+
+        if (netOilKg > 0) {
+          const allocatedOilKg = netOilKg * ratio;
+          const oilCostPerKg = Number(closing.oilCostPerKg) || ingCostMap.get('oil') || ingCostMap.get('ഓയിൽ') || 150;
+          const allocatedOilCost = roundCurrency(allocatedOilKg * oilCostPerKg);
+          const oilKey = 'basic_oil';
+
+          if (!ingMap[oilKey]) {
+            ingMap[oilKey] = {
+              name: 'ഓയിൽ (Oil)',
+              unit: 'kg',
+              qty: 0,
+              cost: 0,
+              isBasic: true,
+            };
+          }
+          ingMap[oilKey].qty += allocatedOilKg;
+          ingMap[oilKey].cost += allocatedOilCost;
+        }
+      }
+
+      // B. Daily basic ingredients from stock movements (Salt, Cashew Shell, Chippli, Curry Leaves, etc.)
+      for (const m of movements) {
+        if ((m.quantity || 0) >= 0) continue;
+        const itemName = (m.itemName || '').trim();
+        const reason = (m.reason || '').toLowerCase();
+        const isBasic = isBasicIngredientName(itemName) || reason.includes('daily basic ingredient usage');
+        if (!isBasic) continue;
+        if (itemName.toLowerCase().includes('oil') || itemName.includes('ഓയിൽ')) continue;
+
+        const isConsumption =
+          m.movementType === 'production_consumption' ||
+          reason.includes('daily basic ingredient usage');
+        if (!isConsumption) continue;
+
+        const dateMatch = m.reason?.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+        const movDate = dateMatch ? dateMatch[1] : (m.createdAt ? m.createdAt.split('T')[0] : '');
+        if (movDate !== rDate) continue;
+
+        const qtyKg = m.unit?.toLowerCase() === 'g' ? Math.abs(m.quantity) / 1000 : Math.abs(m.quantity);
+        const unitCost = (m.costPerUnit && m.costPerUnit > 0)
+          ? m.costPerUnit
+          : (ingCostMap.get(m.itemId) || ingCostMap.get(itemName.toLowerCase()) || 0);
+
+        const allocatedKg = qtyKg * ratio;
+        const allocatedCost = roundCurrency(allocatedKg * unitCost);
+        const basicKey = `basic_${(m.itemId || itemName).toLowerCase().trim()}`;
+
+        if (!ingMap[basicKey]) {
+          ingMap[basicKey] = {
+            name: itemName,
+            unit: 'kg',
+            qty: 0,
+            cost: 0,
+            isBasic: true,
+          };
+        }
+        ingMap[basicKey].qty += allocatedKg;
+        ingMap[basicKey].cost += allocatedCost;
+      }
+    }
+
+    const formattedList = Object.values(ingMap).map((item) => ({
+      ...item,
+      qty: roundStock(item.qty),
+      cost: roundCurrency(item.cost),
+    }));
+
+    setDetailIngredients(formattedList);
+  }, [productionRuns, selectedDate, ingredients, stockMovements, allMovements, closingDataMap]);
 
   // Refresh handler to reload latest data without reloading the whole page
   const handleRefresh = async () => {
@@ -1062,7 +1164,14 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
         {/* Ingredient Details Table */}
         {detailIngredients.length > 0 && (
           <div className="space-y-2.5">
-            <h3 className="text-sm font-black text-stone-800 dark:text-stone-200 px-1">ഉപയോഗിച്ച ചേരുവകളുടെ ലിസ്റ്റ്</h3>
+            <div className="flex items-center justify-between px-1">
+              <h3 className="text-sm font-black text-stone-800 dark:text-stone-200">
+                ഉപയോഗിച്ച ചേരുവകളുടെ ലിസ്റ്റ്
+              </h3>
+              <span className="text-[11px] font-bold text-stone-500 dark:text-stone-400">
+                {detailIngredients.length} ചേരുവകൾ
+              </span>
+            </div>
             <div className="rounded-2xl border border-stone-200 dark:border-[#2E2828] overflow-hidden shadow-sm">
               <div className="grid grid-cols-[1fr_100px_100px] gap-2 px-4 py-3 bg-stone-50 dark:bg-[#1E1B1B] text-[10px] font-bold text-stone-500 dark:text-stone-400 uppercase tracking-wider">
                 <span>ചേരുവ</span>
@@ -1070,10 +1179,21 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
                 <span className="text-right">ചെലവ്</span>
               </div>
               {detailIngredients.map((ing, idx) => (
-                <div key={idx} className="grid grid-cols-[1fr_100px_100px] gap-2 px-4 py-3 border-t border-stone-100 dark:border-[#2E2828]/50 text-xs sm:text-sm">
-                  <span className="font-bold text-stone-800 dark:text-stone-200 truncate">{ing.name}</span>
-                  <span className="text-right text-stone-600 dark:text-stone-400 font-mono">{ing.qty.toFixed(2)} {ing.unit}</span>
-                  <span className="text-right font-bold text-stone-900 dark:text-white font-mono">{formatCurrency(ing.cost)}</span>
+                <div key={idx} className="grid grid-cols-[1fr_100px_100px] gap-2 px-4 py-3 border-t border-stone-100 dark:border-[#2E2828]/50 text-xs sm:text-sm items-center">
+                  <span className="font-bold text-stone-800 dark:text-stone-200 truncate flex items-center gap-1.5">
+                    <span>{ing.name}</span>
+                    {ing.isBasic && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 whitespace-nowrap">
+                        ബേസിക്
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-right text-stone-600 dark:text-stone-400 font-mono">
+                    {Number(ing.qty).toFixed(ing.qty < 0.1 && ing.qty > 0 ? 3 : 2)} {ing.unit}
+                  </span>
+                  <span className="text-right font-bold text-stone-900 dark:text-white font-mono">
+                    {formatCurrency(ing.cost)}
+                  </span>
                 </div>
               ))}
             </div>

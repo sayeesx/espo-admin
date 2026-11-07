@@ -84,6 +84,20 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   const [resetError, setResetError] = useState<string>('');
   const [resetLoading, setResetLoading] = useState<boolean>(false);
   const [resetSuccessNotice, setResetSuccessNotice] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      if (onRefresh) await onRefresh();
+      showToast('സിസ്റ്റം ക്രമീകരണ വിവരങ്ങൾ പുതുക്കി', 'success');
+    } catch {
+      showToast('പുതുക്കുന്നതിൽ പരാജയപ്പെട്ടു', 'error');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // Load PIN and Factory Profile from cache and audit logs
   useEffect(() => {
@@ -455,12 +469,25 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
           </p>
         </div>
 
-        {resetSuccessNotice && (
-          <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2 font-malayalam animate-fade-in">
-            <FiCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-            <span>{resetSuccessNotice}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {resetSuccessNotice && (
+            <div className="p-2.5 rounded-xl bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-2 font-malayalam animate-fade-in">
+              <FiCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{resetSuccessNotice}</span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-700 dark:text-stone-300 font-bold text-xs border border-stone-200 dark:border-[#2E2828] press-apple transition-colors cursor-pointer disabled:opacity-50 shadow-2xs font-malayalam"
+            title="സിസ്റ്റം വിവരങ്ങൾ പുതുക്കുക"
+          >
+            <FiRefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-epso-orange' : ''}`} />
+            <span>പുതുക്കുക</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

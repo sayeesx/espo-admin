@@ -17,6 +17,7 @@ import {
   FiBox,
   FiCheck,
   FiX,
+  FiRefreshCw,
 } from 'react-icons/fi';
 import {
   saveIngredient,
@@ -62,6 +63,23 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   const [addPurchaseModalOpen, setAddPurchaseModalOpen] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
   const [detailIngredient, setDetailIngredient] = useState<Ingredient | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      if (onRefresh) await onRefresh();
+      await loadPackagingItems();
+      const pts = await fetchPacketTypes(true);
+      setPacketTypes(pts);
+      showToast('ചേരുവകളുടെ വിവരങ്ങൾ പുതുക്കി', 'success');
+    } catch {
+      showToast('പുതുക്കുന്നതിൽ പരാജയപ്പെട്ടു', 'error');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   // Tab state: Raw Ingredients vs Packet Types (persisted across reloads)
   const [activeIngredientTab, setActiveIngredientTab] = useState<'ingredients' | 'packets'>(() => {
@@ -478,6 +496,17 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
             <div className="flex items-center gap-2 flex-nowrap shrink-0 ml-auto">
               <button
                 type="button"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-50 font-malayalam"
+                title="ചേരുവകൾ പുതുക്കുക"
+              >
+                <FiRefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-epso-orange' : ''}`} />
+                <span>പുതുക്കുക</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => handleSelectSubTab('packets')}
                 className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer whitespace-nowrap shrink-0"
                 title="പാക്കറ്റ് തരങ്ങൾ (Packet Types & Covers)"
@@ -787,6 +816,17 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-50 font-malayalam"
+                title="പാക്കറ്റുകൾ പുതുക്കുക"
+              >
+                <FiRefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-epso-orange' : ''}`} />
+                <span>പുതുക്കുക</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => handleSelectSubTab('ingredients')}

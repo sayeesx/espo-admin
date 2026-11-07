@@ -51,6 +51,7 @@ interface DashboardViewProps {
   productionRuns: ProductionRun[];
   onNavigateTab: (tab: any) => void;
   onRefresh?: () => void;
+  isRefreshing?: boolean;
   onOpenAI?: () => void;
   isTodayWagePending?: boolean;
 }
@@ -203,11 +204,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   productionRuns,
   onNavigateTab,
   onRefresh,
+  isRefreshing = false,
   onOpenAI,
   isTodayWagePending = false,
 }) => {
   const { showToast, confirm } = useFeedback();
   const { isDark } = useTheme();
+  const [localRefreshing, setLocalRefreshing] = useState(false);
+
   const dateScrollRef = useRef<HTMLDivElement>(null);
   const desktopDateScrollRef = useRef<HTMLDivElement>(null);
   const mobileDateInputRef = useRef<HTMLInputElement>(null);
@@ -250,6 +254,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     fetchDailyWage(activeDate).then(setTodayWage).catch(() => setTodayWage(null));
     fetchTotalPacketsForDate(activeDate).then(setTodayPacketsCount).catch(() => setTodayPacketsCount(0));
   }, [activeDate]);
+
+  const handleTabRefresh = async () => {
+    if (isRefreshing || localRefreshing) return;
+    setLocalRefreshing(true);
+    try {
+      if (onRefresh) await onRefresh();
+      const dateToFetch = selectedDate || todayIso;
+      const [c, w, p, s] = await Promise.all([
+        fetchDailyClosing(dateToFetch).catch(() => null),
+        fetchDailyWage(dateToFetch).catch(() => null),
+        fetchTotalPacketsForDate(dateToFetch).catch(() => 0),
+        fetchSales().catch(() => []),
+      ]);
+      setDailyClosing(c);
+      setTodayWage(w);
+      setTodayPacketsCount(p);
+      if (s) setSalesList(s);
+      showToast('ഡാഷ്‌ബോർഡ് വിവരങ്ങൾ പുതുക്കി', 'success');
+    } catch {
+      showToast('പുതുക്കുന്നതിൽ പരാജയപ്പെട്ടു', 'error');
+    } finally {
+      setLocalRefreshing(false);
+    }
+  };
 
   const todaySalesTotal = useMemo(() => {
     return salesList
@@ -495,9 +523,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 ഇന്നത്തെ പ്രവർത്തനങ്ങൾ
               </p>
             </div>
-            <span className="text-[10px] font-black text-stone-400 uppercase tracking-wider">
-              Live
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black text-stone-400 uppercase tracking-wider">
+                Live
+              </span>
+              <button
+                type="button"
+                onClick={handleTabRefresh}
+                disabled={isRefreshing || localRefreshing}
+                className="p-1.5 rounded-lg border border-stone-200 dark:border-[#282323] text-stone-600 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#252020] cursor-pointer disabled:opacity-50"
+                title="പുതുക്കുക"
+              >
+                <FiRefreshCw className={`w-3.5 h-3.5 ${isRefreshing || localRefreshing ? 'animate-spin text-epso-orange' : ''}`} />
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
@@ -1093,6 +1132,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               title="Costing Analysis"
             >
               <span>കോസ്റ്റിംഗ് വിശകലനം</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleTabRefresh}
+              disabled={isRefreshing || localRefreshing}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-[#2E2828] flex items-center gap-1.5 press-apple font-malayalam cursor-pointer transition-all shadow-2xs disabled:opacity-50"
+              title="ഡാഷ്‌ബോർഡ് വിവരങ്ങൾ പുതുക്കുക"
+            >
+              <FiRefreshCw className={`w-3.5 h-3.5 ${isRefreshing || localRefreshing ? 'animate-spin text-epso-orange' : ''}`} />
+              <span>പുതുക്കുക</span>
             </button>
             <button
               type="button"

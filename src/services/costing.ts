@@ -56,7 +56,7 @@ export function calculateDailyOilUsage(
 } {
   const prevStock = Math.max(0, roundStock(previousAvailableStockKg));
   const used = Math.max(0, roundStock(oilUsedKg));
-  const leftover = Math.max(0, Math.min(used, roundStock(leftoverOilKg)));
+  const leftover = Math.max(0, roundStock(leftoverOilKg));
   const netOilConsumedKg = Math.max(0, roundStock(used - leftover));
   const finalOilStockKg = Math.max(0, roundStock(prevStock - netOilConsumedKg));
   const oilTotalExpense = roundCurrency(netOilConsumedKg * Math.max(0, oilCostPerKg));
