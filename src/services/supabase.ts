@@ -1381,7 +1381,7 @@ export async function saveDailyClosing(params: {
 
   if (params.oilUsedKg !== undefined) {
     oilUsed = Math.max(0, roundStock(params.oilUsedKg));
-    leftoverOil = Math.max(0, roundStock(params.oilLeftoverKg ?? 0));
+    leftoverOil = Math.max(0, Math.min(oilUsed, roundStock(params.oilLeftoverKg ?? 0)));
   } else if (params.oilOpeningBalance !== undefined && params.oilClosingBalance !== undefined) {
     oilUsed = Math.max(0, roundStock(params.oilOpeningBalance - params.oilClosingBalance));
     leftoverOil = Math.max(0, roundStock(params.oilClosingBalance));
