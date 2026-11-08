@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { verifyAdminPin, changeAdminPin } from '../services/supabase';
+import { verifyAdminPin, changeAdminPin, setAdminSessionHeader, supabase } from '../services/supabase';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -12,16 +12,42 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return Boolean(sessionStorage.getItem('epso_admin_session'));
-  });
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  // Authoritatively validate existing session token with server on mount / refresh
   useEffect(() => {
-    const session = sessionStorage.getItem('epso_admin_session');
-    if (session) {
-      setIsAuthenticated(true);
-    }
+    const validateExistingSession = async () => {
+      const session = typeof sessionStorage !== 'undefined'
+        ? sessionStorage.getItem('epso_admin_session')
+        : null;
+
+      if (!session || !session.trim()) {
+        setIsAuthenticated(false);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setAdminSessionHeader(session);
+        const { data, error } = await supabase.rpc('is_admin_session_valid', { p_token: session });
+        if (!error && data === true) {
+          setIsAuthenticated(true);
+        } else {
+          sessionStorage.removeItem('epso_admin_session');
+          setAdminSessionHeader(null);
+          setIsAuthenticated(false);
+        }
+      } catch {
+        sessionStorage.removeItem('epso_admin_session');
+        setAdminSessionHeader(null);
+        setIsAuthenticated(false);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    validateExistingSession();
   }, []);
 
   const loginWithPin = async (pin: string): Promise<{ success: boolean; error?: string }> => {
@@ -29,33 +55,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const cleanPin = pin.trim();
 
-      // Explicitly reject and permanently block obsolete/old password 65188
-      if (cleanPin === '65188') {
-        sessionStorage.removeItem('epso_admin_session');
-        setIsAuthenticated(false);
-        return { success: false, error: 'തെറ്റായ പിൻ (Incorrect PIN)' };
-      }
-
-      // Strictly enforce Admin PIN 98096
-      if (cleanPin !== '98096') {
-        return { success: false, error: 'തെറ്റായ പിൻ (Incorrect PIN)' };
-      }
-
-      // Verify Admin PIN 98096
+      // Zero hardcoded credentials: fully verified via bcrypt RPC
       const res = await verifyAdminPin(cleanPin);
-      if (res.success) {
-        sessionStorage.setItem('epso_admin_session', res.session_token || 'active_token');
+      if (res.success && res.session_token) {
+        sessionStorage.setItem('epso_admin_session', res.session_token);
+        setAdminSessionHeader(res.session_token);
         setIsAuthenticated(true);
         return { success: true };
       }
 
       return { success: false, error: res.error || 'തെറ്റായ പിൻ (Incorrect PIN)' };
     } catch (err: any) {
-      if (pin.trim() === '98096') {
-        sessionStorage.setItem('epso_admin_session', 'active_token');
-        setIsAuthenticated(true);
-        return { success: true };
-      }
       return { success: false, error: err?.message || 'Authentication error.' };
     } finally {
       setIsLoading(false);
@@ -67,7 +77,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    const session = typeof sessionStorage !== 'undefined'
+      ? sessionStorage.getItem('epso_admin_session')
+      : null;
+    if (session) {
+      Promise.resolve(supabase.rpc('revoke_admin_session', { p_token: session })).catch(() => {});
+    }
     sessionStorage.removeItem('epso_admin_session');
+    setAdminSessionHeader(null);
     setIsAuthenticated(false);
   };
 
@@ -86,8 +103,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
-  return ctx;
-}
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};

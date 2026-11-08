@@ -24,9 +24,10 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
       setConfirmPin('');
       setErrorMsg('');
       setSuccessMsg('');
-      // Load current production pin from local storage cache if available
-      const cached = localStorage.getItem('epso_production_pin');
-      if (cached && /^\d{4}$/.test(cached)) setCurrentPin(cached);
+      // Purge any legacy plaintext PIN from local storage
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem('epso_production_pin');
+      }
     }
   }, [isOpen]);
 
@@ -49,35 +50,27 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
 
     setIsLoading(true);
     try {
-      // 1. Securely set Kitchen PIN via server-side RPC (requires admin auth)
+      // Securely set Kitchen PIN via server-side RPC using Admin session token
       const sessionToken = sessionStorage.getItem('epso_admin_session') || '';
+      if (!sessionToken) {
+        throw new Error('അഡ്മിൻ സെഷൻ ലഭ്യമല്ല. ദയവായി വീണ്ടും ലോഗിൻ ചെയ്യുക (Admin session expired)');
+      }
+
       const { data, error: rpcErr } = await supabase.rpc('set_kitchen_pin', {
         p_new_pin: newPin,
-        p_admin_pin: '98096',
         p_session_token: sessionToken,
       });
 
       if (rpcErr) {
-        console.error('Supabase PIN update error:', rpcErr);
         throw new Error(rpcErr.message || 'Failed to update PIN in database');
       }
 
-      // 2. Cache in localStorage
-      localStorage.setItem('epso_production_pin', newPin);
-      setCurrentPin(newPin);
-      setSuccessMsg('പ്രൊഡക്ഷൻ പിൻ വിജയകരമായി മാറ്റി! (Production PIN updated successfully)');
+      setSuccessMsg('പ്രൊഡക്ഷൻ പിൻ വിജയകരമായി മാറ്റി! (Kitchen PIN updated successfully)');
       setTimeout(() => {
         onClose();
       }, 1200);
     } catch (err: any) {
-      console.warn('Falling back to local storage PIN cache:', err);
-      // Offline fallback: still update localStorage
-      localStorage.setItem('epso_production_pin', newPin);
-      setCurrentPin(newPin);
-      setSuccessMsg('പ്രൊഡക്ഷൻ പിൻ സേവ് ചെയ്തു! (PIN saved locally)');
-      setTimeout(() => {
-        onClose();
-      }, 1200);
+      setErrorMsg(err?.message || 'പിൻ അപ്ഡേറ്റ് ചെയ്യുന്നതിൽ പരാജയപ്പെട്ടു (Failed to update PIN)');
     } finally {
       setIsLoading(false);
     }

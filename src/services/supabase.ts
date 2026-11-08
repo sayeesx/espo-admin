@@ -62,6 +62,24 @@ const { url: supabaseUrl, anonKey: supabaseAnonKey } = resolveSupabaseConfig();
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
+export function setAdminSessionHeader(token: string | null): void {
+  const rest = (supabase as any).rest;
+  if (rest && rest.headers) {
+    if (token && token.trim() !== '') {
+      rest.headers['x-admin-session-token'] = token.trim();
+    } else {
+      delete rest.headers['x-admin-session-token'];
+    }
+  }
+}
+
+if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
+  const initialAdminToken = sessionStorage.getItem('epso_admin_session');
+  if (initialAdminToken) {
+    setAdminSessionHeader(initialAdminToken);
+  }
+}
+
 export function invalidateAdminCache(pattern?: string): void {
   if (pattern) {
     dbCache.invalidate(pattern);
@@ -70,30 +88,67 @@ export function invalidateAdminCache(pattern?: string): void {
   }
 }
 
-export async function verifyAdminPin(pin: string): Promise<{ success: boolean; session_token?: string; error?: string }> {
+export async function verifyAdminPin(pin: string): Promise<{
+  success: boolean;
+  session_token?: string;
+  error?: string;
+  locked?: boolean;
+  remaining_attempts?: number;
+}> {
   try {
     const cleanPin = pin.trim();
-
-    // Obsolete PIN 65188 is deleted and permanently blocked
-    if (cleanPin === '65188') {
-      return { success: false, error: 'തെറ്റായ പിൻ (Incorrect PIN)' };
+    const { data, error } = await supabase.rpc('verify_admin_pin', { p_pin: cleanPin });
+    if (error) {
+      return { success: false, error: error.message };
     }
-
-    // Active Admin PIN is strictly 98096
-    if (cleanPin === '98096') {
-      return {
-        success: true,
-        session_token: 'epso_admin_session_' + Date.now().toString(36) + Math.random().toString(36).slice(2),
-      };
+    if (data?.valid === true && data.session_token) {
+      setAdminSessionHeader(data.session_token);
+      return { success: true, session_token: data.session_token };
     }
-
-    // Any other PIN is invalid
-    return { success: false, error: 'തെറ്റായ പിൻ (Incorrect PIN)' };
+    return {
+      success: false,
+      error: data?.message || 'തെറ്റായ പിൻ (Incorrect PIN)',
+      locked: data?.locked,
+      remaining_attempts: data?.remaining_attempts,
+    };
   } catch (err: any) {
-    if (pin.trim() === '98096') {
-      return { success: true, session_token: 'epso_admin_session_fallback' };
-    }
     return { success: false, error: err?.message || 'Connection error while contacting server' };
+  }
+}
+
+export async function isKitchenPinConfigured(): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.rpc('is_kitchen_pin_configured');
+    if (error || typeof data !== 'boolean') return false;
+    return data;
+  } catch {
+    return false;
+  }
+}
+
+export async function reconcilePhysicalStock(
+  itemId: string,
+  physicalCount: number,
+  reason: string,
+  operator: string = 'Shop Owner'
+): Promise<{ success: boolean; discrepancy_delta?: number; message?: string; error?: string }> {
+  try {
+    const sessionToken =
+      typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('epso_admin_session') || '' : '';
+    const { data, error } = await supabase.rpc('reconcile_physical_inventory_count', {
+      p_item_id: itemId,
+      p_physical_count: physicalCount,
+      p_reason: reason,
+      p_operator: operator,
+      p_session_token: sessionToken,
+    });
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    invalidateAdminCache();
+    return data;
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Failed to reconcile physical inventory' };
   }
 }
 
@@ -372,7 +427,6 @@ export async function adjustIngredientStock(
   reason: string,
   operatorName = 'Admin'
 ): Promise<void> {
-  // Fetch current ingredient balance
   const { data: ing, error: fetchErr } = await supabase
     .from('ingredients')
     .select('id, name, unit, current_stock, avg_cost_per_unit')
@@ -382,41 +436,15 @@ export async function adjustIngredientStock(
   if (fetchErr) throw fetchErr;
 
   const prevStock = Number(ing.current_stock) || 0;
-  if (delta < 0 && prevStock <= 0) {
-    throw new Error('സ്റ്റോക്ക് 0 ആണ്, നെഗറ്റീവ് ആക്കാൻ കഴിയില്ല (Stock is 0, cannot deduct)');
+  const newStock = Number((prevStock + delta).toFixed(3));
+  if (newStock < 0) {
+    throw new Error('സ്റ്റോക്ക് 0 ന് താഴെയാക്കാൻ കഴിയില്ല (Stock cannot become negative)');
   }
-  if (delta < 0 && Math.abs(delta) > prevStock) {
-    throw new Error('ലഭ്യമായ സ്റ്റോക്കിനേക്കാൾ കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല (Cannot deduct more than available stock)');
+
+  const res = await reconcilePhysicalStock(ingredientId, newStock, reason, operatorName);
+  if (!res.success) {
+    throw new Error(res.error || 'Failed to adjust ingredient stock');
   }
-  const newStock = Math.max(0, prevStock + delta);
-
-  // Update ingredient balance
-  const { error: updateErr } = await supabase
-    .from('ingredients')
-    .update({ current_stock: newStock, updated_at: new Date().toISOString() })
-    .eq('id', ingredientId);
-
-  if (updateErr) throw updateErr;
-
-  dbCache.invalidate('admin_ingredients');
-  dbCache.invalidate('admin_stock_movements');
-
-  // Insert stock movement record
-  await supabase.from('stock_movements').insert({
-    item_id: ingredientId,
-    item_type: 'raw',
-    item_name: ing.name,
-    movement_type: delta >= 0 ? 'in' : 'out',
-    quantity: Math.abs(delta),
-    unit: ing.unit,
-    previous_balance: prevStock,
-    new_balance: newStock,
-    cost_per_unit: ing.avg_cost_per_unit,
-    reference: `ADMIN-ADJ-${Date.now().toString().slice(-6)}`,
-    operator_name: operatorName,
-    reason,
-    created_at: new Date().toISOString(),
-  });
 }
 
 export async function deleteIngredient(id: string): Promise<void> {

@@ -154,35 +154,29 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
 
     setPinLoading(true);
     try {
-      // 1. Update Kitchen PIN via server RPC (requires admin auth)
       const sessionToken = sessionStorage.getItem('epso_admin_session') || '';
-      const { error: rpcErr } = await supabase.rpc('set_kitchen_pin', {
+      if (!sessionToken) {
+        throw new Error('അഡ്മിൻ സെഷൻ ലഭ്യമല്ല. ദയവായി വീണ്ടും ലോഗിൻ ചെയ്യുക (Admin session required)');
+      }
+
+      const { data, error: rpcErr } = await supabase.rpc('set_kitchen_pin', {
         p_new_pin: newPin,
-        p_admin_pin: '98096',
         p_session_token: sessionToken,
       });
       if (rpcErr) throw rpcErr;
 
-      // 2. Cache locally
-      localStorage.setItem('epso_production_pin', newPin);
-      setCurrentPin(newPin);
       setNewPin('');
       setConfirmPin('');
       setPinMessage({
         type: 'success',
-        text: 'പ്രൊഡക്ഷൻ പിൻ വിജയകരമായി മാറ്റി! (Production PIN updated successfully)',
+        text: 'പ്രൊഡക്ഷൻ പിൻ വിജയകരമായി മാറ്റി! (Kitchen PIN updated successfully)',
       });
       setTimeout(() => setPinMessage(null), 3000);
     } catch (err: any) {
-      localStorage.setItem('epso_production_pin', newPin);
-      setCurrentPin(newPin);
-      setNewPin('');
-      setConfirmPin('');
       setPinMessage({
-        type: 'success',
-        text: 'പ്രൊഡക്ഷൻ പിൻ സേവ് ചെയ്തു! (PIN saved locally)',
+        type: 'error',
+        text: err?.message || 'പിൻ അപ്ഡേറ്റ് ചെയ്യുന്നതിൽ പരാജയപ്പെട്ടു (Failed to update PIN)',
       });
-      setTimeout(() => setPinMessage(null), 3000);
     } finally {
       setPinLoading(false);
     }
