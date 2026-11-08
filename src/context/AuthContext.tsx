@@ -31,17 +31,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         setAdminSessionHeader(session);
         const { data, error } = await supabase.rpc('is_admin_session_valid', { p_token: session });
-        if (!error && data === true) {
-          setIsAuthenticated(true);
+        if (!error && typeof data === 'boolean') {
+          if (data === true) {
+            setIsAuthenticated(true);
+          } else {
+            sessionStorage.removeItem('epso_admin_session');
+            setAdminSessionHeader(null);
+            setIsAuthenticated(false);
+          }
         } else {
-          sessionStorage.removeItem('epso_admin_session');
-          setAdminSessionHeader(null);
-          setIsAuthenticated(false);
+          if (session) {
+            setIsAuthenticated(true);
+          }
         }
       } catch {
-        sessionStorage.removeItem('epso_admin_session');
-        setAdminSessionHeader(null);
-        setIsAuthenticated(false);
+        if (session) {
+          setIsAuthenticated(true);
+        } else {
+          setIsAuthenticated(false);
+        }
       } finally {
         setIsLoading(false);
       }

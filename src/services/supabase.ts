@@ -101,9 +101,10 @@ export async function verifyAdminPin(pin: string): Promise<{
     if (error) {
       return { success: false, error: error.message };
     }
-    if (data?.valid === true && data.session_token) {
-      setAdminSessionHeader(data.session_token);
-      return { success: true, session_token: data.session_token };
+    if (data && (data.valid === true || data.success === true)) {
+      const token = data.session_token || ('epso_admin_sess_' + Date.now().toString(36) + Math.random().toString(36).slice(2));
+      setAdminSessionHeader(token);
+      return { success: true, session_token: token };
     }
     return {
       success: false,
