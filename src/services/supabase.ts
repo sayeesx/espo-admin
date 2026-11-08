@@ -1135,122 +1135,27 @@ export async function recordSale(sale: {
     throw new Error('Sale quantity must be greater than zero');
   }
 
-  // 1. Locate product to validate stock and compute COGS
-  let prodId = sale.product_id;
-  let prodName = sale.product_name;
-  let currentStock = 0;
-  let unitProdCost = 0;
+  // Atomically record sale, update stock with row-level lock (FOR UPDATE), and insert ledger movement
+  const { data, error } = await supabase.rpc('record_sale_atomic', {
+    p_sale_date: sale.sale_date,
+    p_product_name: sale.product_name,
+    p_quantity: saleQty,
+    p_unit: sale.unit || 'kg',
+    p_unit_price: Number(sale.unit_price) || 0,
+    p_total_amount: Number(sale.total_amount) || 0,
+    p_product_id: sale.product_id ? sale.product_id : null,
+    p_customer_name: sale.customer_name || null,
+    p_payment_method: sale.payment_method || null,
+    p_payment_status: sale.payment_status || 'paid',
+    p_notes: sale.notes || null,
+  });
 
-  if (prodId) {
-    const { data: prod } = await supabase
-      .from('products')
-      .select('id, name, current_stock, cost_per_unit')
-      .eq('id', prodId)
-      .single();
-    if (prod) {
-      prodName = prod.name || prodName;
-      currentStock = Number(prod.current_stock) || 0;
-      unitProdCost = Number(prod.cost_per_unit) || 0;
-    }
-  } else if (prodName) {
-    const { data: prod } = await supabase
-      .from('products')
-      .select('id, name, current_stock, cost_per_unit')
-      .ilike('name', prodName)
-      .limit(1)
-      .maybeSingle();
-    if (prod) {
-      prodId = prod.id;
-      prodName = prod.name;
-      currentStock = Number(prod.current_stock) || 0;
-      unitProdCost = Number(prod.cost_per_unit) || 0;
-    }
+  if (error) {
+    console.error('Error recording sale atomically:', error);
+    throw new Error(error.message || 'Failed to record sale');
   }
 
-  // Stock validation: Prevent selling more than available stock
-  if (prodId) {
-    if (currentStock < saleQty) {
-      throw new Error(
-        `Insufficient stock for "${prodName}". Available: ${currentStock} ${sale.unit || 'kg'}, Requested: ${saleQty} ${sale.unit || 'kg'}`
-      );
-    }
-
-    // Try fetching latest allocated production cost per kg for accurate COGS
-    try {
-      const { data: latestAlloc } = await supabase
-        .from('daily_cost_allocations')
-        .select('production_cost_per_kg')
-        .eq('product_id', prodId)
-        .order('production_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (latestAlloc && Number(latestAlloc.production_cost_per_kg) > 0) {
-        unitProdCost = Number(latestAlloc.production_cost_per_kg);
-      }
-    } catch (e) {
-      console.warn('Could not query cost allocation for product:', prodId, e);
-    }
-  }
-
-  const cogs = Math.round(saleQty * unitProdCost * 100) / 100;
-  const salePayload: any = {
-    ...sale,
-    product_id: prodId || null,
-    product_name: prodName,
-    quantity: saleQty,
-    cogs: cogs > 0 ? cogs : null,
-    created_at: new Date().toISOString(),
-  };
-
-  let data: any = null;
-  const { data: insertData, error } = await supabase
-    .from('sales')
-    .insert([salePayload])
-    .select()
-    .single();
-
-  if (error && error.message?.includes('cogs')) {
-    const { cogs, ...fallbackPayload } = salePayload;
-    const retry = await supabase.from('sales').insert([fallbackPayload]).select().single();
-    if (retry.error) {
-      console.error('Error recording sale fallback:', retry.error);
-      throw retry.error;
-    }
-    data = retry.data;
-  } else if (error) {
-    console.error('Error recording sale:', error);
-    throw error;
-  } else {
-    data = insertData;
-  }
-
-  // Deduct inventory and log stock movement
-  if (prodId) {
-    const newStock = Math.max(0, Math.round((currentStock - saleQty) * 1000) / 1000);
-    await supabase
-      .from('products')
-      .update({ current_stock: newStock, updated_at: new Date().toISOString() })
-      .eq('id', prodId);
-
-    await supabase.from('stock_movements').insert({
-      item_id: prodId,
-      item_type: 'product',
-      item_name: prodName,
-      movement_type: 'sale',
-      quantity: -saleQty,
-      unit: sale.unit || 'kg',
-      previous_balance: currentStock,
-      new_balance: newStock,
-      cost_per_unit: unitProdCost,
-      reference: `Sale #${data.id}`,
-      reason: `Sold ${saleQty} ${sale.unit || 'kg'} to ${sale.customer_name || 'Retail'}`,
-      created_at: new Date().toISOString(),
-    });
-
-    dbCache.invalidate('admin_products');
-  }
-
+  dbCache.invalidate('admin_products');
   return data;
 }
 
@@ -1278,57 +1183,16 @@ export async function recordSalesBatch(sales: Array<{
 }
 
 export async function deleteSale(id: string): Promise<void> {
-  // Fetch sale before deleting to reverse stock deduction
-  try {
-    const { data: sale } = await supabase
-      .from('sales')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
+  const { error } = await supabase.rpc('delete_sale_atomic', {
+    p_sale_id: id,
+  });
 
-    if (sale && sale.product_id && Number(sale.quantity) > 0) {
-      const prodId = sale.product_id;
-      const qty = Number(sale.quantity);
-      const { data: prod } = await supabase
-        .from('products')
-        .select('current_stock, name')
-        .eq('id', prodId)
-        .single();
-
-      if (prod) {
-        const prevStock = Number(prod.current_stock) || 0;
-        const newStock = Math.round((prevStock + qty) * 1000) / 1000;
-        await supabase
-          .from('products')
-          .update({ current_stock: newStock, updated_at: new Date().toISOString() })
-          .eq('id', prodId);
-
-        await supabase.from('stock_movements').insert({
-          item_id: prodId,
-          item_type: 'product',
-          item_name: prod.name || sale.product_name,
-          movement_type: 'sale_reversal',
-          quantity: qty,
-          unit: sale.unit || 'kg',
-          previous_balance: prevStock,
-          new_balance: newStock,
-          reference: `Sale Reversal #${id}`,
-          reason: `Reversal of deleted sale #${id} (${qty} ${sale.unit || 'kg'} restored)`,
-          created_at: new Date().toISOString(),
-        });
-
-        dbCache.invalidate('admin_products');
-      }
-    }
-  } catch (e) {
-    console.warn('Error reversing stock for deleted sale:', e);
-  }
-
-  const { error } = await supabase.from('sales').delete().eq('id', id);
   if (error) {
-    console.error('Error deleting sale:', error);
-    throw error;
+    console.error('Error deleting sale atomically:', error);
+    throw new Error(error.message || 'Failed to delete sale');
   }
+
+  dbCache.invalidate('admin_products');
 }
 
 
