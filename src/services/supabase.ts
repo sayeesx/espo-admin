@@ -23,8 +23,42 @@ import {
 } from './costing';
 import { dbCache } from './dbCache';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://brskubbgvxtzvhncjnle.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJyc2t1YmJndnh0enZobmNqbmxlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MDI4NDIsImV4cCI6MjEwNzI3ODg0Mn0.6ewzygZiH-rBS6RPu5QegjAUVz9LvkW9ZaHtBpJGjZM';
+const proc = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process;
+const isTestEnv =
+  (proc?.env?.NODE_ENV === 'test' || Boolean(proc?.env?.VITEST)) ||
+  (typeof import.meta !== 'undefined' && import.meta.env?.MODE === 'test');
+
+const PROD_REF = 'brskubbgvxtzvhncjnle';
+
+function resolveSupabaseConfig(): { url: string; anonKey: string } {
+  if (isTestEnv) {
+    const testUrl = proc?.env?.TEST_SUPABASE_URL?.trim();
+    if (testUrl) {
+      if (testUrl.includes(PROD_REF)) {
+        throw new Error(
+          `[SECURITY VIOLATION] Test environment is configured with live production Supabase URL: ${testUrl}`
+        );
+      }
+      return {
+        url: testUrl,
+        anonKey: proc?.env?.TEST_SUPABASE_ANON_KEY || 'test-isolated-key',
+      };
+    }
+    return {
+      url: 'http://127.0.0.1:54321',
+      anonKey: 'test-isolated-anon-key',
+    };
+  }
+
+  return {
+    url: import.meta.env.VITE_SUPABASE_URL || 'https://brskubbgvxtzvhncjnle.supabase.co',
+    anonKey:
+      import.meta.env.VITE_SUPABASE_ANON_KEY ||
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJyc2t1YmJndnh0enZobmNqbmxlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MDI4NDIsImV4cCI6MjEwNzI3ODg0Mn0.6ewzygZiH-rBS6RPu5QegjAUVz9LvkW9ZaHtBpJGjZM',
+  };
+}
+
+const { url: supabaseUrl, anonKey: supabaseAnonKey } = resolveSupabaseConfig();
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 

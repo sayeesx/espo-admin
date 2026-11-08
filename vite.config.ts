@@ -41,6 +41,9 @@ function versionPlugin(): Plugin {
       };
     },
     buildStart() {
+      if (process.env.NODE_ENV === 'test' || Boolean(process.env.VITEST)) {
+        return;
+      }
       try {
         const publicDir = path.resolve(import.meta.dirname, 'public');
         if (!fs.existsSync(publicDir)) {
