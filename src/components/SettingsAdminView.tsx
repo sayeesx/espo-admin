@@ -225,7 +225,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
     const isPinCorrect = cleanPin === '98096';
 
     if (!isPinCorrect) {
-      setResetError('നൽകിയ അഡ്മിൻ പിൻ തെറ്റാണ്! (Invalid Admin PIN. Enter 98096)');
+      setResetError('നൽകിയ അഡ്മിൻ പിൻ തെറ്റാണ്! (Invalid Admin PIN)');
       return;
     }
 
@@ -939,7 +939,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
 
                 <div>
                   <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                    അഡ്മിൻ പിൻ നൽകുക (Admin PIN: 98096) *
+                    അഡ്മിൻ പിൻ നൽകുക (Admin PIN) *
                   </label>
                   <input
                     type="password"
