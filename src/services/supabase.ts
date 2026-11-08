@@ -1459,44 +1459,29 @@ export async function saveDailyClosing(params: {
     }
   }
 
-  // 7. Update common oil inventory in ingredients table to final calculated stock
+  // 7. Update common oil inventory and reconcile stock movements atomically without deleting ledger rows (remediating BUG-01)
   if (oilIng) {
-    await supabase
-      .from('ingredients')
-      .update({
-        current_stock: finalOilStock,
-        avg_cost_per_unit: oilUnitCost,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', oilIng.id);
-
-    // Clean up previous stock movement for this daily closing to avoid duplicate logs on edit/re-save
-    await supabase
-      .from('stock_movements')
-      .delete()
-      .eq('item_id', oilIng.id)
-      .eq('reference', `Daily Closing ${productionDate}`);
-
-    // Record synchronized stock movement ledger entry
-    await supabase.from('stock_movements').insert({
-      item_id: oilIng.id,
-      item_type: 'ingredient',
-      item_name: oilIng.name || 'ഓയിൽ',
-      movement_type: 'production_consumption',
-      quantity: -oilConsumedKg,
-      unit: oilIng.unit || 'kg',
-      previous_balance: previousAvailableStock,
-      new_balance: finalOilStock,
-      cost_per_unit: oilUnitCost,
-      reference: `Daily Closing ${productionDate}`,
-      operator_name: closedBy,
-      reason: `Daily oil usage: ${oilUsed} kg used - ${leftoverOil} kg leftover = ${oilConsumedKg} kg net consumed`,
-      created_at: new Date().toISOString(),
+    const { error: rpcErr } = await supabase.rpc('reconcile_daily_closing_oil_movement', {
+      p_production_date: productionDate,
+      p_oil_ing_id: oilIng.id,
+      p_oil_used: oilUsed,
+      p_leftover_oil: leftoverOil,
+      p_oil_consumed_kg: oilConsumedKg,
+      p_oil_unit_cost: oilUnitCost,
+      p_previous_available_stock: previousAvailableStock,
+      p_final_oil_stock: finalOilStock,
+      p_closed_by: closedBy,
     });
+
+    if (rpcErr) {
+      console.error('Failed to reconcile daily closing oil movement:', rpcErr);
+      throw new Error(`Failed to reconcile oil inventory: ${rpcErr.message}`);
+    }
   }
 
   invalidateAdminCache('daily_closings');
   invalidateAdminCache('ingredients');
+  invalidateAdminCache('admin_stock_movements');
 
   return {
     id: upsertedClosing.id,
