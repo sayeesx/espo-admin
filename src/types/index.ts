@@ -60,6 +60,17 @@ export interface RecipeItem {
   cost?: number;
 }
 
+export interface BatchIngredientUsage {
+  ingredientId: string;
+  ingredientName: string;
+  unit: UnitType;
+  expectedQuantity: number;
+  actualQuantity: number;
+  differenceQuantity: number;
+  unitCost: number;
+  totalCost: number;
+}
+
 export interface Recipe {
   id: string;
   productId: string;

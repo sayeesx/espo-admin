@@ -169,7 +169,8 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
         const movDate = dateMatch ? dateMatch[1] : (m.createdAt ? m.createdAt.split('T')[0] : '');
         if (!movDate) continue;
 
-        const qtyKg = m.unit?.toLowerCase() === 'g' ? Math.abs(m.quantity) / 1000 : Math.abs(m.quantity);
+        const u = m.unit?.trim().toLowerCase();
+        const qtyKg = (u === 'g' || u === 'ml') ? Math.abs(m.quantity) / 1000 : Math.abs(m.quantity);
         const unitCost = (m.costPerUnit && m.costPerUnit > 0)
           ? m.costPerUnit
           : (ingCostMap.get(m.itemId) || ingCostMap.get(itemName) || 0);
@@ -437,7 +438,8 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
         const movDate = dateMatch ? dateMatch[1] : (m.createdAt ? m.createdAt.split('T')[0] : '');
         if (movDate !== rDate) continue;
 
-        const qtyKg = m.unit?.toLowerCase() === 'g' ? Math.abs(m.quantity) / 1000 : Math.abs(m.quantity);
+        const u = m.unit?.trim().toLowerCase();
+        const qtyKg = (u === 'g' || u === 'ml') ? Math.abs(m.quantity) / 1000 : Math.abs(m.quantity);
         const unitCost = (m.costPerUnit && m.costPerUnit > 0)
           ? m.costPerUnit
           : (ingCostMap.get(m.itemId) || ingCostMap.get(itemName.toLowerCase()) || 0);

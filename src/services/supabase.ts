@@ -1326,14 +1326,18 @@ export async function saveDailyClosing(params: {
   try {
     const { data: basicMovements } = await supabase
       .from('stock_movements')
-      .select('quantity, cost_per_unit, item_name, reason')
+      .select('quantity, unit, cost_per_unit, item_name, reason')
       .eq('item_type', 'ingredient')
       .ilike('reason', `%${productionDate}%`);
 
     if (basicMovements && basicMovements.length > 0) {
       for (const m of basicMovements) {
         const cost = Number(m.cost_per_unit) || 0;
-        const qty = Math.abs(Number(m.quantity) || 0);
+        let qty = Math.abs(Number(m.quantity) || 0);
+        const u = (m.unit || '').trim().toLowerCase();
+        if (u === 'g' || u === 'ml') {
+          qty = qty / 1000;
+        }
         dailyBasicIngredientsExpense += qty * cost;
       }
     }

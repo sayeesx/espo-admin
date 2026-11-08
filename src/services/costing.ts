@@ -1,4 +1,62 @@
-import { DailyCostAllocation, FinalProductCosting, PackagingItem, PackingRecord } from '../types';
+import { DailyCostAllocation, FinalProductCosting, PackagingItem, PackingRecord, BatchIngredientUsage, UnitType } from '../types';
+
+/**
+ * Computes the ingredient usage line items, including difference and cost breakdowns.
+ * Normalizes units when rate is per base unit (e.g. rate per kg or per Liter):
+ * - 'g' (grams) -> actual / 1000 kg
+ * - 'ml' (milliliters) -> actual / 1000 L
+ * - 'kg', 'l', 'pcs', 'packs', 'rolls' -> actual
+ */
+export function computeBatchUsageSummary(
+  scaledItems: Array<{ ingredientId: string; ingredientName: string; unit: UnitType; expectedQuantity: number }>,
+  actualQuantities: Record<string, number>,
+  ingredientCostMap: Record<string, number>
+): BatchIngredientUsage[] {
+  return scaledItems.map((item) => {
+    const actual = roundStock(actualQuantities[item.ingredientId] ?? item.expectedQuantity);
+    const expected = roundStock(item.expectedQuantity);
+    const difference = roundStock(actual - expected);
+    const unitCost = ingredientCostMap[item.ingredientId] ?? 0;
+
+    const unitLower = (item.unit || '').trim().toLowerCase();
+    let qtyInBaseUnit = actual;
+    if (unitLower === 'g' || unitLower === 'ml') {
+      qtyInBaseUnit = actual / 1000;
+    }
+
+    const totalCost = roundCurrency(qtyInBaseUnit * unitCost);
+
+    return {
+      ingredientId: item.ingredientId,
+      ingredientName: item.ingredientName,
+      unit: item.unit,
+      expectedQuantity: expected,
+      actualQuantity: actual,
+      differenceQuantity: difference,
+      unitCost: roundCurrency(unitCost),
+      totalCost,
+    };
+  });
+}
+
+export function computeBatchMetrics(
+  ingredientsUsed: BatchIngredientUsage[],
+  actualOutputKg: number,
+  plannedOutputKg: number
+) {
+  const totalIngredientCost = roundCurrency(
+    ingredientsUsed.reduce((sum, item) => sum + (item.totalCost || 0), 0)
+  );
+  const costPerKg = actualOutputKg > 0 ? roundCurrency(totalIngredientCost / actualOutputKg) : 0;
+  const outputDifferenceKg = roundStock(actualOutputKg - plannedOutputKg);
+  const yieldPercentage = plannedOutputKg > 0 ? roundTo((actualOutputKg / plannedOutputKg) * 100, 1) : 100;
+  return {
+    totalIngredientCost,
+    costPerKg,
+    outputDifferenceKg,
+    yieldPercentage,
+  };
+}
 
 /**
  * Rounds a number to a specified number of decimal places without floating-point drift.
