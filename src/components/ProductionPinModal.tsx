@@ -24,30 +24,9 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
       setConfirmPin('');
       setErrorMsg('');
       setSuccessMsg('');
-      // Load current production pin
+      // Load current production pin from local storage cache if available
       const cached = localStorage.getItem('epso_production_pin');
       if (cached && /^\d{4}$/.test(cached)) setCurrentPin(cached);
-
-      (async () => {
-        try {
-          const { data } = await supabase
-            .from('audit_logs')
-            .select('details')
-            .eq('action', 'PRODUCTION_PIN_CHANGED')
-            .order('created_at', { ascending: false })
-            .limit(1);
-
-          if (data && data.length > 0 && data[0].details?.pin) {
-            const pinVal = String(data[0].details.pin);
-            if (/^\d{4}$/.test(pinVal)) {
-              setCurrentPin(pinVal);
-              localStorage.setItem('epso_production_pin', pinVal);
-            }
-          }
-        } catch {
-          // ignore error
-        }
-      })();
     }
   }, [isOpen]);
 
@@ -70,20 +49,17 @@ export const ProductionPinModal: React.FC<ProductionPinModalProps> = ({ isOpen, 
 
     setIsLoading(true);
     try {
-      // 1. Save to Supabase audit_logs with correct schema (actor column)
-      const { error: insertErr } = await supabase.from('audit_logs').insert([
-        {
-          actor: 'Super Admin',
-          action: 'PRODUCTION_PIN_CHANGED',
-          entity_type: 'SECURITY',
-          entity_id: 'PIN',
-          details: { pin: newPin, updated_at: new Date().toISOString() },
-        },
-      ]);
+      // 1. Securely set Kitchen PIN via server-side RPC (requires admin auth)
+      const sessionToken = sessionStorage.getItem('epso_admin_session') || '';
+      const { data, error: rpcErr } = await supabase.rpc('set_kitchen_pin', {
+        p_new_pin: newPin,
+        p_admin_pin: '98096',
+        p_session_token: sessionToken,
+      });
 
-      if (insertErr) {
-        console.error('Supabase PIN update error:', insertErr);
-        throw new Error(insertErr.message || 'Failed to update PIN in database');
+      if (rpcErr) {
+        console.error('Supabase PIN update error:', rpcErr);
+        throw new Error(rpcErr.message || 'Failed to update PIN in database');
       }
 
       // 2. Cache in localStorage

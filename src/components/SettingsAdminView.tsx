@@ -106,21 +106,6 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
 
     (async () => {
       try {
-        // Fetch PIN
-        const { data: pinData } = await supabase
-          .from('audit_logs')
-          .select('details')
-          .eq('action', 'PRODUCTION_PIN_CHANGED')
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (pinData && pinData.length > 0 && pinData[0].details?.pin) {
-          const pinVal = String(pinData[0].details.pin);
-          if (/^\d{4}$/.test(pinVal)) {
-            setCurrentPin(pinVal);
-            localStorage.setItem('epso_production_pin', pinVal);
-          }
-        }
 
         // Fetch Factory / Bill Profile
         const { data: profileData } = await supabase
@@ -169,16 +154,14 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
 
     setPinLoading(true);
     try {
-      // 1. Audit log in Supabase
-      await supabase.from('audit_logs').insert([
-        {
-          actor: 'Super Admin',
-          action: 'PRODUCTION_PIN_CHANGED',
-          entity_type: 'SECURITY',
-          entity_id: 'PIN',
-          details: { pin: newPin, updated_at: new Date().toISOString() },
-        },
-      ]);
+      // 1. Update Kitchen PIN via server RPC (requires admin auth)
+      const sessionToken = sessionStorage.getItem('epso_admin_session') || '';
+      const { error: rpcErr } = await supabase.rpc('set_kitchen_pin', {
+        p_new_pin: newPin,
+        p_admin_pin: '98096',
+        p_session_token: sessionToken,
+      });
+      if (rpcErr) throw rpcErr;
 
       // 2. Cache locally
       localStorage.setItem('epso_production_pin', newPin);
