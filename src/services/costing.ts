@@ -76,6 +76,46 @@ export function roundCurrency(value: number): number {
 }
 
 /**
+ * Normalizes an ingredient quantity into the base pricing unit (kg or L)
+ * when measured in grams ('g') or milliliters ('ml').
+ */
+export function normalizeQuantityForCost(quantity: number, unit?: string): number {
+  if (!quantity || !isFinite(quantity)) return 0;
+  const u = (unit || '').trim().toLowerCase();
+  if (u === 'g' || u === 'ml') {
+    return quantity / 1000;
+  }
+  return quantity;
+}
+
+/**
+ * Calculates new weighted-average unit cost when new stock is purchased,
+ * safely handling negative or zero current stock.
+ */
+export function calculateWeightedAverageCost(
+  currentStock: number,
+  currentAvgCost: number,
+  purchasedQty: number,
+  purchasedUnitCost: number
+): number {
+  if (purchasedQty <= 0) return currentAvgCost;
+  
+  // If current stock was zero or negative, previous deficit has no positive inventory valuation.
+  // The new inventory takes strictly the new purchase cost.
+  if (currentStock <= 0) {
+    return roundCurrency(purchasedUnitCost);
+  }
+
+  const currentTotalValue = currentStock * currentAvgCost;
+  const newPurchaseValue = purchasedQty * purchasedUnitCost;
+  const combinedQty = currentStock + purchasedQty;
+
+  if (combinedQty <= 0) return roundCurrency(purchasedUnitCost);
+
+  return roundCurrency((currentTotalValue + newPurchaseValue) / combinedQty);
+}
+
+/**
  * Continuous Oil Balance Calculator.
  * Closing oil balance = Opening oil balance + Purchases − Oil consumption/loss.
  * Oil consumed/lost = Opening + Purchases - Closing.

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Ingredient } from '../types';
+import { normalizeQuantityForCost } from '../services/costing';
 import {
   FiPrinter,
   FiX,
@@ -115,7 +116,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
     return selectedIngredients.reduce((acc, ing) => {
       const qty = orderQuantities[ing.id] || 0;
       const unitCost = ing.avgCostPerUnit || 0;
-      return acc + qty * unitCost;
+      return acc + normalizeQuantityForCost(qty, ing.unit) * unitCost;
     }, 0);
   }, [selectedIngredients, orderQuantities]);
 

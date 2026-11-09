@@ -431,11 +431,28 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, onRefr
 
     setIsSubmitting(true);
     try {
-      // Save all active items into sales table
-      const batchPayload = activeItems.map((item) => {
+      // Save all active items into sales table with proportional discount distribution
+      const totalDiscount = invoiceCalculations.discount;
+      const unallocatedItems = activeItems.map((item) => {
         const itemBaseAmt = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
         const itemGstAmt = itemBaseAmt * ((Number(item.gstRate) || 0) / 100);
-        const itemTotal = itemBaseAmt + itemGstAmt;
+        const itemGross = itemBaseAmt + itemGstAmt;
+        return { item, itemBaseAmt, itemGstAmt, itemGross };
+      });
+      const totalGross = unallocatedItems.reduce((acc, curr) => acc + curr.itemGross, 0);
+
+      let allocatedDiscountSum = 0;
+      const batchPayload = unallocatedItems.map(({ item, itemGross }, idx) => {
+        let itemDiscount = 0;
+        if (totalDiscount > 0 && totalGross > 0) {
+          if (idx === unallocatedItems.length - 1) {
+            itemDiscount = Math.max(0, Math.round((totalDiscount - allocatedDiscountSum) * 100) / 100);
+          } else {
+            itemDiscount = Math.max(0, Math.round((totalDiscount * (itemGross / totalGross)) * 100) / 100);
+            allocatedDiscountSum += itemDiscount;
+          }
+        }
+        const itemFinalTotal = Math.max(0, Math.round((itemGross - itemDiscount) * 100) / 100);
 
         return {
           sale_date: invoiceDate,
@@ -444,11 +461,12 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, onRefr
           quantity: Number(item.quantity) || 1,
           unit: item.unit || 'kg',
           unit_price: Number(item.unitPrice) || 0,
-          total_amount: itemTotal,
+          discount: itemDiscount,
+          total_amount: itemFinalTotal,
           customer_name: customerName.trim() || 'Counter Sale',
           payment_method: paymentMethod,
           payment_status: paymentStatus,
-          notes: `${invoiceNo}${item.gstRate > 0 ? ` (GST ${item.gstRate}%)` : ''}`,
+          notes: `${invoiceNo}${item.gstRate > 0 ? ` (GST ${item.gstRate}%)` : ''}${itemDiscount > 0 ? ` [Discount: ₹${itemDiscount.toFixed(2)}]` : ''}`,
         };
       });
 
@@ -518,11 +536,11 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, onRefr
           unit: sale.unit || 'kg',
           unitPrice: Number(sale.unit_price) || 0,
           gstRate: 0,
-          amount: Number(sale.total_amount) || 0,
+          amount: (Number(sale.total_amount) || 0) + (Number(sale.discount) || 0),
         },
       ],
-      subtotal: Number(sale.total_amount) || 0,
-      discount: 0,
+      subtotal: (Number(sale.total_amount) || 0) + (Number(sale.discount) || 0),
+      discount: Number(sale.discount) || 0,
       totalGst: 0,
       grandTotal: Number(sale.total_amount) || 0,
       gstBreakdown: { 0: 0 },
@@ -857,6 +875,11 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                     </td>
                     <td className="py-3 px-3.5 text-right font-mono font-black text-stone-900 dark:text-white">
                       ₹{Number(sale.total_amount).toFixed(2)}
+                      {Number(sale.discount) > 0 && (
+                        <div className="text-[10px] text-amber-600 dark:text-amber-400 font-normal">
+                          (-₹{Number(sale.discount).toFixed(2)})
+                        </div>
+                      )}
                     </td>
                     <td className="py-3 px-3.5 text-stone-700 dark:text-stone-300 font-medium">
                       {sale.customer_name || '—'}

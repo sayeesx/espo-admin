@@ -11,6 +11,7 @@ import {
   FiCheck,
 } from 'react-icons/fi';
 import { saveRecipe, deleteRecipe, fetchPacketTypes } from '../services/supabase';
+import { normalizeQuantityForCost } from '../services/costing';
 import { ThemeSelect } from './ThemeSelect';
 import { ManagePacketTypesModal } from './ManagePacketTypesModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
@@ -223,7 +224,8 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
     return recipeItems.reduce((acc, row) => {
       const ing = ingredients.find((i) => i.id === row.ingredientId);
       const unitCost = ing?.avgCostPerUnit || 0;
-      return acc + (row.quantity * unitCost);
+      const normalizedQty = normalizeQuantityForCost(Number(row.quantity) || 0, row.unit);
+      return acc + (normalizedQty * unitCost);
     }, 0);
   };
 

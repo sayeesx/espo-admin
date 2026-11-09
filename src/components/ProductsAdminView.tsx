@@ -23,6 +23,7 @@ import {
   FiRefreshCw,
 } from 'react-icons/fi';
 import { saveProduct, deleteProduct, saveRecipe, deleteRecipe, fetchPacketTypes, adjustProductStock } from '../services/supabase';
+import { normalizeQuantityForCost } from '../services/costing';
 import { PrintPurchaseListModal } from './PrintPurchaseListModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import { createPortal } from 'react-dom';
@@ -374,7 +375,8 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
     return recipeItems.reduce((acc, row) => {
       const ing = ingredients.find((i) => i.id === row.ingredientId);
       const unitCost = ing?.avgCostPerUnit || 0;
-      return acc + (Number(row.quantity) || 0) * unitCost;
+      const normalizedQty = normalizeQuantityForCost(Number(row.quantity) || 0, row.unit);
+      return acc + (normalizedQty * unitCost);
     }, 0);
   };
 

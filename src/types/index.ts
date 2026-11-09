@@ -265,6 +265,7 @@ export interface SaleRecord {
   quantity: number;
   unit: string;
   unit_price: number;
+  discount?: number;
   total_amount: number;
   customer_name?: string;
   payment_method?: 'cash' | 'upi' | 'bank' | 'credit' | string;

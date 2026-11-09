@@ -18,6 +18,7 @@ import {
   allocateDailySharedExpenses,
   calculateContinuousOilExpense,
   calculateDailyOilUsage,
+  calculateWeightedAverageCost,
   roundCurrency,
   roundStock,
 } from './costing';
@@ -1187,6 +1188,7 @@ export async function recordSale(sale: {
   quantity: number;
   unit: string;
   unit_price: number;
+  discount?: number;
   total_amount: number;
   customer_name?: string;
   payment_method?: string;
@@ -1205,6 +1207,7 @@ export async function recordSale(sale: {
     p_quantity: saleQty,
     p_unit: sale.unit || 'kg',
     p_unit_price: Number(sale.unit_price) || 0,
+    p_discount: Number(sale.discount) || 0,
     p_total_amount: Number(sale.total_amount) || 0,
     p_product_id: sale.product_id ? sale.product_id : null,
     p_customer_name: sale.customer_name || null,
@@ -1229,6 +1232,7 @@ export async function recordSalesBatch(sales: Array<{
   quantity: number;
   unit: string;
   unit_price: number;
+  discount?: number;
   total_amount: number;
   customer_name?: string;
   payment_method?: string;
@@ -2166,13 +2170,9 @@ export async function bulkPurchaseIngredients(
     const prevStock = Number(ing.current_stock) || 0;
     const newStock = roundStock(prevStock + purchase.amount);
 
-    // Weighted average cost calculation
+    // Weighted average cost calculation with zero/negative stock protection
     const prevCost = Number(ing.avg_cost_per_unit) || 0;
-    const totalOldValue = prevStock * prevCost;
-    const totalNewValue = purchase.amount * purchase.costPerUnit;
-    const newAvgCost = newStock > 0
-      ? roundCurrency((totalOldValue + totalNewValue) / newStock)
-      : purchase.costPerUnit;
+    const newAvgCost = calculateWeightedAverageCost(prevStock, prevCost, purchase.amount, purchase.costPerUnit);
 
     updatePromises.push(
       supabase
