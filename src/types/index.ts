@@ -9,6 +9,7 @@ export interface Product {
   unit: UnitType;
   currentStock: number;
   wholesalePrice: number;
+  avgCostPerUnit?: number | null;
   isActive: boolean;
   description?: string;
   createdAt?: string;
@@ -112,6 +113,10 @@ export interface ProductionRun {
     totalCost?: number;
   }[];
   totalIngredientCost?: number;
+  allocatedLabourCost?: number;
+  allocatedOilCost?: number;
+  allocatedBasicCost?: number;
+  spoilageLoss?: number;
   createdAt?: string;
   packingRecords?: Array<{
     id: string;
@@ -127,7 +132,7 @@ export interface StockMovement {
   itemId: string;
   itemType: 'raw' | 'finished' | 'ingredient' | 'product';
   itemName: string;
-  movementType: 'in' | 'out' | 'adjust' | 'opening' | 'purchase' | 'production_consumption' | 'production_output' | 'cancellation_reversal';
+  movementType: 'in' | 'out' | 'adjust' | 'opening' | 'purchase' | 'production_consumption' | 'production_output' | 'cancellation_reversal' | 'packing_reversal' | 'sale' | 'sale_reversal' | 'wastage';
   quantity: number;
   unit: string;
   previousBalance: number;
@@ -163,6 +168,8 @@ export interface DailyClosing {
   productionWages: number; // ₹
   totalSharedExpense: number; // ₹
   totalProductionKg: number; // kg
+  totalSpoilageLoss?: number; // ₹
+  totalWastageKg?: number; // kg
   status: 'open' | 'closed' | 'adjusted';
   notes?: string;
   closedBy: string;
@@ -267,6 +274,9 @@ export interface SaleRecord {
   unit_price: number;
   discount?: number;
   total_amount: number;
+  cogs?: number | null;
+  cogs_status?: 'verified' | 'unverified_missing_cost';
+  cogsStatus?: 'verified' | 'unverified_missing_cost';
   customer_name?: string;
   payment_method?: 'cash' | 'upi' | 'bank' | 'credit' | string;
   payment_status?: 'paid' | 'pending' | 'partial' | string;

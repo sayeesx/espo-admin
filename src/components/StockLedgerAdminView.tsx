@@ -130,7 +130,7 @@ export interface UnifiedLedgerEntry {
   itemType: 'raw' | 'finished' | 'ingredient' | 'product' | 'wage' | 'packaging';
   itemName: string;
   category: 'basic' | 'packets' | 'wages' | 'ingredients' | 'products';
-  movementType: 'in' | 'out' | 'adjust' | 'opening' | 'purchase' | 'production_consumption' | 'production_output' | 'cancellation_reversal';
+  movementType: StockMovement['movementType'];
   quantity: number;
   unit: string;
   previousBalance: number;

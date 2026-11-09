@@ -16,6 +16,8 @@ import {
 } from '../types';
 import {
   allocateDailySharedExpenses,
+  allocateDailySharedExpensesWithWastage,
+  WastageBatchSummary,
   calculateContinuousOilExpense,
   calculateDailyOilUsage,
   calculateWeightedAverageCost,
@@ -1009,7 +1011,7 @@ export async function fetchStockMovements(force = false): Promise<StockMovement[
       id: row.id,
       itemId: row.item_id,
       itemType: row.item_type as any,
-      itemName: row.item_name,
+      itemName: row.item_name || '',
       movementType: row.movement_type as any,
       quantity: Number(row.quantity) || 0,
       unit: row.unit,
@@ -1383,63 +1385,32 @@ export async function saveDailyClosing(params: {
 
   const totalSharedExpense = roundCurrency(oilTotalExpense + productionWages + dailyBasicIngredientsExpense);
 
-  // 6. Fetch eligible production runs on that date
+  // 6. Fetch production runs on that date (both completed good runs and wastage runs)
   const { data: runs, error: runsErr } = await supabase
     .from('production_runs')
     .select(`
       id,
+      run_number,
       product_id,
       actual_quantity,
+      planned_quantity,
       total_ingredient_cost,
-      products (name)
+      status,
+      cancellation_reason,
+      products (name, current_stock, avg_cost_per_unit)
     `)
-    .eq('production_date', productionDate)
-    .neq('status', 'cancelled')
-    .gt('actual_quantity', 0);
+    .eq('production_date', productionDate);
 
   if (runsErr) throw runsErr;
 
-  const totalProductionKg = (runs || []).reduce((sum, r) => sum + (Number(r.actual_quantity) || 0), 0);
+  const goodRuns = (runs || []).filter((r: any) => r.status === 'completed' && (Number(r.actual_quantity) || 0) > 0);
+  const wastageRuns = (runs || []).filter((r: any) => r.status === 'cancelled' && r.cancellation_reason === 'wastage');
 
-  // Metadata preserving exact cook inputs
-  const metaPayload = {
-    oilUsedKg: oilUsed,
-    leftoverOilKg: leftoverOil,
-    previousAvailableStock,
-    finalOilStock,
-    basicIngredientsExpense: dailyBasicIngredientsExpense,
-    userNotes: notes || '',
-  };
+  const totalProductionKg = goodRuns.reduce((sum: number, r: any) => sum + (Number(r.actual_quantity) || 0), 0);
 
-  const closingPayload = {
-    production_date: productionDate,
-    oil_opening_balance: previousAvailableStock,
-    oil_purchases: oilPurchases,
-    oil_closing_balance: finalOilStock,
-    oil_consumed: oilConsumedKg,
-    oil_cost_per_kg: oilUnitCost,
-    oil_total_expense: oilTotalExpense,
-    production_wages: productionWages,
-    total_shared_expense: totalSharedExpense,
-    total_production_kg: totalProductionKg,
-    status: 'closed',
-    notes: JSON.stringify(metaPayload),
-    closed_by: closedBy,
-    updated_at: new Date().toISOString(),
-  };
-
-  const { data: upsertedClosing, error: closingErr } = await supabase
-    .from('daily_closings')
-    .upsert(closingPayload, { onConflict: 'production_date' })
-    .select()
-    .single();
-
-  if (closingErr) throw closingErr;
-  const closingId = upsertedClosing.id;
-
-  // Group production runs by product
+  // Group good production runs by product
   const productMap: Record<string, { productId: string; productName: string; totalProductionKg: number; batchCount: number; ingredientCost: number }> = {};
-  for (const r of runs || []) {
+  for (const r of goodRuns) {
     const pId = r.product_id;
     const pName = (r.products as any)?.name || 'Product';
     const qty = Number(r.actual_quantity) || 0;
@@ -1461,13 +1432,114 @@ export async function saveDailyClosing(params: {
 
   const productsSummary = Object.values(productMap);
 
-  // Distribute shared expenses: wages equally per batch, oil and basics proportionally by weight
-  const allocations = allocateDailySharedExpenses(
+  const wastageSummary: WastageBatchSummary[] = wastageRuns.map((r: any) => {
+    const attempted = Number(r.actual_quantity) > 0 ? Number(r.actual_quantity) : Number(r.planned_quantity) || 0;
+    return {
+      runId: r.id,
+      runNumber: r.run_number,
+      productName: (r.products as any)?.name || 'Product',
+      attemptedKg: attempted,
+      directMaterialLoss: Number(r.total_ingredient_cost) || 0,
+    };
+  });
+
+  // Distribute shared expenses: keeps good production costs separate from wastage / spoilage losses
+  const {
+    productAllocations: allocations,
+    wastageAllocations,
+    totalSpoilageLoss,
+    totalWastageKg,
+  } = allocateDailySharedExpensesWithWastage(
     productsSummary,
+    wastageSummary,
     oilTotalExpense,
     productionWages,
     dailyBasicIngredientsExpense
   );
+
+  // Metadata preserving exact cook inputs and wastage breakdown
+  const metaPayload = {
+    oilUsedKg: oilUsed,
+    leftoverOilKg: leftoverOil,
+    previousAvailableStock,
+    finalOilStock,
+    basicIngredientsExpense: dailyBasicIngredientsExpense,
+    totalWastageKg,
+    totalSpoilageLoss,
+    wastageDetails: wastageAllocations,
+    userNotes: notes || '',
+  };
+
+  const closingPayload: Record<string, any> = {
+    production_date: productionDate,
+    oil_opening_balance: previousAvailableStock,
+    oil_purchases: oilPurchases,
+    oil_closing_balance: finalOilStock,
+    oil_consumed: oilConsumedKg,
+    oil_cost_per_kg: oilUnitCost,
+    oil_total_expense: oilTotalExpense,
+    production_wages: productionWages,
+    total_shared_expense: totalSharedExpense,
+    total_production_kg: totalProductionKg,
+    total_spoilage_loss: totalSpoilageLoss,
+    total_wastage_kg: totalWastageKg,
+    status: 'closed',
+    notes: JSON.stringify(metaPayload),
+    closed_by: closedBy,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data: upsertedClosing, error: closingErr } = await supabase
+    .from('daily_closings')
+    .upsert(closingPayload, { onConflict: 'production_date' })
+    .select()
+    .single();
+
+  if (closingErr) throw closingErr;
+  const closingId = upsertedClosing.id;
+
+  // Update production_runs for wastage batches with their allocated spoilage loss
+  for (const wa of wastageAllocations) {
+    try {
+      await supabase
+        .from('production_runs')
+        .update({
+          allocated_oil_cost: wa.allocatedOilLoss,
+          allocated_labour_cost: wa.allocatedLabourLoss,
+          allocated_basic_cost: wa.allocatedBasicLoss,
+          spoilage_loss: wa.totalSpoilageLoss,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', wa.runId);
+    } catch (e) {
+      console.warn('Could not update wastage run spoilage loss:', e);
+    }
+  }
+
+  // Update moving weighted average inventory valuation on products for good production
+  for (const a of allocations) {
+    if (a.totalProductionKg > 0 && a.productionCostPerKg > 0) {
+      try {
+        const { data: prod } = await supabase
+          .from('products')
+          .select('current_stock, avg_cost_per_unit')
+          .eq('id', a.productId)
+          .single();
+        if (prod) {
+          const currStock = Number(prod.current_stock) || 0;
+          const prevCost = Number(prod.avg_cost_per_unit) || 0;
+          const prevStock = Math.max(0, roundStock(currStock - a.totalProductionKg));
+          const newAvg = calculateWeightedAverageCost(prevStock, prevCost, a.totalProductionKg, a.productionCostPerKg);
+          await supabase
+            .from('products')
+            .update({ avg_cost_per_unit: newAvg, updated_at: new Date().toISOString() })
+            .eq('id', a.productId);
+        }
+      } catch (e) {
+        console.warn('Could not update product valuation:', e);
+      }
+    }
+  }
 
   await supabase.from('daily_cost_allocations').delete().eq('closing_id', closingId);
 
@@ -2116,75 +2188,20 @@ export async function bulkPurchaseIngredients(
   const validPurchases = purchases.filter((p) => p.amount > 0);
   if (validPurchases.length === 0) return;
 
-  const ids = validPurchases.map((p) => p.ingredientId);
-  const { data: ings, error: fetchErr } = await supabase
-    .from('ingredients')
-    .select('id, name, unit, current_stock, avg_cost_per_unit')
-    .in('id', ids);
+  const payload = validPurchases.map((p) => ({
+    ingredient_id: p.ingredientId,
+    amount: p.amount,
+    cost_per_unit: p.costPerUnit,
+  }));
 
-  if (fetchErr || !ings) {
-    throw new Error(fetchErr?.message || 'Failed to fetch ingredients for bulk purchase');
-  }
+  const { error } = await supabase.rpc('bulk_purchase_ingredients_atomic', {
+    p_purchases: payload,
+    p_operator_name: 'Admin',
+  });
 
-  const ingMap = new Map(ings.map((i) => [i.id, i]));
-  const now = new Date().toISOString();
-  const batchRef = `BULK-PURCHASE-${Date.now().toString().slice(-6)}`;
-  const stockMovements: any[] = [];
-  const updatePromises: PromiseLike<any>[] = [];
-
-  for (const purchase of validPurchases) {
-    const ing = ingMap.get(purchase.ingredientId);
-    if (!ing) continue;
-
-    const prevStock = Number(ing.current_stock) || 0;
-    const newStock = roundStock(prevStock + purchase.amount);
-
-    // Weighted average cost calculation with zero/negative stock protection
-    const prevCost = Number(ing.avg_cost_per_unit) || 0;
-    const newAvgCost = calculateWeightedAverageCost(prevStock, prevCost, purchase.amount, purchase.costPerUnit);
-
-    updatePromises.push(
-      supabase
-        .from('ingredients')
-        .update({
-          current_stock: newStock,
-          avg_cost_per_unit: newAvgCost,
-          updated_at: now,
-        })
-        .eq('id', purchase.ingredientId)
-    );
-
-    stockMovements.push({
-      item_id: purchase.ingredientId,
-      item_type: 'ingredient',
-      item_name: ing.name,
-      movement_type: 'purchase',
-      quantity: purchase.amount,
-      unit: ing.unit,
-      previous_balance: prevStock,
-      new_balance: newStock,
-      cost_per_unit: purchase.costPerUnit,
-      reference: batchRef,
-      operator_name: 'Admin',
-      reason: 'Bulk purchase entry',
-      created_at: now,
-    });
-  }
-
-  // Execute all ingredient updates in parallel
-  const updateResults = await Promise.all(updatePromises);
-  for (const res of updateResults) {
-    if (res.error) {
-      console.error('Error updating ingredient stock:', res.error);
-    }
-  }
-
-  // Batch insert all stock movements in a single round-trip
-  if (stockMovements.length > 0) {
-    const { error: smErr } = await supabase.from('stock_movements').insert(stockMovements);
-    if (smErr) {
-      console.error('Error inserting stock movements:', smErr);
-    }
+  if (error) {
+    console.error('Error in atomic bulk purchase:', error);
+    throw new Error(error.message || 'Failed to complete atomic bulk purchase');
   }
 
   dbCache.invalidate('admin_ingredients');

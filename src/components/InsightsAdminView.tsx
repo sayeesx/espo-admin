@@ -316,9 +316,20 @@ export const InsightsAdminView: React.FC<InsightsAdminViewProps> = ({
       const revenue = Number(s.total_amount) || 0;
       const qty = Number(s.quantity) || 0;
 
-      const baseUnitCost = productCostMap.get(pName) || ((revenue / (qty || 1)) * 0.68);
-      const unitCost = baseUnitCost + 25; // add packing & wage shared cost
-      const estimatedCost = Math.round(qty * unitCost);
+      let estimatedCost: number;
+      if (s.cogs_status === 'verified' && s.cogs !== null && s.cogs !== undefined) {
+        estimatedCost = Number(s.cogs);
+      } else {
+        const prod = products.find((p) => p.id === s.product_id);
+        const prodAvgCost = Number(prod?.avgCostPerUnit) || 0;
+        if (prodAvgCost > 0) {
+          estimatedCost = Math.round(qty * prodAvgCost);
+        } else {
+          const baseUnitCost = productCostMap.get(pName) || ((revenue / (qty || 1)) * 0.68);
+          const unitCost = baseUnitCost + 25; // add packing & wage shared cost
+          estimatedCost = Math.round(qty * unitCost);
+        }
+      }
       const profit = Math.round(revenue - estimatedCost);
 
       const existing = profitMap.get(pName) || {

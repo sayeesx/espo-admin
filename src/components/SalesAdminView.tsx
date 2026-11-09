@@ -854,6 +854,7 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                   <th className="py-3 px-3.5 text-right">അളവ് (Qty)</th>
                   <th className="py-3 px-3.5 text-right">വില (Rate)</th>
                   <th className="py-3 px-3.5 text-right">ആകെ തുക</th>
+                  <th className="py-3 px-3.5 text-right">ലാഭം (Profit)</th>
                   <th className="py-3 px-3.5">ഉപഭോക്താവ് (Customer)</th>
                   <th className="py-3 px-3.5">പേയ്‌മെന്റ്</th>
                   <th className="py-3 px-3.5 text-center">ബില്ലിംഗ്</th>
@@ -884,6 +885,26 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                         <div className="text-[10px] text-amber-600 dark:text-amber-400 font-normal">
                           (-₹{Number(sale.discount).toFixed(2)})
                         </div>
+                      )}
+                    </td>
+                    <td className="py-3 px-3.5 text-right font-mono">
+                      {sale.cogs_status === 'unverified_missing_cost' || sale.cogs === null || sale.cogs === undefined ? (
+                        <span
+                          className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
+                          title="COGS unverified due to missing product valuation at time of sale"
+                        >
+                          അൺവെരിഫൈഡ്
+                        </span>
+                      ) : (
+                        <span
+                          className={`font-bold ${
+                            Number(sale.total_amount) - Number(sale.cogs) >= 0
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-rose-600 dark:text-rose-400'
+                          }`}
+                        >
+                          ₹{(Number(sale.total_amount) - Number(sale.cogs)).toFixed(2)}
+                        </span>
                       )}
                     </td>
                     <td className="py-3 px-3.5 text-stone-700 dark:text-stone-300 font-medium">

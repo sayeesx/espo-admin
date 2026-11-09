@@ -115,6 +115,8 @@ export function calculateWeightedAverageCost(
   return roundCurrency((currentTotalValue + newPurchaseValue) / combinedQty);
 }
 
+export const calculateMovingWeightedAverage = calculateWeightedAverageCost;
+
 /**
  * Continuous Oil Balance Calculator.
  * Closing oil balance = Opening oil balance + Purchases − Oil consumption/loss.
@@ -353,6 +355,206 @@ export function allocateDailyWageToBatches<
   });
 }
 
+export interface WastageBatchSummary {
+  runId: string;
+  runNumber?: string;
+  productName: string;
+  attemptedKg: number;
+  directMaterialLoss: number;
+}
+
+export interface WastageAllocationResult {
+  runId: string;
+  runNumber?: string;
+  productName: string;
+  attemptedKg: number;
+  directMaterialLoss: number;
+  allocatedOilLoss: number;
+  allocatedLabourLoss: number;
+  allocatedBasicLoss: number;
+  totalSpoilageLoss: number;
+}
+
+/**
+ * Distributes shared daily expenses across products produced that day:
+ * - Keeps Good Production costs separate from Abnormal Wastage / Spoilage Losses.
+ * - Oil, Basic Ingredients & Daily Wages are allocated proportionally by attempted production weight.
+ * - Good batches do NOT absorb wastage costs.
+ * - Exact reconciliation: The final item absorbs fractional paisa rounding discrepancy.
+ */
+export function allocateDailySharedExpensesWithWastage(
+  productsSummary: Array<{
+    productId: string;
+    productName: string;
+    totalProductionKg: number;
+    batchCount: number;
+    ingredientCost: number;
+  }>,
+  wastageSummary: WastageBatchSummary[] = [],
+  dailyOilExpense: number,
+  dailyCookingWages: number,
+  dailyBasicIngredientsExpense: number = 0,
+  dailyPackingWages: number = 0
+): {
+  productAllocations: Array<{
+    productId: string;
+    productName: string;
+    totalProductionKg: number;
+    batchCount: number;
+    ingredientCost: number;
+    allocatedOilCost: number;
+    allocatedProductionWages: number;
+    allocatedCookingWages: number;
+    allocatedPackingWages: number;
+    allocatedBasicIngredientsCost: number;
+    totalProductionCost: number;
+    productionCostPerKg: number;
+  }>;
+  wastageAllocations: WastageAllocationResult[];
+  totalSpoilageLoss: number;
+  totalGoodKg: number;
+  totalWastageKg: number;
+} {
+  const goodKg = roundStock(productsSummary.reduce((sum, p) => sum + (Number(p.totalProductionKg) || 0), 0));
+  const wasteKg = roundStock(wastageSummary.reduce((sum, w) => sum + (Number(w.attemptedKg) || 0), 0));
+  const totalFactoryKg = roundStock(goodKg + wasteKg);
+
+  const oilExpense = Math.max(0, roundCurrency(dailyOilExpense));
+  const totalDailyWages = roundCurrency((Number(dailyCookingWages) || 0) + (Number(dailyPackingWages) || 0));
+  const basicExpense = Math.max(0, roundCurrency(dailyBasicIngredientsExpense));
+
+  if (totalFactoryKg <= 0) {
+    const productAllocations = productsSummary.map((p) => ({
+      productId: p.productId,
+      productName: p.productName,
+      totalProductionKg: p.totalProductionKg,
+      batchCount: p.batchCount,
+      ingredientCost: p.ingredientCost,
+      allocatedOilCost: 0,
+      allocatedProductionWages: 0,
+      allocatedCookingWages: 0,
+      allocatedPackingWages: 0,
+      allocatedBasicIngredientsCost: 0,
+      totalProductionCost: p.ingredientCost,
+      productionCostPerKg: p.totalProductionKg > 0 ? roundCurrency(p.ingredientCost / p.totalProductionKg) : 0,
+    }));
+
+    const wastageAllocations: WastageAllocationResult[] = wastageSummary.map((w) => ({
+      runId: w.runId,
+      runNumber: w.runNumber,
+      productName: w.productName,
+      attemptedKg: w.attemptedKg,
+      directMaterialLoss: w.directMaterialLoss,
+      allocatedOilLoss: 0,
+      allocatedLabourLoss: 0,
+      allocatedBasicLoss: 0,
+      totalSpoilageLoss: w.directMaterialLoss,
+    }));
+
+    return {
+      productAllocations,
+      wastageAllocations,
+      totalSpoilageLoss: roundCurrency(wastageAllocations.reduce((sum, w) => sum + w.totalSpoilageLoss, 0)),
+      totalGoodKg: 0,
+      totalWastageKg: wasteKg,
+    };
+  }
+
+  type AllocRecipient = 
+    | { type: 'good'; item: (typeof productsSummary)[0]; weight: number }
+    | { type: 'waste'; item: WastageBatchSummary; weight: number };
+
+  const recipients: AllocRecipient[] = [
+    ...productsSummary.filter((p) => (Number(p.totalProductionKg) || 0) > 0).map((p) => ({ type: 'good' as const, item: p, weight: Number(p.totalProductionKg) || 0 })),
+    ...wastageSummary.filter((w) => (Number(w.attemptedKg) || 0) > 0).map((w) => ({ type: 'waste' as const, item: w, weight: Number(w.attemptedKg) || 0 })),
+  ];
+
+  let runningOil = 0;
+  let runningWages = 0;
+  let runningBasic = 0;
+  const count = recipients.length;
+
+  const goodAllocMap = new Map<string, { oil: number; wage: number; basic: number }>();
+  const wasteAllocMap = new Map<string, { oil: number; wage: number; basic: number }>();
+
+  recipients.forEach((rec, idx) => {
+    const isLast = idx === count - 1;
+    let oilAlloc = 0;
+    let wageAlloc = 0;
+    let basicAlloc = 0;
+
+    if (isLast) {
+      oilAlloc = roundCurrency(oilExpense - runningOil);
+      wageAlloc = roundCurrency(totalDailyWages - runningWages);
+      basicAlloc = roundCurrency(basicExpense - runningBasic);
+    } else {
+      const ratio = rec.weight / totalFactoryKg;
+      oilAlloc = roundCurrency(ratio * oilExpense);
+      wageAlloc = roundCurrency(ratio * totalDailyWages);
+      basicAlloc = roundCurrency(ratio * basicExpense);
+
+      runningOil = roundCurrency(runningOil + oilAlloc);
+      runningWages = roundCurrency(runningWages + wageAlloc);
+      runningBasic = roundCurrency(runningBasic + basicAlloc);
+    }
+
+    if (rec.type === 'good') {
+      goodAllocMap.set(rec.item.productId, { oil: oilAlloc, wage: wageAlloc, basic: basicAlloc });
+    } else {
+      wasteAllocMap.set(rec.item.runId, { oil: oilAlloc, wage: wageAlloc, basic: basicAlloc });
+    }
+  });
+
+  const productAllocations = productsSummary.map((p) => {
+    const alloc = goodAllocMap.get(p.productId) || { oil: 0, wage: 0, basic: 0 };
+    const prodKg = Number(p.totalProductionKg) || 0;
+    const totalProdCost = roundCurrency(p.ingredientCost + alloc.oil + alloc.wage + alloc.basic);
+    const costPerKg = prodKg > 0 ? roundCurrency(totalProdCost / prodKg) : 0;
+
+    return {
+      productId: p.productId,
+      productName: p.productName,
+      totalProductionKg: p.totalProductionKg,
+      batchCount: p.batchCount,
+      ingredientCost: p.ingredientCost,
+      allocatedOilCost: alloc.oil,
+      allocatedProductionWages: alloc.wage,
+      allocatedCookingWages: alloc.wage,
+      allocatedPackingWages: 0,
+      allocatedBasicIngredientsCost: alloc.basic,
+      totalProductionCost: totalProdCost,
+      productionCostPerKg: costPerKg,
+    };
+  });
+
+  const wastageAllocations: WastageAllocationResult[] = wastageSummary.map((w) => {
+    const alloc = wasteAllocMap.get(w.runId) || { oil: 0, wage: 0, basic: 0 };
+    const totalSpoilageLoss = roundCurrency(w.directMaterialLoss + alloc.oil + alloc.wage + alloc.basic);
+
+    return {
+      runId: w.runId,
+      runNumber: w.runNumber,
+      productName: w.productName,
+      attemptedKg: w.attemptedKg,
+      directMaterialLoss: w.directMaterialLoss,
+      allocatedOilLoss: alloc.oil,
+      allocatedLabourLoss: alloc.wage,
+      allocatedBasicLoss: alloc.basic,
+      totalSpoilageLoss,
+    };
+  });
+
+  const totalSpoilageLoss = roundCurrency(wastageAllocations.reduce((sum, w) => sum + w.totalSpoilageLoss, 0));
+
+  return {
+    productAllocations,
+    wastageAllocations,
+    totalSpoilageLoss,
+    totalGoodKg: goodKg,
+    totalWastageKg: wasteKg,
+  };
+}
+
 /**
  * Distributes shared daily expenses across products produced that day:
  * - Oil, Basic Ingredients & Daily Wages: Allocated proportional to production weight:
@@ -372,7 +574,8 @@ export function allocateDailySharedExpenses(
   dailyOilExpense: number,
   dailyCookingWages: number,
   dailyBasicIngredientsExpense: number = 0,
-  dailyPackingWages: number = 0
+  dailyPackingWages: number = 0,
+  wastageSummary: WastageBatchSummary[] = []
 ): Array<{
   productId: string;
   productName: string;
@@ -387,71 +590,15 @@ export function allocateDailySharedExpenses(
   totalProductionCost: number;
   productionCostPerKg: number;
 }> {
-  const totalKg = productsSummary.reduce((sum, p) => sum + (Number(p.totalProductionKg) || 0), 0);
-  const totalDailyWages = roundCurrency(
-    (Number(dailyCookingWages) || 0) + (Number(dailyPackingWages) || 0)
+  const result = allocateDailySharedExpensesWithWastage(
+    productsSummary,
+    wastageSummary,
+    dailyOilExpense,
+    dailyCookingWages,
+    dailyBasicIngredientsExpense,
+    dailyPackingWages
   );
-
-  if (productsSummary.length === 0) {
-    return [];
-  }
-
-  let runningOil = 0;
-  let runningWages = 0;
-  let runningBasic = 0;
-
-  let lastPositiveIdx = -1;
-  for (let i = productsSummary.length - 1; i >= 0; i--) {
-    if ((Number(productsSummary[i].totalProductionKg) || 0) > 0) {
-      lastPositiveIdx = i;
-      break;
-    }
-  }
-  if (lastPositiveIdx === -1) {
-    lastPositiveIdx = productsSummary.length - 1;
-  }
-
-  return productsSummary.map((p, idx) => {
-    const prodKg = Number(p.totalProductionKg) || 0;
-    let oilAlloc = 0;
-    let wagesAlloc = 0;
-    let basicAlloc = 0;
-
-    if (totalKg > 0 && prodKg > 0) {
-      if (idx === lastPositiveIdx) {
-        oilAlloc = roundCurrency(dailyOilExpense - runningOil);
-        wagesAlloc = roundCurrency(totalDailyWages - runningWages);
-        basicAlloc = roundCurrency(dailyBasicIngredientsExpense - runningBasic);
-      } else {
-        const weightRatio = prodKg / totalKg;
-        oilAlloc = roundCurrency(weightRatio * dailyOilExpense);
-        wagesAlloc = roundCurrency(weightRatio * totalDailyWages);
-        basicAlloc = roundCurrency(weightRatio * dailyBasicIngredientsExpense);
-
-        runningOil = roundCurrency(runningOil + oilAlloc);
-        runningWages = roundCurrency(runningWages + wagesAlloc);
-        runningBasic = roundCurrency(runningBasic + basicAlloc);
-      }
-    }
-
-    const totalProdCost = roundCurrency(p.ingredientCost + oilAlloc + wagesAlloc + basicAlloc);
-    const costPerKg = prodKg > 0 ? roundCurrency(totalProdCost / prodKg) : 0;
-
-    return {
-      productId: p.productId,
-      productName: p.productName,
-      totalProductionKg: p.totalProductionKg,
-      batchCount: p.batchCount,
-      ingredientCost: p.ingredientCost,
-      allocatedOilCost: oilAlloc,
-      allocatedProductionWages: wagesAlloc,
-      allocatedCookingWages: wagesAlloc,
-      allocatedPackingWages: 0,
-      allocatedBasicIngredientsCost: basicAlloc,
-      totalProductionCost: totalProdCost,
-      productionCostPerKg: costPerKg,
-    };
-  });
+  return result.productAllocations;
 }
 
 /**
