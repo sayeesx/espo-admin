@@ -1249,9 +1249,10 @@ export async function recordSalesBatch(sales: Array<{
   return results;
 }
 
-export async function deleteSale(id: string): Promise<void> {
+export async function deleteSale(id: string, restoreStock: boolean = true): Promise<void> {
   const { error } = await supabase.rpc('delete_sale_atomic', {
     p_sale_id: id,
+    p_restore_stock: restoreStock,
   });
 
   if (error) {

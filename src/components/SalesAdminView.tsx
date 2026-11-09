@@ -15,6 +15,7 @@ import {
   FiMenu,
   FiArrowLeft,
   FiShoppingBag,
+  FiRotateCcw,
 } from 'react-icons/fi';
 import { Product, SaleRecord, FactoryProfile, DEFAULT_FACTORY_PROFILE } from '../types';
 import {
@@ -107,6 +108,8 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, onRefr
   const [activeBill, setActiveBill] = useState<BillData | null>(null);
   const [isBillModalOpen, setIsBillModalOpen] = useState<boolean>(false);
   const [deletingSaleId, setDeletingSaleId] = useState<string | null>(null);
+  const [saleToDelete, setSaleToDelete] = useState<SaleRecord | null>(null);
+  const [isDeletingSale, setIsDeletingSale] = useState<boolean>(false);
   const [billCopied, setBillCopied] = useState<boolean>(false);
 
   const cleanFooter = (text?: string) => {
@@ -549,23 +552,25 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, onRefr
     setIsBillModalOpen(true);
   };
 
-  const handleDelete = async (id: string) => {
-    const confirmed = await confirm({
-      title: 'വിൽപ്പന റെക്കോർഡ് നീക്കം ചെയ്യണോ?',
-      message: 'ഈ വിൽപ്പന റെക്കോർഡ് നീക്കം ചെയ്യണോ? ഈ പ്രവർത്തനം പഴയപടിയാക്കാൻ കഴിയില്ല.',
-      confirmLabel: 'ഡിലീറ്റ് ചെയ്യുക',
-      cancelLabel: 'റദ്ദാക്കുക',
-      isDestructive: true,
-    });
-    if (!confirmed) return;
+  const handleConfirmDelete = async (restoreStock: boolean) => {
+    if (!saleToDelete) return;
+    setIsDeletingSale(true);
+    setDeletingSaleId(saleToDelete.id);
     try {
-      setDeletingSaleId(id);
-      await deleteSale(id);
-      setSales((prev) => prev.filter((s) => s.id !== id));
-      showToast('വിൽപ്പന റെക്കോർഡ് വിജയകരമായി നീക്കം ചെയ്തു', 'success');
+      await deleteSale(saleToDelete.id, restoreStock);
+      setSales((prev) => prev.filter((s) => s.id !== saleToDelete.id));
+      if (onRefresh) await onRefresh();
+      showToast(
+        restoreStock
+          ? 'വിൽപ്പന റെക്കോർഡ് നീക്കം ചെയ്തു, സ്റ്റോക്ക് തിരികെ ചേർത്തു'
+          : 'വിൽപ്പന റെക്കോർഡ് നീക്കം ചെയ്തു (സ്റ്റോക്ക് മാറ്റിയില്ല)',
+        'success'
+      );
+      setSaleToDelete(null);
     } catch (err: any) {
       showToast(err?.message || 'ഡിലീറ്റ് ചെയ്യാനായില്ല', 'error');
     } finally {
+      setIsDeletingSale(false);
       setDeletingSaleId(null);
     }
   };
@@ -911,7 +916,7 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                     </td>
                     <td className="py-3 px-3.5 text-center">
                       <button
-                        onClick={() => handleDelete(sale.id)}
+                        onClick={() => setSaleToDelete(sale)}
                         disabled={deletingSaleId === sale.id}
                         className="p-1.5 text-stone-400 hover:text-red-500 transition-colors cursor-pointer disabled:opacity-50"
                         title="Delete Sale Record"
@@ -1602,6 +1607,116 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                 </button>
               </div>
             </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Delete Sale Options Modal: Ask Admin Whether to Restore Stock or Not */}
+      {saleToDelete && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs font-malayalam animate-fadeIn">
+          <div className="bg-white dark:bg-[#1E1B1B] w-full max-w-md rounded-3xl p-6 border border-stone-200 dark:border-[#2E2828] shadow-2xl space-y-5">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+                  <FiTrash2 className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-stone-900 dark:text-white">
+                    വിൽപ്പന റെക്കോർഡ് ഒഴിവാക്കുക
+                  </h3>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    {saleToDelete.customer_name || 'റീട്ടെയിൽ'} • {saleToDelete.product_name}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSaleToDelete(null)}
+                disabled={isDeletingSale}
+                className="p-1.5 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 rounded-lg transition-colors cursor-pointer"
+              >
+                <FiX className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Sale details box */}
+            <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] space-y-1.5 text-xs">
+              <div className="flex justify-between">
+                <span className="text-stone-500 dark:text-stone-400">ഉൽപ്പന്നം:</span>
+                <span className="font-bold text-stone-900 dark:text-white">{saleToDelete.product_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-500 dark:text-stone-400">അളവ്:</span>
+                <span className="font-mono font-bold text-stone-900 dark:text-white">{saleToDelete.quantity} {saleToDelete.unit || 'kg'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-500 dark:text-stone-400">ആകെ തുക:</span>
+                <span className="font-mono font-black text-stone-900 dark:text-white">₹{Number(saleToDelete.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+              </div>
+            </div>
+
+            <p className="text-xs font-bold text-stone-800 dark:text-stone-200">
+              ഈ വിൽപ്പന നീക്കം ചെയ്യുമ്പോൾ ഉൽപ്പന്ന സ്റ്റോക്ക് എന്ത് ചെയ്യണം?
+            </p>
+
+            <div className="space-y-3">
+              {/* Option 1: Restore stock */}
+              <button
+                type="button"
+                onClick={() => handleConfirmDelete(true)}
+                disabled={isDeletingSale}
+                className="w-full p-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 border-2 border-emerald-500/80 text-left transition-all cursor-pointer flex items-center justify-between group disabled:opacity-50"
+              >
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <FiRotateCcw className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="text-xs font-black text-emerald-900 dark:text-emerald-200">
+                      സ്റ്റോക്കിലേക്ക് തിരികെ ചേർക്കുക
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                    ഉൽപ്പന്ന സ്റ്റോക്കിലേക്ക് {saleToDelete.quantity} {saleToDelete.unit || 'kg'} തിരികെ കൂട്ടിച്ചേർക്കും
+                  </p>
+                </div>
+                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 group-hover:translate-x-0.5 transition-transform shrink-0 ml-2">
+                  തിരഞ്ഞെടുക്കുക →
+                </span>
+              </button>
+
+              {/* Option 2: Delete only without restoring stock */}
+              <button
+                type="button"
+                onClick={() => handleConfirmDelete(false)}
+                disabled={isDeletingSale}
+                className="w-full p-4 rounded-2xl bg-stone-50 hover:bg-stone-100 dark:bg-[#161414] dark:hover:bg-[#201d1d] border border-stone-300 dark:border-stone-700 text-left transition-all cursor-pointer flex items-center justify-between group disabled:opacity-50"
+              >
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <FiTrash2 className="w-4 h-4 text-stone-500 dark:text-stone-400 shrink-0" />
+                    <span className="text-xs font-bold text-stone-800 dark:text-stone-200">
+                      സ്റ്റോക്ക് മാറ്റാതെ ഒഴിവാക്കുക
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                    സ്റ്റോക്ക് കൂട്ടാതെ ഈ വിൽപ്പന റെക്കോർഡ് മാത്രം ഒഴിവാക്കും
+                  </p>
+                </div>
+                <span className="text-xs font-bold text-stone-500 dark:text-stone-400 group-hover:translate-x-0.5 transition-transform shrink-0 ml-2">
+                  തിരഞ്ഞെടുക്കുക →
+                </span>
+              </button>
+            </div>
+
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSaleToDelete(null)}
+                disabled={isDeletingSale}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-[#282323] transition-colors cursor-pointer"
+              >
+                റദ്ദാക്കുക (Cancel)
+              </button>
+            </div>
           </div>
         </div>,
         document.body

@@ -87,39 +87,10 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
         setTotalWageBudget(String(getEffectiveDailyWage(existing)));
         setNotes(existing.notes || '');
       } else {
-        // Automatically default to the previous day's recorded wage
-        const prevWage = history.find((w: any) => w.productionDate < date);
-        const defaultBudget = prevWage ? getEffectiveDailyWage(prevWage) || 4000 : 4000;
-        const defaultNotes = prevWage?.notes ? `${prevWage.notes}` : '';
-
-        setTotalWageBudget(String(defaultBudget));
-        setNotes(defaultNotes);
-
-        // If today and no wage record exists, automatically create/populate today's wage record
-        const todayStr = getTodayStr();
-        if (date === todayStr) {
-          try {
-            const autoCreated = await saveDailyWage({
-              productionDate: todayStr,
-              totalWageBudget: defaultBudget,
-              numCooks: 0,
-              numPackers: 0,
-              totalPacketsProduced: packets,
-              totalProductionKg: prodKg,
-              productionWageAmount: roundCurrency(defaultBudget),
-              packingWageAmount: 0,
-              wagePerCook: 0,
-              wagePerPacker: 0,
-              notes: defaultNotes || 'Auto-populated from previous day',
-            });
-            setExistingWage(autoCreated);
-          } catch (autoErr) {
-            console.warn('Auto-populate today wage note:', autoErr);
-            setExistingWage(null);
-          }
-        } else {
-          setExistingWage(null);
-        }
+        // Wages must be set manually each day; do not auto-populate yesterday's wage
+        setExistingWage(null);
+        setTotalWageBudget('0');
+        setNotes('');
       }
     } catch (err) {
       console.error('Failed to load wage data:', err);
@@ -363,30 +334,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
         </div>
       ) : (
         <>
-          {/* ======================================================== */}
-          {/* AUTO-FETCHED PRODUCTION SUMMARY BANNER                   */}
-          {/* ======================================================== */}
-          <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-200/80 dark:border-amber-900/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-epso-orange/15 text-epso-orange flex items-center justify-center font-black">
-                <FiLayers className="w-5 h-5" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wider">
-                  ഈ തീയതിയിലെ ഫാക്ടറി ഉൽപ്പാദന കണക്ക്
-                </p>
-                <p className="text-sm sm:text-base font-black text-stone-900 dark:text-white mt-0.5">
-                  <span className="font-mono text-epso-red dark:text-amber-400">{liveProductionKg.toFixed(1)} kg</span> ഉൽപ്പാദനം ·{' '}
-                  <span className="font-mono text-indigo-600 dark:text-indigo-400">{livePackets}</span> പാക്കറ്റുകൾ പാക്ക് ചെയ്തു ·{' '}
-                  <span className="font-mono text-amber-700 dark:text-amber-300">{dayBatches.length}</span> ബാച്ചുകൾ
-                </p>
-              </div>
-            </div>
-
-            <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-400">
-              ബാച്ചുകളിൽ നിന്നും പാക്കിംഗ് രേഖകളിൽ നിന്നും സ്വയം ശേഖരിച്ചത്
-            </span>
-          </div>
+          
 
           {/* ======================================================== */}
           {/* TOTAL DAILY WAGE FORM                                    */}
@@ -505,13 +453,24 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
                 </p>
               </div>
             ) : (
-              <div className="p-4 rounded-2xl bg-stone-100 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] text-xs text-stone-600 dark:text-stone-400 space-y-1">
-                <p className="font-bold text-stone-800 dark:text-stone-200">
-                  പണിയില്ലാത്ത / ക്ലീനിംഗ് ദിവസങ്ങൾ (Non-Production Day):
-                </p>
-                <p>
-                  ഇന്ന് ഉൽപ്പാദനം നടന്നിട്ടില്ലാത്തതിനാൽ (0 kg), ഈ കൂലി തുക (₹{Number(totalWageBudget || 0).toLocaleString('en-IN')}) മാസത്തെ പൊതുവായ പ്രവർത്തനച്ചെലവുകളിലേക്ക് (General Operational Overhead) ചേർക്കപ്പെടുന്നു; ഉൽപ്പന്ന ബാച്ചുകളിലേക്ക് ചേർക്കപ്പെടില്ല.
-                </p>
+              <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-xs space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+                  <p className="font-black text-amber-900 dark:text-amber-200 text-sm">
+                    പണിയില്ലാത്ത / ക്ലീനിംഗ് ദിവസങ്ങൾ (Non-Production Day):
+                  </p>
+                </div>
+                <div className="text-stone-700 dark:text-stone-300 space-y-1.5 leading-relaxed">
+                  <p>
+                    • <strong>ബാച്ച് ഉൽപ്പാദനം ഇല്ല:</strong> ഈ തീയതിയിൽ ഫാക്ടറിയിൽ ബാച്ചുകൾ ഉൽപ്പാദിപ്പിച്ചിട്ടില്ലാത്തതിനാൽ (0 kg), ബാച്ച് അടിസ്ഥാനത്തിലുള്ള ലേബർ വിഭജനം (₹/kg) ബാധകമല്ല.
+                  </p>
+                  <p>
+                    • <strong>അക്കൗണ്ടിംഗ് രീതി:</strong> ഇന്ന് നൽകുന്ന കൂലി (₹{Number(totalWageBudget || 0).toLocaleString('en-IN')}) ഉൽപ്പന്നങ്ങളുടെ ഇൻവെന്ററി കോസ്റ്റിലേക്ക് ചേർക്കാതെ, ഫാക്ടറിയുടെ മാസത്തെ പൊതുവായ പ്രവർത്തനച്ചെലവിലേക്ക് (General Factory Operational Overhead / Indirect Labor) നേരിട്ട് കണക്കാക്കുന്നു.
+                  </p>
+                  <p>
+                    • <strong>റിപ്പോർട്ടിംഗ്:</strong> മാസാവസാനത്തെ ലാഭനഷ്ട കണക്കിലും (P&L) ഡെയ്‌ലി ലെഡ്ജറിലും ഈ കൂലി ചെലവ് കൃത്യമായി രേഖപ്പെടുത്തപ്പെടും.
+                  </p>
+                </div>
               </div>
             )}
 
