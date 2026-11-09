@@ -7,14 +7,11 @@ import {
 } from '../services/supabase';
 import {
   FiPackage,
-  FiPlus,
   FiTrash2,
-  FiEdit2,
   FiCheck,
   FiX,
-  FiDollarSign,
-  FiLayers,
   FiAlertCircle,
+  FiPlusCircle,
 } from 'react-icons/fi';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
 import { createPortal } from 'react-dom';
@@ -38,13 +35,12 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
 
   const [packetTypes, setPacketTypes] = useState<PacketType[]>([]);
   const [loading, setLoading] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedPacket, setSelectedPacket] = useState<PacketType | null>(null);
 
-  // Form states for creating or editing
+  // Form states: Admin enters ONLY Quantity and Total Price
   const [name, setName] = useState('');
-  const [bundleCost, setBundleCost] = useState<number | string>(0);
-  const [bundleQuantity, setBundleQuantity] = useState<number | string>(100);
-  const [costPerPacket, setCostPerPacket] = useState<number | string>(0);
+  const [quantity, setQuantity] = useState<number | string>('');
+  const [totalPrice, setTotalPrice] = useState<number | string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -56,7 +52,7 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
       if (initialPacket?.id) {
         const fresh = data.find((p) => p.id === initialPacket.id);
         if (fresh) {
-          startEdit(fresh);
+          selectPacketForPurchase(fresh);
         }
       }
     } catch (err: any) {
@@ -69,7 +65,7 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       if (initialPacket) {
-        startEdit(initialPacket);
+        selectPacketForPurchase(initialPacket);
       } else {
         resetForm();
       }
@@ -78,73 +74,41 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
   }, [isOpen, initialPacket]);
 
   const resetForm = () => {
-    setEditingId(null);
+    setSelectedPacket(null);
     setName('');
-    setBundleCost(0);
-    setBundleQuantity(100);
-    setCostPerPacket(0);
+    setQuantity('');
+    setTotalPrice('');
     setErrorMsg('');
   };
 
-  const startEdit = (pkt: PacketType) => {
-    setEditingId(pkt.id);
+  const selectPacketForPurchase = (pkt: PacketType) => {
+    setSelectedPacket(pkt);
     setName(pkt.name);
-    setBundleCost(pkt.bundleCost || 0);
-    setBundleQuantity(Math.max(0, Number(pkt.bundleQuantity ?? 0)));
-    setCostPerPacket(pkt.costPerPacket || 0);
+    setQuantity('');
+    setTotalPrice('');
     setErrorMsg('');
   };
 
-  // Recalculate cost per packet when bundle cost or quantity changes
-  const handleBundleCostChange = (val: string) => {
-    setBundleCost(val);
-    const cost = parseFloat(val) || 0;
-    const qty = parseFloat(String(bundleQuantity)) || 0;
-    if (qty > 0) {
-      setCostPerPacket(parseFloat((cost / qty).toFixed(4)));
-    }
-  };
-
-  const handleBundleQuantityChange = (val: string) => {
-    setBundleQuantity(val);
-    const qty = parseFloat(val) || 0;
-    const cost = parseFloat(String(bundleCost)) || 0;
-    const currentUnitCost = parseFloat(String(costPerPacket)) || 0;
-    if (qty > 0) {
-      if (cost > 0) {
-        setCostPerPacket(parseFloat((cost / qty).toFixed(4)));
-      } else if (currentUnitCost > 0) {
-        setBundleCost(parseFloat((currentUnitCost * qty).toFixed(2)));
-      }
-    }
-  };
-
-  const handleQuickAddStock = (delta: number) => {
-    const currentQty = Math.max(0, parseInt(String(bundleQuantity), 10) || 0);
-    const nextQty = Math.max(0, currentQty + delta);
-    setBundleQuantity(nextQty);
-    const currentUnitCost = parseFloat(String(costPerPacket)) || 0;
-    const cost = parseFloat(String(bundleCost)) || 0;
-    if (currentUnitCost > 0) {
-      setBundleCost(parseFloat((currentUnitCost * nextQty).toFixed(2)));
-    } else if (cost > 0 && nextQty > 0) {
-      setCostPerPacket(parseFloat((cost / nextQty).toFixed(4)));
-    }
-  };
-
-  const handleCostPerPacketDirectChange = (val: string) => {
-    setCostPerPacket(val);
-    const singleCost = parseFloat(val) || 0;
-    const qty = parseFloat(String(bundleQuantity)) || 0;
-    if (qty > 0) {
-      setBundleCost(parseFloat((singleCost * qty).toFixed(2)));
-    }
-  };
+  // Auto-calculated Cover Unit Cost: Total Price / Quantity
+  const numQty = parseFloat(String(quantity)) || 0;
+  const numTotal = parseFloat(String(totalPrice)) || 0;
+  const coverUnitCost = numQty > 0 && numTotal > 0 ? Number((numTotal / numQty).toFixed(4)) : (selectedPacket?.costPerPacket || 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       setErrorMsg('പാക്കറ്റിന്റെ പേര് നൽകുക (Enter packet name)');
+      return;
+    }
+
+    if (numQty <= 0) {
+      setErrorMsg('എണ്ണം നൽകുക (Quantity must be greater than zero)');
+      return;
+    }
+
+    if (numTotal < 0) {
+      setErrorMsg('ആകെ തുക തെറ്റാണ് (Total price cannot be negative)');
       return;
     }
 
@@ -152,19 +116,24 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
       setIsSubmitting(true);
       setErrorMsg('');
 
-      const bQty = Math.max(0, parseInt(String(bundleQuantity), 10) || 0);
-      const bCost = Math.max(0, parseFloat(String(bundleCost)) || 0);
-      const cPerPacket = parseFloat(String(costPerPacket)) || (bQty > 0 ? bCost / bQty : 0);
+      const existingStock = selectedPacket ? Number(selectedPacket.bundleQuantity ?? 0) : 0;
+      // Packet stock increases by the entered quantity
+      const newStock = existingStock + Math.round(numQty);
+      const unitCost = numQty > 0 ? Number((numTotal / numQty).toFixed(4)) : 0;
+      const newBundleCost = Number((newStock * unitCost).toFixed(2));
 
       await savePacketType({
-        id: editingId || undefined,
-        name: name.trim(),
-        bundleCost: bQty === 0 ? 0 : bCost,
-        bundleQuantity: bQty,
-        costPerPacket: cPerPacket,
+        id: selectedPacket?.id || undefined,
+        name: trimmedName,
+        bundleCost: newBundleCost,
+        bundleQuantity: newStock,
+        costPerPacket: unitCost,
       });
 
-      showToast(`${name.trim()} സ്റ്റോക്ക് (${bQty} pkts) വിജയകരമായി സൂക്ഷിച്ചു`, 'success');
+      showToast(
+        `${trimmedName}: ${Math.round(numQty)} pcs ചേർത്തു. പുതിയ സ്റ്റോക്ക്: ${newStock} pcs (₹${unitCost.toFixed(2)}/കവർ)`,
+        'success'
+      );
       resetForm();
       await loadData();
       if (onUpdated) onUpdated();
@@ -189,6 +158,9 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
     try {
       await deletePacketType(id);
       showToast('പാക്കറ്റ് തരം വിജയകരമായി നീക്കം ചെയ്തു', 'success');
+      if (selectedPacket?.id === id) {
+        resetForm();
+      }
       await loadData();
       if (onUpdated) onUpdated();
     } catch (err: any) {
@@ -200,14 +172,13 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] overflow-hidden">
-      {/* Edge-to-edge backdrop */}
       <div
         className="fixed inset-0 w-full h-full bg-black/65 backdrop-blur-md animate-apple-backdrop"
         onClick={() => !isSubmitting && onClose()}
       />
 
       <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-5 relative z-10 pointer-events-none">
-        <div className="w-full max-w-3xl max-h-[90vh] flex flex-col bg-white dark:bg-[#1E1B1B] rounded-3xl border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal google-modal pointer-events-auto overflow-hidden">
+        <div className="w-full max-w-2xl max-h-[90vh] flex flex-col bg-white dark:bg-[#1E1B1B] rounded-3xl border border-stone-200 dark:border-[#2E2828] shadow-apple-modal animate-apple-modal google-modal pointer-events-auto overflow-hidden">
           {/* Header */}
           <div className="p-5 pb-3 border-b border-stone-200 dark:border-[#2E2828] shrink-0 flex items-center justify-between">
             <div className="flex items-center gap-2.5">
@@ -216,10 +187,10 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
               </span>
               <div>
                 <h2 className="text-lg font-bold text-stone-900 dark:text-white font-malayalam leading-tight">
-                  പാക്കറ്റ് തരങ്ങളും ചിലവും (Packet Types & Costs)
+                  പാക്കറ്റ് കവറുകൾ ചേർക്കുക (Packet Covers & Stock)
                 </h2>
                 <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam">
-                  പാക്കറ്റുകളുടെ വിലയും ബണ്ടിൽ അളവും ക്രമീകരിക്കുക
+                  എണ്ണവും ആകെ തുകയും നൽകി കവർ സ്റ്റോക്ക് ചേർക്കുക
                 </p>
               </div>
             </div>
@@ -242,136 +213,117 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
               </div>
             )}
 
-            {/* Form: Add or Edit Packet Type */}
+            {/* Form: Enter ONLY Quantity + Total Price */}
             <form onSubmit={handleSubmit} className="p-4 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323] space-y-3">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-stone-900 dark:text-white font-malayalam flex items-center gap-1.5">
-                  <FiLayers className="w-4 h-4 text-epso-orange" />
-                  {editingId ? `പാക്കറ്റ് തരം തിരുത്തുക: ${name || 'Selected'}` : 'പുതിയ പാക്കറ്റ് തരം ചേർക്കുക (Add Packet Type)'}
+                <span className="font-bold text-stone-900 dark:text-white font-malayalam flex items-center gap-1.5 text-sm">
+                  <FiPlusCircle className="w-4 h-4 text-epso-orange" />
+                  {selectedPacket ? `സ്റ്റോക്ക് ചേർക്കുക: ${selectedPacket.name}` : 'പുതിയ പാക്കറ്റ് കവർ ചേർക്കുക'}
                 </span>
-                {editingId && (
+                {selectedPacket && (
                   <button
                     type="button"
                     onClick={resetForm}
-                    className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 font-bold"
+                    className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 font-bold text-[11px]"
                   >
-                    റദ്ദാക്കുക (Cancel Edit)
+                    പുതിയത് ചേർക്കാൻ മാറ്റുക
                   </button>
                 )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Packet Name */}
-                <div className="sm:col-span-2">
-                  <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                    പാക്കറ്റിന്റെ പേര് / സൈസ് (Packet Name / Size) *
-                  </label>
+              {/* Packet Type Selection */}
+              <div>
+                <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
+                  പാക്കറ്റ് തരം / പേര് (Packet Type) *
+                </label>
+                {selectedPacket ? (
+                  <div className="p-2.5 rounded-xl bg-stone-200/60 dark:bg-[#282323] flex items-center justify-between">
+                    <span className="font-bold text-stone-900 dark:text-white font-mono text-sm">{selectedPacket.name}</span>
+                    <span className="text-[11px] font-bold text-stone-500">
+                      നിലവിലെ സ്റ്റോക്ക്: {selectedPacket.bundleQuantity ?? 0} pcs
+                    </span>
+                  </div>
+                ) : (
                   <input
                     type="text"
                     required
-                    placeholder="e.g. 3kg HM Packet, 10 x 12 Packet"
+                    placeholder="e.g. 10 x 12 Packet, 2KG HM Packet"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="w-full google-input text-stone-900 dark:text-white font-bold"
                   />
-                </div>
+                )}
+              </div>
 
-                {/* Bundle Total Cost */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {/* 1. Quantity (number of covers purchased, e.g. 500) */}
                 <div>
                   <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                    ബണ്ടിൽ ആകെ ചിലവ് (Bundle Cost ₹)
+                    വാങ്ങിയ എണ്ണം / Quantity (pcs) *
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    required
+                    placeholder="e.g. 500"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    className="w-full google-input text-stone-900 dark:text-white font-bold font-mono text-sm"
+                  />
+                </div>
+
+                {/* 2. Total Price (total purchase amount, e.g. ₹250) */}
+                <div>
+                  <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
+                    ആകെ വില / Total Price (₹) *
                   </label>
                   <input
                     type="number"
                     step="0.01"
                     min="0"
+                    required
                     placeholder="e.g. 250"
-                    value={bundleCost === 0 ? '' : bundleCost}
-                    onChange={(e) => handleBundleCostChange(e.target.value)}
-                    className="w-full google-input text-stone-900 dark:text-white font-bold font-mono"
+                    value={totalPrice}
+                    onChange={(e) => setTotalPrice(e.target.value)}
+                    className="w-full google-input text-stone-900 dark:text-white font-bold font-mono text-sm"
                   />
-                </div>
-
-                {/* Bundle Quantity (No. of packets in stock) */}
-                <div>
-                  <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                    ലഭ്യമായ പാക്കറ്റ് സ്റ്റോക്ക് (Packets in Stock)
-                  </label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
-                    placeholder="0"
-                    value={bundleQuantity === '' ? '' : bundleQuantity}
-                    onChange={(e) => handleBundleQuantityChange(e.target.value)}
-                    className="w-full google-input text-stone-900 dark:text-white font-bold font-mono"
-                  />
-                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                    <span className="text-[10px] font-bold text-stone-400">വേഗത്തിൽ ചേർക്കാൻ:</span>
-                    {[50, 100, 200, 500].map((addAmt) => (
-                      <button
-                        key={addAmt}
-                        type="button"
-                        onClick={() => handleQuickAddStock(addAmt)}
-                        className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60 font-bold font-mono text-[10px] transition-colors cursor-pointer"
-                      >
-                        +{addAmt}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBundleQuantity(0);
-                        setBundleCost(0);
-                      }}
-                      className="px-2 py-0.5 rounded-lg bg-red-50 dark:bg-red-950/40 hover:bg-red-100 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/60 font-bold font-mono text-[10px] transition-colors cursor-pointer"
-                    >
-                      0 (Clear)
-                    </button>
-                  </div>
-                </div>
-
-                {/* Cost Per Packet (Direct / Calculated) */}
-                <div className="sm:col-span-2">
-                  <div className="p-3 rounded-xl bg-orange-500/10 border border-orange-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div>
-                      <span className="font-bold text-orange-900 dark:text-amber-300 block font-malayalam">
-                        ഒരു പാക്കറ്റിന്റെ ചിലവ് (Cost per Packet):
-                      </span>
-                      <span className="text-[11px] text-stone-500 dark:text-stone-400 font-mono">
-                        ₹{Number(bundleCost) || 0} / {Number(bundleQuantity) || 1} pkts = ₹{Number(costPerPacket).toFixed(2)} / pkt
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 self-end sm:self-auto">
-                      <span className="font-bold text-stone-500">₹</span>
-                      <input
-                        type="number"
-                        step="0.0001"
-                        min="0"
-                        value={costPerPacket === 0 ? '' : costPerPacket}
-                        onChange={(e) => handleCostPerPacketDirectChange(e.target.value)}
-                        placeholder="0.00"
-                        className="w-24 p-2 rounded-lg border border-orange-300 dark:border-amber-700/60 bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white font-extrabold font-mono text-right outline-none"
-                      />
-                      <span className="font-bold text-stone-500">/ pkt</span>
-                    </div>
-                  </div>
                 </div>
               </div>
+
+              {/* Auto-Calculated Summary Card */}
+              {numQty > 0 && (
+                <div className="p-3 rounded-xl bg-orange-500/10 border border-orange-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2 mt-2">
+                  <div>
+                    <span className="font-bold text-orange-900 dark:text-amber-300 block font-malayalam">
+                      ഒരു കവറിന്റെ ചിലവ് (Cover Unit Cost):
+                    </span>
+                    <span className="text-[11px] text-stone-500 dark:text-stone-400 font-mono">
+                      ₹{numTotal} / {numQty} pcs = ₹{coverUnitCost.toFixed(2)} / കവർ
+                    </span>
+                  </div>
+
+                  <div className="text-right">
+                    <span className="text-[11px] text-stone-500 block font-malayalam">പുതിയ ആകെ സ്റ്റോക്ക്:</span>
+                    <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                      {((selectedPacket?.bundleQuantity ?? 0) + Math.round(numQty))} pcs
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  disabled={isSubmitting || numQty <= 0}
+                  className="px-5 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   {isSubmitting ? (
                     <span>സൂക്ഷിക്കുന്നു...</span>
                   ) : (
                     <>
-                      <FiCheck className="w-3.5 h-3.5" />
-                      <span>{editingId ? 'അപ്ഡേറ്റ് ചെയ്യുക (Update)' : 'പാക്കറ്റ് ചേർക്കുക (Save)'}</span>
+                      <FiCheck className="w-4 h-4" />
+                      <span>സ്റ്റോക്ക് ചേർക്കുക (Add Stock)</span>
                     </>
                   )}
                 </button>
@@ -382,75 +334,61 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-stone-700 dark:text-stone-300 font-malayalam">
-                  ലഭ്യമായ പാക്കറ്റ് തരങ്ങൾ ({packetTypes.length} എണ്ണം):
+                  പാക്കറ്റ് കവർ സ്റ്റോക്ക് ({packetTypes.length} എണ്ണം):
                 </span>
                 {loading && <span className="text-stone-400 animate-pulse">റീലോഡ് ചെയ്യുന്നു...</span>}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {packetTypes.map((pkt) => {
-                  const isCurrentlyEditing = editingId === pkt.id;
+                  const isSelected = selectedPacket?.id === pkt.id;
                   const stockCount = Math.max(0, Number(pkt.bundleQuantity ?? 0));
                   const isOutOfStock = stockCount <= 0;
-                  const cPerPkt = Number(pkt.costPerPacket) || (stockCount > 0 ? pkt.bundleCost / stockCount : 0);
+                  const cPerPkt = Number(pkt.costPerPacket) || 0;
 
                   return (
                     <div
                       key={pkt.id}
-                      className={`p-3 rounded-2xl border transition-all flex flex-col justify-between gap-2 ${
-                        isCurrentlyEditing
-                          ? 'border-epso-red dark:border-amber-500 bg-orange-50/50 dark:bg-amber-950/20'
-                          : 'border-stone-200 dark:border-[#282323] bg-white dark:bg-[#1E1B1B]'
+                      onClick={() => selectPacketForPurchase(pkt)}
+                      className={`p-3 rounded-2xl border transition-all flex flex-col justify-between gap-2 cursor-pointer ${
+                        isSelected
+                          ? 'border-epso-red dark:border-amber-500 bg-orange-50/50 dark:bg-amber-950/20 ring-2 ring-orange-500/20'
+                          : 'border-stone-200 dark:border-[#282323] bg-white dark:bg-[#1E1B1B] hover:border-orange-300'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <div className="flex items-center gap-2">
-                            <h4 className="font-black text-stone-900 dark:text-white text-sm">
-                              {pkt.name}
-                            </h4>
+                          <h4 className="font-black text-stone-900 dark:text-white text-sm">
+                            {pkt.name}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-1 text-stone-500 dark:text-stone-400 font-mono text-[11px]">
                             <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold font-mono ${
+                              className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
                                 isOutOfStock
                                   ? 'bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400'
                                   : 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
                               }`}
                             >
-                              {isOutOfStock ? 'സ്റ്റോക്കില്ല (0)' : `${stockCount} pkts`}
+                              {stockCount} pcs
                             </span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5 text-stone-500 dark:text-stone-400 font-mono text-[11px]">
-                            <span>മൂല്യം: ₹{Number(pkt.bundleCost || 0).toFixed(0)}</span>
                             <span>•</span>
-                            <span>സ്റ്റോക്ക്: {stockCount} എണ്ണം</span>
+                            <span>₹{cPerPkt.toFixed(2)} / കവർ</span>
                           </div>
                         </div>
 
-                        <div className="text-right shrink-0">
-                          <span className="text-sm font-black text-epso-red dark:text-amber-400 font-mono">
-                            ₹{cPerPkt.toFixed(2)}
-                          </span>
-                          <span className="text-[10px] text-stone-400 block font-semibold">/ packet</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(pkt.id, pkt.name);
+                            }}
+                            className="p-1.5 text-stone-400 hover:text-red-500 rounded-lg transition-colors cursor-pointer"
+                            title="ഡിലീറ്റ്"
+                          >
+                            <FiTrash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
-                      </div>
-
-                      <div className="flex items-center justify-end gap-1 pt-1.5 border-t border-stone-100 dark:border-[#282323]">
-                        <button
-                          type="button"
-                          onClick={() => startEdit(pkt)}
-                          className="px-2.5 py-1 rounded-lg bg-stone-100 dark:bg-[#282323] hover:bg-stone-200 dark:hover:bg-[#342e2e] text-stone-700 dark:text-stone-300 font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
-                        >
-                          <FiEdit2 className="w-3 h-3" />
-                          <span>സ്റ്റോക്ക് ചേർക്കുക / തിരുത്തുക</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(pkt.id, pkt.name)}
-                          className="p-1 text-red-500 hover:text-red-700 transition-colors cursor-pointer"
-                          title="ഡിലീറ്റ്"
-                        >
-                          <FiTrash2 className="w-3.5 h-3.5" />
-                        </button>
                       </div>
                     </div>
                   );

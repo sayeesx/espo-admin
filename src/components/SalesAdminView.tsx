@@ -300,7 +300,7 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, onRefr
       productId: defaultProduct ? defaultProduct.id : '',
       productName: defaultProduct ? defaultProduct.name : 'Product A',
       quantity: 1,
-      unit: defaultProduct?.unit || 'kg',
+      unit: 'kg',
       unitPrice: initialPrice,
       gstRate: 5,
     };
@@ -349,7 +349,7 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, onRefr
       productId: fallbackProd?.id || '',
       productName: fallbackProd?.name || `Item ${String.fromCharCode(65 + invoiceItems.length)}`,
       quantity: 1,
-      unit: fallbackProd?.unit || 'kg',
+      unit: 'kg',
       unitPrice: initialPrice,
       gstRate: 5,
     };
@@ -791,11 +791,11 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
         </div>
 
         <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm">
-          <p className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam">ആകെ വിറ്റ അളവ്</p>
+          <p className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam">ആകെ വിറ്റ ഭാരം</p>
           <p className="text-xl sm:text-2xl font-black text-stone-800 dark:text-stone-200 font-mono mt-0.5">
-            <AnimatedNumber value={stats.totalQty} decimals={1} />
+            <AnimatedNumber value={stats.totalQty} decimals={1} suffix=" kg" />
           </p>
-          <p className="text-[10px] text-stone-400 mt-0.5 font-malayalam">പാക്കറ്റുകൾ / കിലോ</p>
+          <p className="text-[10px] text-stone-400 mt-0.5 font-malayalam">കിലോ (kg)</p>
         </div>
       </div>
 
@@ -851,7 +851,7 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                 <tr className="border-b border-stone-200 dark:border-[#2E2828] text-stone-600 dark:text-stone-400 bg-stone-50/80 dark:bg-[#141212] font-bold">
                   <th className="py-3 px-3.5">തീയതി</th>
                   <th className="py-3 px-3.5">ഉൽപ്പന്നം (Item)</th>
-                  <th className="py-3 px-3.5 text-right">അളവ് (Qty)</th>
+                  <th className="py-3 px-3.5 text-right">ഭാരം (Kg)</th>
                   <th className="py-3 px-3.5 text-right">വില (Rate)</th>
                   <th className="py-3 px-3.5 text-right">ആകെ തുക</th>
                   <th className="py-3 px-3.5 text-right">ലാഭം (Profit)</th>
@@ -1127,7 +1127,7 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                           />
                         </th>
                         <th className="py-2.5 px-3">Item</th>
-                        <th className="py-2.5 px-3 w-24 text-center">Qty</th>
+                        <th className="py-2.5 px-3 w-28 text-center">Weight (Kg)</th>
                         <th className="py-2.5 px-3 w-28 text-right">Rate</th>
                         <th className="py-2.5 px-3 w-24 text-center">GST</th>
                         <th className="py-2.5 px-3 w-28 text-right">Total</th>
@@ -1173,8 +1173,8 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                                 step="any"
                                 value={item.quantity}
                                 onChange={(e) => handleUpdateItem(item.id, { quantity: parseFloat(e.target.value) || 0 })}
-                                className="w-20 px-2 py-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-center font-mono font-bold text-xs text-stone-900 dark:text-white focus:outline-none"
-                              />
+                                className="w-16 px-2 py-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-center font-mono font-bold text-xs text-stone-900 dark:text-white focus:outline-none"
+                              /> <span className="text-[11px] font-bold text-stone-500 dark:text-stone-400 ml-1">kg</span>
                             </td>
                             <td className="py-2.5 px-3 text-right">
                               <div className="relative inline-block w-24">
@@ -1450,7 +1450,7 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                 <div className="grid grid-cols-12 text-xs font-bold py-1 text-black">
                   <div className="col-span-1">SN</div>
                   <div className="col-span-5">Item</div>
-                  <div className="col-span-2 text-center">Qty</div>
+                  <div className="col-span-2 text-center">Kg</div>
                   <div className="col-span-2 text-right">Price</div>
                   <div className="col-span-2 text-right">Amt</div>
                 </div>
@@ -1464,7 +1464,7 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                     <div key={idx} className="grid grid-cols-12 items-baseline">
                       <div className="col-span-1">{item.sn || idx + 1}</div>
                       <div className="col-span-5 font-medium pr-1 leading-tight">{item.name}</div>
-                      <div className="col-span-2 text-center">{item.quantity}</div>
+                      <div className="col-span-2 text-center">{item.quantity} kg</div>
                       <div className="col-span-2 text-right">{item.unitPrice.toFixed(2)}</div>
                       <div className="col-span-2 text-right">{item.amount.toFixed(2)}</div>
                     </div>
@@ -1478,7 +1478,7 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                 <div className="grid grid-cols-12 items-center text-xs font-bold text-black py-1">
                   <div className="col-span-6">Subtotal</div>
                   <div className="col-span-2 text-center">
-                    {activeBill.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)}
+                    {activeBill.items.reduce((s, it) => s + (Number(it.quantity) || 0), 0)} kg
                   </div>
                   <div className="col-span-4 text-right">
                     ₹ {activeBill.subtotal.toFixed(2)}
@@ -1667,7 +1667,7 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                 <span className="font-bold text-stone-900 dark:text-white">{saleToDelete.product_name}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-stone-500 dark:text-stone-400">അളവ്:</span>
+                <span className="text-stone-500 dark:text-stone-400">ഭാരം (Kg):</span>
                 <span className="font-mono font-bold text-stone-900 dark:text-white">{saleToDelete.quantity} {saleToDelete.unit || 'kg'}</span>
               </div>
               <div className="flex justify-between">

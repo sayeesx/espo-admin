@@ -610,6 +610,21 @@ export function allocateDailySharedExpenses(
  *
  * Total product cost = Bulk production cost + Packaging material (cover) cost.
  */
+export function parsePacketWeightKg(size: string): number {
+  if (!size) return 0.1;
+  const s = size.toLowerCase().trim();
+  const kgMatch = s.match(/(\d+(?:\.\d+)?)\s*kg/i);
+  if (kgMatch) return parseFloat(kgMatch[1]);
+  const gMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:g|gm|grams)/i);
+  if (gMatch) return parseFloat(gMatch[1]) / 1000;
+  if (s.includes('8 x 10') || s.includes('8x10')) return 0.100;
+  if (s.includes('8 x 12') || s.includes('8x12')) return 0.250;
+  if (s.includes('10 x 12') || s.includes('10x12')) return 0.250;
+  if (s.includes('10 x 14') || s.includes('10x14')) return 0.500;
+  if (s.includes('10 x 16') || s.includes('10x16')) return 1.000;
+  return 0.100;
+}
+
 export function calculateFinalProductCosting(
   productionAllocation: {
     productId: string;
@@ -664,14 +679,8 @@ export function calculateFinalProductCosting(
     let kgPerPacket = 0;
     if (item.packets > 0 && item.weightKg > 0) {
       kgPerPacket = item.weightKg / item.packets;
-    } else if (/(\d+(?:\.\d+)?)\s*kg/i.test(size)) {
-      const match = size.match(/(\d+(?:\.\d+)?)\s*kg/i);
-      kgPerPacket = match ? parseFloat(match[1]) : 1;
-    } else if (/(\d+)\s*g/i.test(size)) {
-      const match = size.match(/(\d+)\s*g/i);
-      kgPerPacket = match ? parseInt(match[1], 10) / 1000 : 0.1;
     } else {
-      kgPerPacket = 0.1;
+      kgPerPacket = parsePacketWeightKg(size);
     }
 
     // Bulk product share inside this packet: kgPerPacket * productionCostPerKg
