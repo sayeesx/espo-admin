@@ -226,14 +226,18 @@ export function isBasicIngredientName(name: string): boolean {
 
 /**
  * Consistent batch eligibility rule across Epso:
- * Excludes cancelled batches and requires positive produced weight (actualQuantity > 0).
+ * Excludes cancelled batches and requires positive produced weight (actualQuantity > 0),
+ * or allows plannedQuantity if pending weighing.
  */
 export function isEligibleProductionBatch(
-  run: { status?: string; actualQuantity?: number } | null | undefined
+  run: { status?: string; actualQuantity?: number; plannedQuantity?: number } | null | undefined,
+  allowPlannedIfPending: boolean = false
 ): boolean {
   if (!run) return false;
   if (run.status === 'cancelled') return false;
-  return (Number(run.actualQuantity) || 0) > 0;
+  if ((Number(run.actualQuantity) || 0) > 0) return true;
+  if (allowPlannedIfPending && (Number(run.plannedQuantity) || 0) > 0) return true;
+  return false;
 }
 
 /**
@@ -262,7 +266,7 @@ export function getEffectiveDailyWage(
   return 0;
 }
 
-export interface BatchWageAllocationItem<T extends { id: string; actualQuantity?: number }> {
+export interface BatchWageAllocationItem<T extends { id: string; actualQuantity?: number; plannedQuantity?: number }> {
   run: T;
   weight: number;
   shareRatio: number;
@@ -280,19 +284,29 @@ export interface BatchWageAllocationItem<T extends { id: string; actualQuantity?
  * allocations strictly equals the entered daily wage.
  */
 export function allocateDailyWageToBatches<
-  T extends { id: string; actualQuantity?: number; status?: string }
->(runsForDate: T[], totalDailyWage: number): BatchWageAllocationItem<T>[] {
-  const eligibleRuns = (runsForDate || []).filter((r) => isEligibleProductionBatch(r));
+  T extends { id: string; actualQuantity?: number; plannedQuantity?: number; status?: string }
+>(runsForDate: T[], totalDailyWage: number, allowPlannedIfPending: boolean = true): BatchWageAllocationItem<T>[] {
+  const eligibleRuns = (runsForDate || []).filter((r) => isEligibleProductionBatch(r, allowPlannedIfPending));
   if (eligibleRuns.length === 0) return [];
+
+  const getWeight = (r: T) => {
+    const act = Number(r.actualQuantity) || 0;
+    if (act > 0) return roundStock(act);
+    if (allowPlannedIfPending) {
+      const plan = Number(r.plannedQuantity) || 0;
+      if (plan > 0) return roundStock(plan);
+    }
+    return 0;
+  };
 
   const budget = Math.max(0, roundCurrency(Number(totalDailyWage) || 0));
   const totalEligibleKg = roundStock(
-    eligibleRuns.reduce((sum, r) => sum + (Number(r.actualQuantity) || 0), 0)
+    eligibleRuns.reduce((sum, r) => sum + getWeight(r), 0)
   );
 
   if (totalEligibleKg <= 0 || budget <= 0) {
     return eligibleRuns.map((run) => {
-      const weight = roundStock(Number(run.actualQuantity) || 0);
+      const weight = getWeight(run);
       return {
         run,
         weight,
@@ -310,7 +324,7 @@ export function allocateDailyWageToBatches<
 
   return eligibleRuns.map((run, idx) => {
     const isLast = idx === count - 1;
-    const weight = roundStock(Number(run.actualQuantity) || 0);
+    const weight = getWeight(run);
     const shareRatio = weight / totalEligibleKg;
 
     let totalBatchWage: number;
@@ -559,7 +573,7 @@ export function calculateFinalProductCosting(
  * across all eligible production runs, ensuring exact paisa reconciliation per day.
  */
 export function computeDailyBatchCostMaps<
-  T extends { id: string; productionDate?: string; actualQuantity?: number; status?: string }
+  T extends { id: string; productionDate?: string; actualQuantity?: number; plannedQuantity?: number; status?: string }
 >(
   productionRuns: T[],
   wageMap: Record<string, any>,
@@ -573,7 +587,7 @@ export function computeDailyBatchCostMaps<
   /** Dates that have weighed batches but no admin-entered daily wage (total_wage_budget = 0 / missing) */
   datesWithoutWage: Set<string>;
 } {
-  const eligibleRuns = (productionRuns || []).filter((r) => isEligibleProductionBatch(r));
+  const eligibleRuns = (productionRuns || []).filter((r) => isEligibleProductionBatch(r, true));
   const runsByDate = new Map<string, T[]>();
 
   for (const run of eligibleRuns) {
@@ -598,7 +612,7 @@ export function computeDailyBatchCostMaps<
     // Derived on the fly from current batch weights (never cached): (batch kg / day kg) × day wage.
     const dayTotalWage = getEffectiveDailyWage(wage);
     if (dayTotalWage > 0) {
-      const wageAllocs = allocateDailyWageToBatches(dayRuns, dayTotalWage);
+      const wageAllocs = allocateDailyWageToBatches(dayRuns, dayTotalWage, true);
       for (const item of wageAllocs) {
         batchWageMap.set(item.run.id, item.totalBatchWage);
       }
@@ -611,7 +625,7 @@ export function computeDailyBatchCostMaps<
         ? roundCurrency(Number(closing.oilConsumed) * (Number(closing.oilCostPerKg) || 150))
         : 0;
     if (dayOilCost > 0) {
-      const oilAllocs = allocateDailyWageToBatches(dayRuns, dayOilCost);
+      const oilAllocs = allocateDailyWageToBatches(dayRuns, dayOilCost, true);
       for (const item of oilAllocs) {
         batchOilMap.set(item.run.id, item.totalBatchWage);
       }
@@ -619,8 +633,9 @@ export function computeDailyBatchCostMaps<
 
     const dayBasicCost = Number(basicCostByDate[rDate]) || 0;
     if (dayBasicCost > 0) {
-      const basicAllocs = allocateDailyWageToBatches(dayRuns, dayBasicCost);
+      const basicAllocs = allocateDailyWageToBatches(dayRuns, dayBasicCost, true);
       for (const item of basicAllocs) {
+
         batchBasicMap.set(item.run.id, item.totalBatchWage);
       }
     }
@@ -634,4 +649,3 @@ export function computeDailyBatchCostMaps<
     datesWithoutWage,
   };
 }
-

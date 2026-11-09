@@ -113,16 +113,22 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
   }, [selectedDate, loadDateData]);
 
   // Eligible batches on the selected date (excludes cancelled and requires actualQuantity > 0)
+  // Eligible batches on the selected date (actualQuantity > 0 or plannedQuantity > 0 if pending)
   const dayBatches = useMemo(() => {
     return allRuns.filter(
-      (r) => r.productionDate === selectedDate && isEligibleProductionBatch(r)
+      (r) => r.productionDate === selectedDate && isEligibleProductionBatch(r, true)
     );
   }, [allRuns, selectedDate]);
 
   // Live production kg and packets computed from current eligible batches
   const liveProductionKg = useMemo(() => {
     if (dayBatches.length > 0) {
-      return roundStock(dayBatches.reduce((sum, r) => sum + (Number(r.actualQuantity) || 0), 0));
+      return roundStock(
+        dayBatches.reduce((sum, r) => {
+          const act = Number(r.actualQuantity) || 0;
+          return sum + (act > 0 ? act : (Number(r.plannedQuantity) || 0));
+        }, 0)
+      );
     }
     return roundStock(totalProductionKg);
   }, [dayBatches, totalProductionKg]);
@@ -194,7 +200,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
   const batchWageAllocations = useMemo(() => {
     if (dayBatches.length === 0) return [];
     const budget = roundCurrency(Number(totalWageBudget) || 0);
-    const allocated = allocateDailyWageToBatches(dayBatches, budget);
+    const allocated = allocateDailyWageToBatches(dayBatches, budget, true);
 
     return allocated.map((item) => {
       const packetsCount =
@@ -213,10 +219,13 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
   const multiDayLedger = useMemo(() => {
     return wageHistory.map((w) => {
       const runsForDay = allRuns.filter(
-        (r) => r.productionDate === w.productionDate && isEligibleProductionBatch(r)
+        (r) => r.productionDate === w.productionDate && isEligibleProductionBatch(r, true)
       );
       const dayKg = roundStock(
-        runsForDay.reduce((sum, r) => sum + (Number(r.actualQuantity) || 0), 0)
+        runsForDay.reduce((sum, r) => {
+          const act = Number(r.actualQuantity) || 0;
+          return sum + (act > 0 ? act : (Number(r.plannedQuantity) || 0));
+        }, 0)
       );
       const dayPacketsFromRuns = runsForDay.reduce(
         (sum, r) =>
@@ -557,6 +566,11 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
                             {/* Batch Weight */}
                             <td className="py-3 px-4 text-right font-mono font-bold text-stone-900 dark:text-white">
                               {item.weight.toFixed(1)} {item.run.unit || 'kg'}
+                              {(Number(item.run.actualQuantity) || 0) <= 0 && (Number(item.run.plannedQuantity) || 0) > 0 && (
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400 block font-sans font-normal">
+                                  (പ്ലാൻ ചെയ്തത് / Est.)
+                                </span>
+                              )}
                             </td>
 
                             {/* Share Percent */}

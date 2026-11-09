@@ -851,6 +851,19 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           </div>
         </div>
 
+        {/* Missing Wage Warning Banner */}
+        {p.wageMissing && p.productionWages <= 0 && p.totalProductionKg > 0 && (
+          <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 flex items-center gap-3 text-xs text-amber-900 dark:text-amber-200 font-malayalam">
+            <FiUsers className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+            <div>
+              <span className="font-black block font-sans">No wages entered in costing wage calculation of product</span>
+              <span className="text-amber-700 dark:text-amber-300 text-[11px]">
+                കൂലി പേജിൽ ഈ ദിവസത്തെ ആകെ കൂലി ചേർത്താൽ ഉടൻ ഭാരത്തിനനുസരിച്ച് ബാച്ചുകൾക്ക് കൂലി വിഹിതം സ്വയം വിതരണം ചെയ്യപ്പെടും.
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* DAILY PRICE FLUCTUATION TREND CHART */}
         <div className="p-5 rounded-3xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-stone-100 dark:border-[#282323]">
@@ -1067,7 +1080,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
             { label: 'ചേരുവകളുടെ ചെലവ്', value: p.ingredientCost, icon: FiBox, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/20' },
             { label: 'ഉപയോഗിച്ച ഓയിലിന്റെ ചെലവ്', value: p.oilCost, icon: FiDroplet, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/20' },
             { label: 'അടിസ്ഥാന ചേരുവകൾ (ഉപ്പ്, തോട്..)', value: p.basicIngredientsCost, icon: FiLayers, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/20' },
-            { label: 'ദിവസേനയുള്ള കൂലി വിഹിതം (Daily Wages)', value: p.productionWages, missingNote: p.wageMissing ? (p.productionWages > 0 ? 'ചില ദിവസങ്ങളിൽ കൂലി നൽകിയിട്ടില്ല (Some days: no wages entered)' : 'കൂലി നൽകിയിട്ടില്ല (No wages entered)') : undefined, icon: FiUsers, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/20' },
+            { label: 'ദിവസേനയുള്ള കൂലി വിഹിതം (Daily Wages)', value: p.productionWages, missingNote: p.wageMissing ? (p.productionWages > 0 ? 'ചില ദിവസങ്ങളിൽ കൂലി നൽകിയിട്ടില്ല (Some days: no wages entered)' : 'No wages entered in costing wage calculation of product') : undefined, icon: FiUsers, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/20' },
             { label: 'പാക്കിംഗ് കവർ / മെറ്റീരിയലുകൾ', value: p.packagingMaterialCost, icon: FiPackage, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-950/20' },
           ].map((item, idx) => {
             const Icon = item.icon;
@@ -1317,6 +1330,14 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
                           {formatCurrency(p.costPerKg)}
                         </span>
                       </div>
+
+                      {p.wageMissing && p.productionWages <= 0 && p.totalProductionKg > 0 && (
+                        <div className="pt-1.5 border-t border-amber-200/50 dark:border-amber-900/30">
+                          <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold block leading-tight font-sans">
+                            No wages entered in costing wage calculation of product
+                          </span>
+                        </div>
+                      )}
 
                       {/* വില്പന വില / കിലോ */}
                       <div className="flex items-center justify-between pt-1 border-t border-stone-200/60 dark:border-[#282323]">
