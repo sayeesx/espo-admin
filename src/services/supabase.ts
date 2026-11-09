@@ -1397,7 +1397,7 @@ export async function saveDailyClosing(params: {
       total_ingredient_cost,
       status,
       cancellation_reason,
-      products (name, current_stock, avg_cost_per_unit)
+      products (name)
     `)
     .eq('production_date', productionDate);
 
