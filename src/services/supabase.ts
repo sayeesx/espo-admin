@@ -804,6 +804,7 @@ export async function deleteProductionRun(
     .select(`
       id,
       run_number,
+      production_date,
       product_id,
       actual_quantity,
       unit,
@@ -918,6 +919,18 @@ export async function deleteProductionRun(
   await supabase.from('production_consumption').delete().eq('run_id', id);
   const { error: delErr } = await supabase.from('production_runs').delete().eq('id', id);
   if (delErr) throw delErr;
+
+  if (run.production_date) {
+    try {
+      await supabase
+        .from('daily_closings')
+        .update({ status: 'adjusted', updated_at: new Date().toISOString() })
+        .eq('production_date', run.production_date)
+        .eq('status', 'closed');
+    } catch (dcErr) {
+      console.warn('Could not flag daily closing as adjusted:', dcErr);
+    }
+  }
 
   // 5. Invalidate caches
   invalidateAdminCache('admin_products');
