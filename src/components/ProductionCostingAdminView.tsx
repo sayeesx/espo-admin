@@ -61,6 +61,8 @@ interface ProductCostSummary {
   oilCost: number;
   basicIngredientsCost: number;
   productionWages: number;
+  /** True when at least one batch date in scope has no admin-entered daily wage */
+  wageMissing: boolean;
   packingWages: number;
   packagingMaterialCost: number;
   totalPacketsPacked: number;
@@ -217,6 +219,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
         batchWageMap,
         batchOilMap,
         batchBasicMap,
+        datesWithoutWage,
       } = computeDailyBatchCostMaps(productionRuns, wageMap, closingMap, basicCostByDate);
 
       // 2. Compute costing for ALL products in catalog
@@ -278,6 +281,9 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
         oilCost = roundCurrency(oilCost);
         basicIngredientsCost = roundCurrency(basicIngredientsCost);
         productionWages = roundCurrency(productionWages);
+        const wageMissing = pRuns.some(
+          (r) => !!r.productionDate && datesWithoutWage.has(r.productionDate)
+        );
 
         const totalManufacturingCost = roundCurrency(
           ingredientCost + oilCost + basicIngredientsCost + productionWages + packingWages + packagingMaterialCost
@@ -303,6 +309,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           oilCost,
           basicIngredientsCost,
           productionWages,
+          wageMissing,
           packingWages,
           packagingMaterialCost,
           totalPacketsPacked: prodPackets,
@@ -1060,7 +1067,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
             { label: 'ചേരുവകളുടെ ചെലവ്', value: p.ingredientCost, icon: FiBox, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/20' },
             { label: 'ഉപയോഗിച്ച ഓയിലിന്റെ ചെലവ്', value: p.oilCost, icon: FiDroplet, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/20' },
             { label: 'അടിസ്ഥാന ചേരുവകൾ (ഉപ്പ്, തോട്..)', value: p.basicIngredientsCost, icon: FiLayers, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/20' },
-            { label: 'ദിവസേനയുള്ള കൂലി വിഹിതം (Daily Wages)', value: p.productionWages, icon: FiUsers, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/20' },
+            { label: 'ദിവസേനയുള്ള കൂലി വിഹിതം (Daily Wages)', value: p.productionWages, missingNote: p.wageMissing ? (p.productionWages > 0 ? 'ചില ദിവസങ്ങളിൽ കൂലി നൽകിയിട്ടില്ല (Some days: no wages entered)' : 'കൂലി നൽകിയിട്ടില്ല (No wages entered)') : undefined, icon: FiUsers, color: 'text-orange-600 dark:text-orange-400', bg: 'bg-orange-50 dark:bg-orange-950/20' },
             { label: 'പാക്കിംഗ് കവർ / മെറ്റീരിയലുകൾ', value: p.packagingMaterialCost, icon: FiPackage, color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-950/20' },
           ].map((item, idx) => {
             const Icon = item.icon;
@@ -1070,7 +1077,18 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
                   <Icon className={`w-5 h-5 ${item.color}`} />
                   <span className="text-xs sm:text-sm font-bold text-stone-700 dark:text-stone-300">{item.label}</span>
                 </div>
-                <span className="text-sm sm:text-base font-black text-stone-900 dark:text-white font-mono">{formatCurrency(item.value)}</span>
+                <div className="text-right">
+                  {(item as any).missingNote && item.value <= 0 ? (
+                    <span className="text-xs sm:text-sm font-bold text-amber-700 dark:text-amber-400">{(item as any).missingNote}</span>
+                  ) : (
+                    <>
+                      <span className="text-sm sm:text-base font-black text-stone-900 dark:text-white font-mono block">{formatCurrency(item.value)}</span>
+                      {(item as any).missingNote && (
+                        <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 block">{(item as any).missingNote}</span>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             );
           })}

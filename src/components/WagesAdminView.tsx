@@ -47,7 +47,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
   const [wageLedgerTab, setWageLedgerTab] = useState<'batches' | 'days'>('batches');
 
   // Form state (Total Daily Wage only — cooking/packing split removed)
-  const [totalWageBudget, setTotalWageBudget] = useState<string>('4000');
+  const [totalWageBudget, setTotalWageBudget] = useState<string>('0');
   const [totalPackets, setTotalPackets] = useState<number>(0);
   const [totalProductionKg, setTotalProductionKg] = useState<number>(0);
   const [notes, setNotes] = useState<string>('');
@@ -143,7 +143,7 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
   const handleSave = async () => {
     const budget = roundCurrency(Number(totalWageBudget) || 0);
 
-    if (budget <= 0) {
+    if (budget < 0 || (budget === 0 && !existingWage)) {
       showToast('ദയവായി സാധുവായ ഒരു കൂലി തുക നൽകുക', 'warning');
       return;
     }
@@ -334,8 +334,6 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
         </div>
       ) : (
         <>
-          
-
           {/* ======================================================== */}
           {/* TOTAL DAILY WAGE FORM                                    */}
           {/* ======================================================== */}
@@ -429,16 +427,27 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
                     ലേബർ ചെലവ് / കിലോ
                   </span>
                   <span className="text-lg sm:text-xl font-black font-mono text-amber-950 dark:text-amber-100">
-                    {liveProductionKg > 0
-                      ? `₹${roundCurrency(Number(totalWageBudget || 0) / liveProductionKg).toFixed(2)} / kg`
-                      : '₹0.00 / kg'}
+                    {Number(totalWageBudget || 0) <= 0
+                      ? 'കൂലി നൽകിയിട്ടില്ല'
+                      : liveProductionKg > 0
+                        ? `₹${roundCurrency(Number(totalWageBudget || 0) / liveProductionKg).toFixed(2)} / kg`
+                        : '₹0.00 / kg'}
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Formula Explanation Banner */}
-            {liveProductionKg > 0 ? (
+            {/* Dynamic Weight-Based Allocation Status */}
+            {Number(totalWageBudget || 0) <= 0 ? (
+              <div className="p-4 rounded-2xl bg-stone-100 dark:bg-[#141212] border border-dashed border-stone-300 dark:border-[#3E3838] text-xs space-y-1">
+                <p className="font-black text-stone-800 dark:text-stone-200">
+                  കൂലി ഇതുവരെ നൽകിയിട്ടില്ല (No wages entered)
+                </p>
+                <p className="text-stone-600 dark:text-stone-400">
+                  ഈ തീയതിയിലെ ആകെ കൂലി നൽകുന്നത് വരെ, ഉൽപ്പന്ന കോസ്റ്റിംഗിൽ കൂലി "കൂലി നൽകിയിട്ടില്ല" എന്ന് കാണിക്കും. കൂലി സേവ് ചെയ്താൽ ഉടൻ എല്ലാ ബാച്ചുകളിലേക്കും ഭാരത്തിനനുസരിച്ച് വിതരണം ചെയ്യപ്പെടും.
+                </p>
+              </div>
+            ) : liveProductionKg > 0 ? (
               <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-900/40 space-y-2 text-xs">
                 <div className="font-mono text-xs flex flex-wrap items-center justify-between gap-2 text-amber-900 dark:text-amber-200">
                   <span>
@@ -449,29 +458,24 @@ export const WagesAdminView: React.FC<WagesAdminViewProps> = ({
                   </span>
                 </div>
                 <p className="text-stone-600 dark:text-stone-400">
-                  ഇന്ന് ഉണ്ടാക്കിയ ഓരോ ബാച്ചിന്റെയും അസംസ്കൃത വസ്തുക്കളുടെ ചെലവിനൊപ്പം ഈ ലേബർ നിരക്ക് (<span className="font-mono font-bold text-stone-800 dark:text-stone-200">ബാച്ച് ഭാരം × ₹{roundCurrency(Number(totalWageBudget || 0) / liveProductionKg).toFixed(2)}</span>) കോസ്റ്റിംഗിൽ സ്വയം ചേർക്കപ്പെടും.
+                  പുതിയ ബാച്ചുകൾ തൂക്കുമ്പോഴോ തൂക്കം മാറ്റുമ്പോഴോ ഈ ദിവസത്തെ എല്ലാ ബാച്ചുകളുടെയും കൂലി വിഹിതം സ്വയം പുനഃക്രമീകരിക്കപ്പെടും. ആകെ വിഹിതം എപ്പോഴും ₹{Number(totalWageBudget || 0).toLocaleString('en-IN')} ആയിരിക്കും.
                 </p>
               </div>
             ) : (
-              <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 text-xs space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
-                  <p className="font-black text-amber-900 dark:text-amber-200 text-sm">
-                    പണിയില്ലാത്ത / ക്ലീനിംഗ് ദിവസങ്ങൾ (Non-Production Day):
-                  </p>
-                </div>
-                <div className="text-stone-700 dark:text-stone-300 space-y-1.5 leading-relaxed">
-                  <p>
-                    • <strong>ബാച്ച് ഉൽപ്പാദനം ഇല്ല:</strong> ഈ തീയതിയിൽ ഫാക്ടറിയിൽ ബാച്ചുകൾ ഉൽപ്പാദിപ്പിച്ചിട്ടില്ലാത്തതിനാൽ (0 kg), ബാച്ച് അടിസ്ഥാനത്തിലുള്ള ലേബർ വിഭജനം (₹/kg) ബാധകമല്ല.
-                  </p>
-                  <p>
-                    • <strong>അക്കൗണ്ടിംഗ് രീതി:</strong> ഇന്ന് നൽകുന്ന കൂലി (₹{Number(totalWageBudget || 0).toLocaleString('en-IN')}) ഉൽപ്പന്നങ്ങളുടെ ഇൻവെന്ററി കോസ്റ്റിലേക്ക് ചേർക്കാതെ, ഫാക്ടറിയുടെ മാസത്തെ പൊതുവായ പ്രവർത്തനച്ചെലവിലേക്ക് (General Factory Operational Overhead / Indirect Labor) നേരിട്ട് കണക്കാക്കുന്നു.
-                  </p>
-                  <p>
-                    • <strong>റിപ്പോർട്ടിംഗ്:</strong> മാസാവസാനത്തെ ലാഭനഷ്ട കണക്കിലും (P&L) ഡെയ്‌ലി ലെഡ്ജറിലും ഈ കൂലി ചെലവ് കൃത്യമായി രേഖപ്പെടുത്തപ്പെടും.
-                  </p>
-                </div>
+              <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-900/40 text-xs space-y-1">
+                <p className="font-black text-amber-900 dark:text-amber-200">
+                  ആകെ കൂലി: ₹{Number(totalWageBudget || 0).toLocaleString('en-IN')} — ബാച്ചുകൾ തൂക്കാൻ കാത്തിരിക്കുന്നു
+                </p>
+                <p className="text-stone-600 dark:text-stone-400">
+                  ഈ തീയതിയിൽ ഇതുവരെ ബാച്ചുകൾ തൂക്കിയിട്ടില്ല (0 kg). ഓരോ ബാച്ചിന്റെയും തൂക്കം നൽകുന്ന മുറയ്ക്ക് ഈ കൂലി ഭാരത്തിനനുസരിച്ച് സ്വയം വിതരണം ചെയ്യപ്പെടും.
+                </p>
               </div>
+            )}
+
+            {existingWage && roundCurrency(Number(totalWageBudget || 0)) !== getEffectiveDailyWage(existingWage) && (
+              <p className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                * മാറ്റം സേവ് ചെയ്തിട്ടില്ല — സേവ് ചെയ്ത കൂലി ₹{getEffectiveDailyWage(existingWage).toLocaleString('en-IN')} ആണ് കോസ്റ്റിംഗിൽ ഉപയോഗിക്കുന്നത്.
+              </p>
             )}
 
             {/* Sub-Ledger View Switcher (Simple Layout) */}

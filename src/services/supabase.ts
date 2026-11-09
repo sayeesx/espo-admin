@@ -1334,7 +1334,7 @@ export async function saveDailyClosing(params: {
     oilUnitCost
   );
 
-  // Wage auto-fill: Check today's wage or auto-populate from previous day's wage
+  // Wages: read only the admin-entered wage for this exact date (never copy from previous days)
   let productionWages = params.productionWages || 0;
   try {
     const { data: todayWage } = await supabase
@@ -1352,41 +1352,9 @@ export async function saveDailyClosing(params: {
       if (!productionWages) {
         productionWages = todayBudget;
       }
-    } else if (!todayWage) {
-      const { data: prevWage } = await supabase
-        .from('daily_wages')
-        .select('*')
-        .lt('production_date', productionDate)
-        .order('production_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const prevBudget =
-        Number(prevWage?.total_wage_budget) ||
-        Number(prevWage?.daily_wage_budget) ||
-        ((Number(prevWage?.production_wage_amount) || 0) + (Number(prevWage?.packing_wage_amount) || 0)) ||
-        0;
-      if (prevWage && prevBudget > 0) {
-        if (!productionWages) {
-          productionWages = prevBudget;
-        }
-        await supabase.from('daily_wages').upsert({
-          production_date: productionDate,
-          total_wage_budget: productionWages,
-          production_wage_amount: productionWages,
-          packing_wage_amount: 0,
-          num_cooks: 0,
-          num_packers: 0,
-          wage_per_cook: 0,
-          wage_per_packer: 0,
-          notes: 'Auto-populated from previous recorded wage',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'production_date', ignoreDuplicates: true });
-      }
     }
   } catch (e) {
-    console.warn('Could not auto-fill daily wage:', e);
+    console.warn('Could not read daily wage for closing:', e);
   }
 
   // Query basic ingredients adjustments recorded on this date (Salt, Cashew shell, Chippli, Curry leaves)

@@ -570,6 +570,8 @@ export function computeDailyBatchCostMaps<
   batchWageMap: Map<string, number>;
   batchOilMap: Map<string, number>;
   batchBasicMap: Map<string, number>;
+  /** Dates that have weighed batches but no admin-entered daily wage (total_wage_budget = 0 / missing) */
+  datesWithoutWage: Set<string>;
 } {
   const eligibleRuns = (productionRuns || []).filter((r) => isEligibleProductionBatch(r));
   const runsByDate = new Map<string, T[]>();
@@ -586,17 +588,22 @@ export function computeDailyBatchCostMaps<
   const batchWageMap = new Map<string, number>();
   const batchOilMap = new Map<string, number>();
   const batchBasicMap = new Map<string, number>();
+  const datesWithoutWage = new Set<string>();
 
   for (const [rDate, dayRuns] of runsByDate.entries()) {
     const wage = wageMap[rDate];
     const closing = closingMap[rDate];
 
-    const dayTotalWage = getEffectiveDailyWage(wage, closing);
+    // Single source of truth for wages: the admin-entered daily_wages.total_wage_budget for this date.
+    // Derived on the fly from current batch weights (never cached): (batch kg / day kg) × day wage.
+    const dayTotalWage = getEffectiveDailyWage(wage);
     if (dayTotalWage > 0) {
       const wageAllocs = allocateDailyWageToBatches(dayRuns, dayTotalWage);
       for (const item of wageAllocs) {
         batchWageMap.set(item.run.id, item.totalBatchWage);
       }
+    } else {
+      datesWithoutWage.add(rDate);
     }
 
     const dayOilCost =
@@ -624,6 +631,7 @@ export function computeDailyBatchCostMaps<
     batchWageMap,
     batchOilMap,
     batchBasicMap,
+    datesWithoutWage,
   };
 }
 
