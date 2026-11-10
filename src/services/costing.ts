@@ -653,14 +653,29 @@ export function calculateFinalProductCosting(
 ): FinalProductCosting {
   const totalPacketsPacked = packingRecords.reduce((sum, r) => sum + r.packetsPacked, 0);
   const totalWeightPackedKg = roundStock(packingRecords.reduce((sum, r) => sum + r.weightPackedKg, 0));
-  const totalPackagingCost = roundCurrency(packingRecords.reduce((sum, r) => sum + (r.packagingCost || 0), 0));
+  const totalPackagingCost = roundCurrency(
+    packingRecords.reduce((sum, r) => sum + (r.packagingCost || (r.packetsPacked * (r.coverUnitCost || 0))), 0)
+  );
   // Removed per-packet packing labour calculation; packing labour is allocated as daily wage expense.
   const totalPackingLabourCost = 0;
   const totalPackingCost = totalPackagingCost;
 
-  const totalCost = roundCurrency(productionAllocation.totalProductionCost + totalPackingCost);
+  // Regular Ingredient Costing:
+  // Total Production Cost = Ingredients + Oil + Basic Ingredients + Labour + Packet Cost
+  const baseManufacturing = roundCurrency(
+    (productionAllocation.ingredientCost || 0) +
+    (productionAllocation.allocatedOilCost || 0) +
+    (productionAllocation.allocatedBasicIngredientsCost || 0) +
+    (productionAllocation.allocatedProductionWages || 0)
+  );
+  const totalProductionCost = roundCurrency(baseManufacturing + totalPackagingCost);
+  const productionCostPerKg = productionAllocation.totalProductionKg > 0
+    ? roundCurrency(totalProductionCost / productionAllocation.totalProductionKg)
+    : 0;
+
+  const totalCost = totalProductionCost;
   const unpackedKg = Math.max(0, roundStock(productionAllocation.totalProductionKg - totalWeightPackedKg));
-  const unpackedValuation = roundCurrency(unpackedKg * productionAllocation.productionCostPerKg);
+  const unpackedValuation = roundCurrency(unpackedKg * productionCostPerKg);
 
   // Group packing by size for packet-level costing breakdown
   const sizeMap: Record<string, { packets: number; coverCost: number; totalCost: number; weightKg: number }> = {};
@@ -668,26 +683,18 @@ export function calculateFinalProductCosting(
     if (!sizeMap[r.packetSize]) {
       sizeMap[r.packetSize] = { packets: 0, coverCost: 0, totalCost: 0, weightKg: 0 };
     }
+    const cost = (r.packagingCost && r.packagingCost > 0)
+      ? r.packagingCost
+      : ((r.packetsPacked || 0) * (r.coverUnitCost || 0));
     sizeMap[r.packetSize].packets += r.packetsPacked;
-    sizeMap[r.packetSize].coverCost += (r.packagingCost || 0);
-    sizeMap[r.packetSize].totalCost += (r.packagingCost || 0);
+    sizeMap[r.packetSize].coverCost += cost;
+    sizeMap[r.packetSize].totalCost += cost;
     sizeMap[r.packetSize].weightKg += r.weightPackedKg;
   }
 
   const packetsBySize = Object.entries(sizeMap).map(([size, item]) => {
-    // Exact weight per packet: prioritize actual recorded weight / packets, fallback to size label parse (kg vs g)
-    let kgPerPacket = 0;
-    if (item.packets > 0 && item.weightKg > 0) {
-      kgPerPacket = item.weightKg / item.packets;
-    } else {
-      kgPerPacket = parsePacketWeightKg(size);
-    }
-
-    // Bulk product share inside this packet: kgPerPacket * productionCostPerKg
-    // Note: productionCostPerKg ALREADY includes both cooking and packing wages allocated by weight!
-    const bulkInsidePacket = roundCurrency(kgPerPacket * productionAllocation.productionCostPerKg);
-    const coverInsidePacket = item.packets > 0 ? roundCurrency(item.coverCost / item.packets) : 0;
-    const costPerPacket = roundCurrency(bulkInsidePacket + coverInsidePacket);
+    // Actual packet unit cost as regular ingredient: item.coverCost / item.packets
+    const costPerPacket = item.packets > 0 ? roundCurrency(item.coverCost / item.packets) : 0;
 
     return {
       size,
@@ -710,8 +717,8 @@ export function calculateFinalProductCosting(
     allocatedCookingWages: productionAllocation.allocatedCookingWages ?? productionAllocation.allocatedProductionWages,
     allocatedPackingWages: productionAllocation.allocatedPackingWages ?? 0,
     allocatedBasicIngredientsCost: productionAllocation.allocatedBasicIngredientsCost ?? 0,
-    totalProductionCost: productionAllocation.totalProductionCost,
-    productionCostPerKg: productionAllocation.productionCostPerKg,
+    totalProductionCost,
+    productionCostPerKg,
     totalPacketsPacked,
     totalWeightPackedKg,
     totalPackagingCost,

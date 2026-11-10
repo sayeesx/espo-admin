@@ -305,7 +305,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
         const wholesalePricePerKg = priceMap[prod.id] || prod.wholesalePrice || 0;
         const profitPerKg = wholesalePricePerKg > 0 && costPerKg > 0 ? roundCurrency(wholesalePricePerKg - costPerKg) : 0;
 
-        // Accurate packet costing: Packet Cost = (Bulk Cost/kg * Weight kg) + Cover Unit Cost
+        // Regular ingredient packet costing: Packets treated as regular ingredients with actual consumption
         const packedSizesMap = new Map<string, { count: number; coverCost: number; weightKg: number }>();
         for (const pr of prodPacking) {
           const s = pr.packetSize || 'Standard';
@@ -323,63 +323,23 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
 
         const packetsBySize: PacketCostDetail[] = [];
 
-        // 1. Packets actually packed
+        // Actual packets consumed in production
         for (const [size, data] of packedSizesMap.entries()) {
           const weightKg = data.count > 0 && data.weightKg > 0
             ? Number((data.weightKg / data.count).toFixed(3))
             : parsePacketWeightKg(size);
           const sKey = size.toLowerCase().trim();
           const coverUnitCost = data.count > 0 ? roundCurrency(data.coverCost / data.count) : (pCostMap[sKey] || 0);
-          const bulkCost = roundCurrency(costPerKg * weightKg);
-          const costPerPacket = roundCurrency(bulkCost + coverUnitCost);
+          const lineTotal = roundCurrency(data.coverCost);
           packetsBySize.push({
             size,
             weightKg,
             coverUnitCost,
-            bulkCost,
-            costPerPacket,
+            bulkCost: 0,
+            costPerPacket: coverUnitCost, // Unit cost of packet cover as regular ingredient
             packetsPacked: data.count,
-            totalCost: roundCurrency(data.count * costPerPacket),
+            totalCost: lineTotal,
           });
-        }
-
-        // 2. Standard packet sizes reference (100g, 250g, 500g, 1kg)
-        const standardSizes = [
-          { name: '100g Packet', weightKg: 0.100, key: '100g' },
-          { name: '250g Packet', weightKg: 0.250, key: '250g' },
-          { name: '500g Packet', weightKg: 0.500, key: '500g' },
-          { name: '1kg Packet', weightKg: 1.000, key: '1kg' },
-        ];
-
-        for (const std of standardSizes) {
-          const exists = packetsBySize.some((p) => Math.abs(p.weightKg - std.weightKg) < 0.001);
-          if (!exists) {
-            let coverUnitCost = 0;
-            for (const [pName, pCost] of Object.entries(pCostMap)) {
-              if (pName.includes(std.key)) {
-                coverUnitCost = pCost;
-                break;
-              }
-            }
-            if (coverUnitCost === 0) {
-              if (std.weightKg === 0.1) coverUnitCost = pCostMap['8 x 10 packet'] || 0.50;
-              else if (std.weightKg === 0.25) coverUnitCost = pCostMap['8 x 12 packet'] || pCostMap['10 x 12 packet'] || 0.60;
-              else if (std.weightKg === 0.5) coverUnitCost = pCostMap['10 x 14 packet'] || 0.75;
-              else if (std.weightKg === 1.0) coverUnitCost = pCostMap['10 x 16 packet'] || pCostMap['2kg hm packet'] || 1.00;
-              else coverUnitCost = 0.50;
-            }
-            const bulkCost = roundCurrency(costPerKg * std.weightKg);
-            const costPerPacket = roundCurrency(bulkCost + coverUnitCost);
-            packetsBySize.push({
-              size: std.name,
-              weightKg: std.weightKg,
-              coverUnitCost,
-              bulkCost,
-              costPerPacket,
-              packetsPacked: 0,
-              totalCost: 0,
-            });
-          }
         }
 
         packetsBySize.sort((a, b) => a.weightKg - b.weightKg);
@@ -1208,7 +1168,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
           </div>
         </div>
 
-        {/* PACKET TYPES & PACKAGING BREAKDOWN (Accurate per-packet costing by weight + cover) */}
+        {/* PACKET TYPES & PACKAGING BREAKDOWN (Actual packet usage and regular ingredient packet costing) */}
         {(() => {
           const packetList = p.packetsBySize || [];
 
@@ -1218,53 +1178,49 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
                 <div className="flex items-center gap-2">
                   <FiPackage className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                   <h3 className="text-sm font-black text-stone-900 dark:text-white">
-                    പാക്കറ്റ് നിരക്കുകളും പാക്കിംഗ് വിശദാംശങ്ങളും (Per-Packet Costing by Weight)
+                    പാക്കറ്റ് ഉപയോഗവും ചെലവ് വിശദാംശങ്ങളും (Packet Usage & Costing)
                   </h3>
                 </div>
                 <span className="text-xs font-mono font-bold text-stone-500">
-                  {p.totalPacketsPacked} pkts പാക്ക് ചെയ്തു
+                  {p.totalPacketsPacked > 0 ? `${p.totalPacketsPacked} pkts (${formatCurrency(p.packagingMaterialCost)})` : 'പാക്കറ്റുകൾ ഉപയോഗിച്ചിട്ടില്ല'}
                 </span>
               </div>
               <p className="text-xs text-stone-400">
-                ഫോർമുല: <span className="font-mono text-purple-600 dark:text-purple-400 font-bold">Packet Cost = (ബൾക്ക് ചെലവ്/കിലോ × പാക്കറ്റ് ഭാരം) + കവർ വില</span>
+                പാക്കറ്റുകൾ റെഗുലർ ചേരുവയായി കണക്കാക്കുന്നു: <span className="font-mono text-purple-600 dark:text-purple-400 font-bold">Total Packet Cost = Sum(Packets Used × Cost Per Packet)</span>
               </p>
 
               {packetList.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
                   {packetList.map((item, idx) => (
                     <div key={idx} className="p-3.5 rounded-2xl bg-stone-50 dark:bg-[#141212] border border-stone-200/80 dark:border-[#282323] space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-xs text-stone-900 dark:text-white font-mono">{item.size}</span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-bold">
-                          {(item.weightKg * 1000).toFixed(0)}g ({(item.weightKg).toFixed(3)} kg)
-                        </span>
+                        {item.weightKg > 0 && (
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-bold">
+                            {(item.weightKg).toFixed(2)} kg
+                          </span>
+                        )}
                       </div>
                       <div className="space-y-1 text-[11px] font-mono border-t border-stone-200/50 dark:border-[#242020] pt-1.5">
                         <div className="flex justify-between text-stone-500 dark:text-stone-400">
-                          <span>സ്നാക്ക് തുക:</span>
-                          <span>₹{item.bulkCost.toFixed(2)}</span>
+                          <span>ഉപയോഗിച്ച എണ്ണം:</span>
+                          <span className="font-bold text-stone-900 dark:text-white">{item.packetsPacked || 0} pkts</span>
                         </div>
                         <div className="flex justify-between text-stone-500 dark:text-stone-400">
-                          <span>കവർ വില:</span>
+                          <span>കവർ നിരക്ക് (Unit Cost):</span>
                           <span>₹{item.coverUnitCost.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between font-black text-xs text-purple-700 dark:text-purple-300 pt-1 border-t border-dashed border-stone-200 dark:border-[#282323]">
-                          <span>പാക്കറ്റ് ചെലവ്:</span>
-                          <span>₹{item.costPerPacket.toFixed(2)}</span>
+                          <span>ആകെ പാക്കറ്റ് തുക:</span>
+                          <span>₹{(item.totalCost || 0).toFixed(2)}</span>
                         </div>
-                        {item.packetsPacked !== undefined && item.packetsPacked > 0 && (
-                          <div className="flex justify-between text-[10px] text-stone-400 pt-0.5">
-                            <span>പാക്ക് ചെയ്തത്:</span>
-                            <span>{item.packetsPacked} pkts (₹{(item.totalCost || 0).toFixed(2)})</span>
-                          </div>
-                        )}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="py-4 text-center text-xs text-stone-400">
-                  പാക്കറ്റ് വിവരങ്ങൾ ലഭ്യമല്ല
+                  ഈ ഉൽപ്പന്നത്തിന് പാക്കറ്റുകൾ ഉപയോഗിച്ചിട്ടില്ല (₹0.00 പാക്കറ്റ് ചെലവ്)
                 </div>
               )}
             </div>

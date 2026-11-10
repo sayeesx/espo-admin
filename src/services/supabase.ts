@@ -570,15 +570,260 @@ export async function savePacketType(packet: Partial<PacketType> & { name: strin
   }
 }
 
-export async function deletePacketType(id: string): Promise<void> {
+export async function recordPacketPurchase(params: {
+  packetTypeId: string;
+  quantity: number;
+  totalPrice: number;
+  operatorName?: string;
+}): Promise<PacketType> {
+  const { packetTypeId, quantity, totalPrice, operatorName = 'Admin' } = params;
+  if (quantity <= 0) throw new Error('Quantity must be greater than zero');
+  if (totalPrice < 0) throw new Error('Total price cannot be negative');
+
+  dbCache.invalidate('admin_packet_types');
+  dbCache.invalidate('admin_stock_movements');
+
+  // 1. Attempt atomic RPC execution
+  try {
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('record_packet_purchase', {
+      p_packet_type_id: packetTypeId,
+      p_quantity: Math.round(quantity),
+      p_total_cost: totalPrice,
+      p_operator_name: operatorName,
+    });
+
+    if (!rpcErr && rpcData) {
+      return {
+        id: rpcData.id,
+        name: rpcData.name,
+        bundleCost: Number(rpcData.bundle_cost) || 0,
+        bundleQuantity: Math.max(0, Number(rpcData.bundle_quantity ?? 0)),
+        costPerPacket: Number(rpcData.cost_per_packet) || 0,
+        isActive: rpcData.is_active ?? true,
+        createdAt: rpcData.created_at,
+        updatedAt: rpcData.updated_at,
+      };
+    }
+    if (rpcErr) console.warn('record_packet_purchase RPC failed, fallback to client logic:', rpcErr);
+  } catch (err) {
+    console.warn('record_packet_purchase RPC error, fallback to client logic:', err);
+  }
+
+  // 2. Client fallback
+  const { data: pt, error: fetchErr } = await supabase
+    .from('packet_types')
+    .select('*')
+    .eq('id', packetTypeId)
+    .single();
+  if (fetchErr || !pt) throw fetchErr || new Error('Packet type not found');
+
+  const currStock = Math.max(0, Number(pt.bundle_quantity ?? 0));
+  const currUnitCost = Number(pt.cost_per_packet) || 0;
+  const purchasedQty = Math.round(quantity);
+  const purchasedUnitCost = purchasedQty > 0 ? Number((totalPrice / purchasedQty).toFixed(4)) : 0;
+
+  const newStock = currStock + purchasedQty;
+  const newUnitCost = currStock <= 0
+    ? purchasedUnitCost
+    : Number(((currStock * currUnitCost + totalPrice) / newStock).toFixed(4));
+  const newBundleCost = Number((newStock * newUnitCost).toFixed(2));
+
+  const { data: updated, error: updateErr } = await supabase
+    .from('packet_types')
+    .update({
+      bundle_quantity: newStock,
+      cost_per_packet: newUnitCost,
+      bundle_cost: newBundleCost,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', packetTypeId)
+    .select()
+    .single();
+
+  if (updateErr) throw updateErr;
+
+  try {
+    await supabase.from('stock_movements').insert({
+      item_id: packetTypeId,
+      item_type: 'ingredient',
+      item_name: pt.name,
+      movement_type: 'purchase_inward',
+      quantity: purchasedQty,
+      unit: 'pcs',
+      previous_balance: currStock,
+      new_balance: newStock,
+      cost_per_unit: newUnitCost,
+      reference: 'Purchase Inward',
+      operator_name: operatorName,
+      reason: `Purchased ${purchasedQty} pcs at ₹${totalPrice} (Weighted Avg: ₹${newUnitCost}/pkt)`,
+      created_at: new Date().toISOString(),
+    });
+  } catch (smErr) {
+    console.warn('Could not record stock movement for packet purchase:', smErr);
+  }
+
+  return {
+    id: updated.id,
+    name: updated.name,
+    bundleCost: Number(updated.bundle_cost) || 0,
+    bundleQuantity: Math.max(0, Number(updated.bundle_quantity ?? 0)),
+    costPerPacket: Number(updated.cost_per_packet) || 0,
+    isActive: updated.is_active ?? true,
+    createdAt: updated.created_at,
+    updatedAt: updated.updated_at,
+  };
+}
+
+export async function adjustPacketStock(params: {
+  packetTypeId: string;
+  newQuantity: number;
+  costPerPacket: number;
+  name?: string;
+  operatorName?: string;
+}): Promise<PacketType> {
+  const { packetTypeId, newQuantity, costPerPacket, name, operatorName = 'Admin' } = params;
+  if (newQuantity < 0) throw new Error('Quantity cannot be negative');
+  if (costPerPacket < 0) throw new Error('Cost per packet cannot be negative');
+
+  dbCache.invalidate('admin_packet_types');
+  dbCache.invalidate('admin_stock_movements');
+
+  // 1. Attempt atomic RPC execution
+  try {
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('adjust_packet_stock', {
+      p_packet_type_id: packetTypeId,
+      p_new_quantity: Math.round(newQuantity),
+      p_cost_per_packet: costPerPacket,
+      p_name: name?.trim() || null,
+      p_operator_name: operatorName,
+    });
+
+    if (!rpcErr && rpcData) {
+      return {
+        id: rpcData.id,
+        name: rpcData.name,
+        bundleCost: Number(rpcData.bundle_cost) || 0,
+        bundleQuantity: Math.max(0, Number(rpcData.bundle_quantity ?? 0)),
+        costPerPacket: Number(rpcData.cost_per_packet) || 0,
+        isActive: rpcData.is_active ?? true,
+        createdAt: rpcData.created_at,
+        updatedAt: rpcData.updated_at,
+      };
+    }
+    if (rpcErr) console.warn('adjust_packet_stock RPC failed, fallback to client logic:', rpcErr);
+  } catch (err) {
+    console.warn('adjust_packet_stock RPC error, fallback to client logic:', err);
+  }
+
+  // 2. Client fallback
+  const { data: pt, error: fetchErr } = await supabase
+    .from('packet_types')
+    .select('*')
+    .eq('id', packetTypeId)
+    .single();
+  if (fetchErr || !pt) throw fetchErr || new Error('Packet type not found');
+
+  const currStock = Math.max(0, Number(pt.bundle_quantity ?? 0));
+  const newStockInt = Math.round(newQuantity);
+  const delta = newStockInt - currStock;
+  const newName = name?.trim() || pt.name;
+  const newBundleCost = Number((newStockInt * costPerPacket).toFixed(2));
+
+  const { data: updated, error: updateErr } = await supabase
+    .from('packet_types')
+    .update({
+      name: newName,
+      bundle_quantity: newStockInt,
+      cost_per_packet: costPerPacket,
+      bundle_cost: newBundleCost,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', packetTypeId)
+    .select()
+    .single();
+
+  if (updateErr) throw updateErr;
+
+  if (delta !== 0) {
+    try {
+      await supabase.from('stock_movements').insert({
+        item_id: packetTypeId,
+        item_type: 'ingredient',
+        item_name: newName,
+        movement_type: 'adjustment',
+        quantity: delta,
+        unit: 'pcs',
+        previous_balance: currStock,
+        new_balance: newStockInt,
+        cost_per_unit: costPerPacket,
+        reference: 'Stock Adjustment',
+        operator_name: operatorName,
+        reason: `Manual stock adjustment from ${currStock} to ${newStockInt} pcs`,
+        created_at: new Date().toISOString(),
+      });
+    } catch (smErr) {
+      console.warn('Could not record stock movement for packet adjustment:', smErr);
+    }
+  }
+
+  return {
+    id: updated.id,
+    name: updated.name,
+    bundleCost: Number(updated.bundle_cost) || 0,
+    bundleQuantity: Math.max(0, Number(updated.bundle_quantity ?? 0)),
+    costPerPacket: Number(updated.cost_per_packet) || 0,
+    isActive: updated.is_active ?? true,
+    createdAt: updated.created_at,
+    updatedAt: updated.updated_at,
+  };
+}
+
+export async function deletePacketType(id: string): Promise<{ status: 'deleted' | 'archived'; message: string }> {
   dbCache.invalidate('admin_packet_types');
   dbCache.invalidate('admin_recipes');
-  const { error } = await supabase
-    .from('packet_types')
-    .delete()
-    .eq('id', id);
 
-  if (error) throw error;
+  // 1. Attempt atomic safe deletion RPC
+  try {
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('delete_packet_type_safe', {
+      p_packet_type_id: id,
+    });
+
+    if (!rpcErr && rpcData) {
+      return {
+        status: (rpcData.status as any) || 'deleted',
+        message: rpcData.message || (rpcData.status === 'archived' ? 'Packet type archived' : 'Packet type deleted'),
+      };
+    }
+    if (rpcErr) console.warn('delete_packet_type_safe RPC failed, fallback to client logic:', rpcErr);
+  } catch (err) {
+    console.warn('delete_packet_type_safe RPC error, fallback to client logic:', err);
+  }
+
+  // 2. Client fallback
+  const { data: pt } = await supabase.from('packet_types').select('name').eq('id', id).single();
+  const ptName = pt?.name || '';
+
+  // Check historical usage
+  const [{ count: recipeCount }, { count: packingCount }, { count: movCount }] = await Promise.all([
+    supabase.from('recipe_packets').select('id', { count: 'exact', head: true }).eq('packet_type_id', id),
+    supabase.from('packing_records').select('id', { count: 'exact', head: true }).ilike('packet_size', ptName),
+    supabase.from('stock_movements').select('id', { count: 'exact', head: true }).eq('item_id', id),
+  ]);
+
+  if ((recipeCount || 0) > 0 || (packingCount || 0) > 0 || (movCount || 0) > 0) {
+    const { error } = await supabase
+      .from('packet_types')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw error;
+    return { status: 'archived', message: 'Packet type has historical production records and was archived.' };
+  } else {
+    const { error } = await supabase.from('packet_types').delete().eq('id', id);
+    if (error) throw error;
+    return { status: 'deleted', message: 'Packet type permanently deleted.' };
+  }
 }
 
 export async function fetchRecipes(force = false): Promise<Recipe[]> {
@@ -1809,6 +2054,7 @@ export async function recordPacking(params: {
   packetSize: string;
   packetsPacked: number;
   operatorName?: string;
+  coverUnitCost?: number;
   notes?: string;
 }): Promise<PackingRecord> {
   const {
@@ -1819,14 +2065,69 @@ export async function recordPacking(params: {
     packetSize,
     packetsPacked,
     operatorName = 'Admin',
+    coverUnitCost,
     notes = '',
   } = params;
+
+  // 1. Attempt atomic RPC execution for transaction safety
+  try {
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('record_packing_atomic', {
+      p_packing_date: packingDate,
+      p_product_id: productId,
+      p_packet_size: packetSize,
+      p_packets_packed: packetsPacked,
+      p_operator_name: operatorName,
+      p_production_run_id: productionRunId || null,
+      p_packaging_item_id: packagingItemId || null,
+      p_cover_unit_cost: coverUnitCost ?? 0.00,
+      p_notes: notes || '',
+    });
+
+    if (!rpcErr && rpcData) {
+      dbCache.invalidate('admin_packing_records');
+      dbCache.invalidate('admin_production_runs');
+      dbCache.invalidate('admin_packet_types');
+      dbCache.invalidate('admin_stock_movements');
+
+      const { data: prod } = await supabase.from('products').select('name').eq('id', productId).single();
+
+      return {
+        id: rpcData.id,
+        packingDate: rpcData.packing_date,
+        productId: rpcData.product_id,
+        productName: prod?.name || 'Product',
+        productionRunId: rpcData.production_run_id,
+        packagingItemId: rpcData.packaging_item_id,
+        packetSize: rpcData.packet_size,
+        packetsPacked: Number(rpcData.packets_packed),
+        coversConsumed: Number(rpcData.covers_consumed),
+        coverUnitCost: Number(rpcData.cover_unit_cost),
+        packagingCost: Number(rpcData.packaging_cost),
+        packingLabourRate: Number(rpcData.packing_labour_rate),
+        packingLabourCost: Number(rpcData.packing_labour_cost),
+        totalPackingCost: Number(rpcData.total_packing_cost),
+        weightPackedKg: Number(rpcData.weight_packed_kg),
+        operatorName: rpcData.operator_name,
+        notes: rpcData.notes,
+        createdAt: rpcData.created_at,
+      };
+    }
+    if (rpcErr && rpcErr.message?.includes('Insufficient')) {
+      throw new Error(rpcErr.message);
+    }
+    console.warn('record_packing_atomic fallback to client logic in Admin:', rpcErr);
+  } catch (err: any) {
+    if (err.message?.includes('Insufficient')) {
+      throw err;
+    }
+    console.warn('record_packing_atomic error, attempting fallback:', err);
+  }
 
   // 1. Fetch product and packaging item
   const { data: prod } = await supabase.from('products').select('name').eq('id', productId).single();
   const prodName = prod?.name || 'Product';
 
-  let unitCost = 0;
+  let unitCost = Number(coverUnitCost) || 0;
   let labourRate = 0;
   let sizeGrams = 100;
   let currStock = 0;
@@ -1974,6 +2275,8 @@ export async function recordPacking(params: {
 
   dbCache.invalidate('admin_packing_records');
   dbCache.invalidate('admin_production_runs');
+  dbCache.invalidate('admin_packet_types');
+  dbCache.invalidate('admin_stock_movements');
 
   return {
     id: created.id,
@@ -1995,6 +2298,86 @@ export async function recordPacking(params: {
     notes: created.notes,
     createdAt: created.created_at,
   };
+}
+
+export async function deletePackingRecord(id: string, operatorName = 'Admin'): Promise<void> {
+  dbCache.invalidate('admin_packing_records');
+  dbCache.invalidate('admin_production_runs');
+  dbCache.invalidate('admin_packet_types');
+  dbCache.invalidate('admin_stock_movements');
+
+  try {
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('delete_packing_atomic', {
+      p_packing_id: id,
+      p_operator_name: operatorName,
+    });
+    if (!rpcErr && rpcData) return;
+    if (rpcErr) console.warn('delete_packing_atomic RPC failed, fallback to client logic:', rpcErr);
+  } catch (err) {
+    console.warn('delete_packing_atomic RPC error:', err);
+  }
+
+  // Fallback
+  const { data: rec } = await supabase.from('packing_records').select('*').eq('id', id).maybeSingle();
+  if (rec && rec.packet_size && Number(rec.packets_packed) > 0) {
+    const { data: pt } = await supabase.from('packet_types').select('*').eq('name', rec.packet_size).maybeSingle();
+    if (pt) {
+      const restored = Number(rec.packets_packed);
+      const currStock = Number(pt.bundle_quantity ?? 0);
+      const newStock = currStock + restored;
+      const unitCost = Number(pt.cost_per_packet) || Number(rec.cover_unit_cost) || 0;
+      await supabase.from('packet_types').update({
+        bundle_quantity: newStock,
+        bundle_cost: Number((newStock * unitCost).toFixed(2)),
+        updated_at: new Date().toISOString(),
+      }).eq('id', pt.id);
+
+      await supabase.from('stock_movements').insert({
+        item_id: pt.id,
+        item_type: 'ingredient',
+        item_name: pt.name,
+        movement_type: 'packing_reversal',
+        quantity: restored,
+        unit: 'pcs',
+        previous_balance: currStock,
+        new_balance: newStock,
+        cost_per_unit: unitCost,
+        reference: rec.production_run_id || `Packing ${rec.packing_date}`,
+        operator_name: operatorName,
+        reason: `Reversal of deleted packing record (${restored} covers restored)`,
+        created_at: new Date().toISOString(),
+      });
+    }
+  }
+
+  await supabase.from('packing_records').delete().eq('id', id);
+}
+
+export async function deletePackingRecordsForRun(runId: string, runNumber?: string, operatorName = 'Admin'): Promise<void> {
+  dbCache.invalidate('admin_packing_records');
+  dbCache.invalidate('admin_production_runs');
+  dbCache.invalidate('admin_packet_types');
+  dbCache.invalidate('admin_stock_movements');
+
+  try {
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('delete_packing_for_run_atomic', {
+      p_run_id: runId,
+      p_run_number: runNumber || null,
+      p_operator_name: operatorName,
+    });
+    if (!rpcErr && rpcData) return;
+  } catch (err) {
+    console.warn('delete_packing_for_run_atomic error:', err);
+  }
+
+  // Fallback: delete individually
+  const { data: records } = await supabase
+    .from('packing_records')
+    .select('id')
+    .eq('production_run_id', runId);
+  for (const r of (records || [])) {
+    await deletePackingRecord(r.id, operatorName);
+  }
 }
 
 export async function fetchPackingRecords(options?: { productId?: string; date?: string; limit?: number }, force = false): Promise<PackingRecord[]> {
