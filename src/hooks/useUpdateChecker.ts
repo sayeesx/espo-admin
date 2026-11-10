@@ -59,19 +59,24 @@ export function useUpdateChecker() {
       const runningId = currentBuildIdRef.current;
       const ackId = localStorage.getItem(STORAGE_KEY_ACK);
 
-      // If user has not acknowledged this new version yet, or runningId is different
-      const isDifferentFromRunning = runningId && data.buildId !== runningId;
-      const isDifferentFromAck = ackId && data.buildId !== ackId;
-
       if (!runningId) {
         currentBuildIdRef.current = data.buildId;
+      }
+
+      // If user has already acknowledged and triggered reload for this exact live build,
+      // never show the update modal a second time
+      if (ackId === data.buildId) {
+        return;
       }
 
       if (!ackId) {
         // First ever visit: acknowledge current live build
         localStorage.setItem(STORAGE_KEY_ACK, data.buildId);
-      } else if (isDifferentFromRunning || isDifferentFromAck) {
-        // A new deployment is live!
+        return;
+      }
+
+      // A genuine new unacknowledged deployment
+      if (data.buildId !== runningId) {
         try {
           localStorage.setItem(STORAGE_KEY_PENDING, JSON.stringify(data));
         } catch {
