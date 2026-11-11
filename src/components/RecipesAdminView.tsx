@@ -11,7 +11,6 @@ import {
   FiCheck,
 } from 'react-icons/fi';
 import { saveRecipe, deleteRecipe, fetchPacketTypes } from '../services/supabase';
-import { normalizeQuantityForCost } from '../services/costing';
 import { ThemeSelect } from './ThemeSelect';
 import { ManagePacketTypesModal } from './ManagePacketTypesModal';
 import { useLockBodyScroll } from '../hooks/useLockBodyScroll';
@@ -220,14 +219,7 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
     setRecipePackets(updated);
   };
 
-  const calculateTotalBatchCost = () => {
-    return recipeItems.reduce((acc, row) => {
-      const ing = ingredients.find((i) => i.id === row.ingredientId);
-      const unitCost = ing?.avgCostPerUnit || 0;
-      const normalizedQty = normalizeQuantityForCost(Number(row.quantity) || 0, row.unit);
-      return acc + (normalizedQty * unitCost);
-    }, 0);
-  };
+  const selectedIngredientsCount = recipeItems.filter((it) => it.ingredientId).length;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -537,13 +529,13 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                     })}
                   </div>
 
-                  {/* Real-time batch cost estimate */}
+                  {/* Selected ingredients count */}
                   <div className="mt-2 pt-2 border-t border-stone-200 dark:border-[#2E2828] flex items-center justify-between text-xs">
                     <span className="text-stone-500 dark:text-stone-400 font-malayalam">
-                      ഏകദേശ ബാച്ച് ചേരുവ ചിലവ് (Est. Ingredients Cost):
+                      തിരഞ്ഞെടുത്ത ചേരുവകൾ (Selected Ingredients):
                     </span>
                     <span className="font-extrabold text-stone-900 dark:text-white">
-                      ₹{calculateTotalBatchCost().toFixed(2)}
+                      {selectedIngredientsCount} എണ്ണം
                     </span>
                   </div>
                 </div>
