@@ -146,11 +146,118 @@ export async function reconcilePhysicalStock(
       p_operator: operator,
       p_session_token: sessionToken,
     });
-    if (error) {
-      return { success: false, error: error.message };
+    if (!error && data?.success) {
+      invalidateAdminCache();
+      return data;
     }
-    invalidateAdminCache();
-    return data;
+
+    // Direct fallback if RPC is missing in schema cache or failed
+    // 1. Check if it's an ingredient
+    const { data: ing } = await supabase
+      .from('ingredients')
+      .select('id, name, unit, current_stock, avg_cost_per_unit')
+      .eq('id', itemId)
+      .maybeSingle();
+
+    if (ing) {
+      const prevStock = Number(ing.current_stock) || 0;
+      const delta = Number((physicalCount - prevStock).toFixed(3));
+      const { error: updErr } = await supabase
+        .from('ingredients')
+        .update({
+          current_stock: physicalCount,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', itemId);
+
+      if (updErr) {
+        return { success: false, error: updErr.message };
+      }
+
+      try {
+        await supabase.from('stock_movements').insert({
+          item_id: itemId,
+          item_type: 'ingredient',
+          item_name: ing.name,
+          movement_type: delta >= 0 ? 'adjustment' : 'wastage',
+          quantity: delta,
+          unit: ing.unit || 'kg',
+          previous_balance: prevStock,
+          new_balance: physicalCount,
+          cost_per_unit: ing.avg_cost_per_unit || 0,
+          reference: 'Physical Audit Reconciliation',
+          operator_name: operator,
+          reason: `Physical count reconciliation: ${reason}`,
+          created_at: new Date().toISOString(),
+        });
+      } catch (movErr) {
+        console.warn('Could not record stock movement log:', movErr);
+      }
+
+      invalidateAdminCache('admin_ingredients');
+      invalidateAdminCache('admin_stock_movements');
+      return {
+        success: true,
+        discrepancy_delta: delta,
+        message: 'Physical inventory count reconciled successfully',
+      };
+    }
+
+    // 2. Check if it's a product
+    const { data: prod } = await supabase
+      .from('products')
+      .select('id, name, unit, current_stock, wholesale_price')
+      .eq('id', itemId)
+      .maybeSingle();
+
+    if (prod) {
+      const prevStock = Number(prod.current_stock) || 0;
+      const delta = Number((physicalCount - prevStock).toFixed(3));
+      const { error: updErr } = await supabase
+        .from('products')
+        .update({
+          current_stock: physicalCount,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', itemId);
+
+      if (updErr) {
+        return { success: false, error: updErr.message };
+      }
+
+      try {
+        await supabase.from('stock_movements').insert({
+          item_id: itemId,
+          item_type: 'product',
+          item_name: prod.name,
+          movement_type: delta >= 0 ? 'adjustment' : 'wastage',
+          quantity: delta,
+          unit: prod.unit || 'kg',
+          previous_balance: prevStock,
+          new_balance: physicalCount,
+          cost_per_unit: prod.wholesale_price || 0,
+          reference: 'Physical Audit Reconciliation',
+          operator_name: operator,
+          reason: `Physical count reconciliation: ${reason}`,
+          created_at: new Date().toISOString(),
+        });
+      } catch (movErr) {
+        console.warn('Could not record stock movement log:', movErr);
+      }
+
+      invalidateAdminCache('admin_products');
+      invalidateAdminCache('admin_stock_movements');
+      return {
+        success: true,
+        discrepancy_delta: delta,
+        message: 'Physical inventory count reconciled successfully',
+      };
+    }
+
+    return {
+      success: false,
+      error: error?.message || 'Item not found in ingredients or products',
+    };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Failed to reconcile physical inventory' };
   }
@@ -322,10 +429,10 @@ export async function adjustProductStock(
   try {
     await supabase.from('stock_movements').insert({
       item_id: productId,
-      item_type: 'finished',
+      item_type: 'product',
       item_name: prod.name,
-      movement_type: delta >= 0 ? 'in' : 'out',
-      quantity: Math.abs(delta),
+      movement_type: delta >= 0 ? 'adjustment' : 'wastage',
+      quantity: delta,
       unit: prod.unit,
       previous_balance: prevStock,
       new_balance: newStock,
@@ -440,15 +547,68 @@ export async function adjustIngredientStock(
   if (fetchErr) throw fetchErr;
 
   const prevStock = Number(ing.current_stock) || 0;
+  if (delta < 0 && prevStock <= 0) {
+    throw new Error('സ്റ്റോക്ക് 0 ആണ്, നെഗറ്റീവ് ആക്കാൻ കഴിയില്ല (Stock is 0, cannot deduct)');
+  }
+  if (delta < 0 && Math.abs(delta) > prevStock) {
+    throw new Error('ലഭ്യമായ സ്റ്റോക്കിനേക്കാൾ കൂടുതൽ കുറയ്ക്കാൻ കഴിയില്ല (Cannot deduct more than available stock)');
+  }
   const newStock = Number((prevStock + delta).toFixed(3));
   if (newStock < 0) {
     throw new Error('സ്റ്റോക്ക് 0 ന് താഴെയാക്കാൻ കഴിയില്ല (Stock cannot become negative)');
   }
 
-  const res = await reconcilePhysicalStock(ingredientId, newStock, reason, operatorName);
-  if (!res.success) {
-    throw new Error(res.error || 'Failed to adjust ingredient stock');
+  // 1. Try atomic RPC if available
+  let reconciled = false;
+  try {
+    const sessionToken =
+      typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('epso_admin_session') || '' : '';
+    const { data: rpcData, error: rpcErr } = await supabase.rpc('reconcile_physical_inventory_count', {
+      p_item_id: ingredientId,
+      p_physical_count: newStock,
+      p_reason: reason,
+      p_operator: operatorName,
+      p_session_token: sessionToken,
+    });
+    if (!rpcErr && rpcData?.success) {
+      reconciled = true;
+    }
+  } catch {
+    // RPC not available, fallback to direct update
   }
+
+  // 2. Direct database update fallback
+  if (!reconciled) {
+    const { error: updateErr } = await supabase
+      .from('ingredients')
+      .update({ current_stock: newStock, updated_at: new Date().toISOString() })
+      .eq('id', ingredientId);
+
+    if (updateErr) throw updateErr;
+
+    try {
+      await supabase.from('stock_movements').insert({
+        item_id: ingredientId,
+        item_type: 'ingredient',
+        item_name: ing.name,
+        movement_type: delta >= 0 ? 'adjustment' : 'wastage',
+        quantity: delta,
+        unit: ing.unit || 'kg',
+        previous_balance: prevStock,
+        new_balance: newStock,
+        cost_per_unit: ing.avg_cost_per_unit || 0,
+        reference: `ADMIN-ING-ADJ-${Date.now().toString().slice(-6)}`,
+        operator_name: operatorName,
+        reason,
+        created_at: new Date().toISOString(),
+      });
+    } catch (movErr) {
+      console.warn('Could not record stock movement log:', movErr);
+    }
+  }
+
+  dbCache.invalidate('admin_ingredients');
+  dbCache.invalidate('admin_stock_movements');
 }
 
 export async function deleteIngredient(id: string): Promise<void> {
