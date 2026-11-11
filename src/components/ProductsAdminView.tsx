@@ -244,9 +244,9 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
       setRecipeError('കുറഞ്ഞത് ഒരു ചേരുവയെങ്കിലും ചേർക്കുക (Add at least 1 ingredient)');
       return;
     }
-    const hasInvalid = recipeItems.some((it) => !it.ingredientId || Number(it.quantity) <= 0);
+    const hasInvalid = recipeItems.some((it) => !it.ingredientId);
     if (hasInvalid) {
-      setRecipeError('എല്ലാ ചേരുവകളുടെയും പേരും അളവും സാധുവാണെന്ന് ഉറപ്പാക്കുക (Ensure all ingredients have a name and quantity > 0)');
+      setRecipeError('എല്ലാ ചേരുവകളും തിരഞ്ഞെടുക്കുക (Please select an ingredient for every row)');
       return;
     }
     setRecipeModalStep(2);
@@ -387,9 +387,9 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
       setRecipeError('കുറഞ്ഞത് ഒരു ചേരുവയെങ്കിലും നൽകുക (At least one ingredient is required)');
       return;
     }
-    const hasInvalid = recipeItems.some((it) => !it.ingredientId || Number(it.quantity) <= 0);
+    const hasInvalid = recipeItems.some((it) => !it.ingredientId);
     if (hasInvalid) {
-      setRecipeError('എല്ലാ ചേരുവകളുടെയും പേരും അളവും സാധുവാണെന്ന് ഉറപ്പാക്കുക (Ensure all ingredients have a name and quantity > 0)');
+      setRecipeError('എല്ലാ ചേരുവകളും തിരഞ്ഞെടുക്കുക (Please select an ingredient for every row)');
       return;
     }
 
@@ -404,11 +404,14 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
           baseOutputUnit: recipeBaseUnit,
           instructions: recipeInstructions,
         },
-        recipeItems.map((it) => ({
-          ingredientId: it.ingredientId,
-          quantity: Number(it.quantity) || 0,
-          unit: it.unit,
-        })),
+        recipeItems.map((it) => {
+          const ing = ingredients.find((i) => i.id === it.ingredientId);
+          return {
+            ingredientId: it.ingredientId,
+            quantity: 1, // Satisfies DB NOT NULL and > 0 check constraint
+            unit: it.unit || ing?.unit || 'kg',
+          };
+        }),
         recipePackets
       );
       setRecipeModalOpen(false);
@@ -1101,9 +1104,6 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                       {/* Scrollable container for ingredients list */}
                       <div className="space-y-2 max-h-[48vh] overflow-y-auto pr-1.5 p-1 rounded-xl bg-stone-100/50 dark:bg-[#141212]/50 border border-stone-200/60 dark:border-[#282323]">
                         {recipeItems.map((item, idx) => {
-                          const ing = ingredients.find((i) => i.id === item.ingredientId);
-                          const lineCost = (Number(item.quantity) || 0) * (ing?.avgCostPerUnit || 0);
-
                           const ingOptions = recipeEligibleIngredients.map((ingItem: Ingredient) => ({
                             value: ingItem.id,
                             label: ingItem.name,
@@ -1116,7 +1116,7 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                               className="flex items-center gap-2 p-2.5 rounded-xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#282323] shadow-xs"
                             >
                               {/* Ingredient ThemeSelect with search */}
-                              <div className="flex-1 min-w-[140px]">
+                              <div className="flex-1 min-w-[200px]">
                                 <ThemeSelect
                                   value={item.ingredientId}
                                   onChange={(val) => handleRecipeItemChange(idx, 'ingredientId', val)}
@@ -1126,36 +1126,13 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                                 />
                               </div>
 
-                              {/* Quantity */}
-                              <div className="w-24">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  min="0.01"
-                                  required
-                                  value={item.quantity}
-                                  onChange={(e) => handleRecipeItemChange(idx, 'quantity', e.target.value)}
-                                  className="w-full p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] text-stone-900 dark:text-white text-xs font-bold outline-none text-right"
-                                  placeholder="Qty"
-                                />
-                              </div>
-
-                              {/* Unit Badge */}
-                              <div className="w-12 text-center text-xs font-bold text-stone-500">
-                                {item.unit}
-                              </div>
-
-                              {/* Line Cost */}
-                              <div className="w-20 text-right font-bold text-xs text-stone-700 dark:text-stone-300">
-                                ₹{lineCost.toFixed(1)}
-                              </div>
-
                               {/* Delete Button */}
                               <button
                                 type="button"
                                 onClick={() => handleRemoveRecipeItem(idx)}
                                 disabled={recipeItems.length <= 1}
-                                className="p-1.5 text-stone-400 hover:text-red-600 disabled:opacity-30 transition-colors cursor-pointer"
+                                className="p-2 text-stone-400 hover:text-red-600 disabled:opacity-30 transition-colors cursor-pointer"
+                                title="ഒഴിവാക്കുക"
                               >
                                 <FiTrash2 className="w-4 h-4" />
                               </button>

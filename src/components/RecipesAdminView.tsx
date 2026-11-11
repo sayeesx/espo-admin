@@ -250,10 +250,14 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
           baseOutputUnit,
           instructions,
         },
-        recipeItems.map((item) => ({
-          ...item,
-          quantity: Number(item.quantity) || 0,
-        })),
+        recipeItems.map((item) => {
+          const ing = ingredients.find((i) => i.id === item.ingredientId);
+          return {
+            ...item,
+            quantity: 1, // Satisfies DB NOT NULL and > 0 check constraint
+            unit: item.unit || ing?.unit || 'kg',
+          };
+        }),
         recipePackets
       );
       showToast('പാചകക്കുറിപ്പ് വിജയകരമായി സൂക്ഷിച്ചു', 'success');
@@ -349,9 +353,6 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                       <div key={it.id} className="flex items-center justify-between py-1">
                         <span className="text-stone-800 dark:text-stone-200 font-malayalam">
                           {it.ingredientName}
-                        </span>
-                        <span className="font-mono font-semibold text-stone-600 dark:text-stone-400">
-                          {it.quantity} {it.unit}
                         </span>
                       </div>
                     ))}
@@ -511,7 +512,7 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
 
                       return (
                         <div key={idx} className="flex items-center gap-2 p-2 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#282323]">
-                          <div className="flex-1 min-w-[140px]">
+                          <div className="flex-1 min-w-[200px]">
                             <ThemeSelect
                               value={item.ingredientId}
                               onChange={(val) => handleItemChange(idx, 'ingredientId', val)}
@@ -521,24 +522,12 @@ export const RecipesAdminView: React.FC<RecipesAdminViewProps> = ({
                             />
                           </div>
 
-                          <input
-                            type="number"
-                            step="any"
-                            min="0.001"
-                            placeholder="അളവ്"
-                            value={item.quantity === 0 ? '' : item.quantity}
-                            onChange={(e) => handleItemChange(idx, 'quantity', e.target.value === '' ? 0 : parseFloat(e.target.value))}
-                            onFocus={(e) => e.target.select()}
-                            className="w-20 p-2.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-900 dark:text-white text-xs font-mono focus:outline-none"
-                          />
-
-                          <span className="text-stone-400 text-xs w-8 text-center">{item.unit}</span>
-
                           {recipeItems.length > 1 && (
                             <button
                               type="button"
                               onClick={() => handleRemoveItemRow(idx)}
                               className="p-1 text-red-500 hover:text-red-700 cursor-pointer"
+                              title="ഒഴിവാക്കുക"
                             >
                               <FiTrash2 className="w-3.5 h-3.5" />
                             </button>
