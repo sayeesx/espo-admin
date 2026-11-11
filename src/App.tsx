@@ -509,6 +509,18 @@ export const App: React.FC = () => {
     }
   }, [tabRefreshing]);
 
+  // Auto-refresh fresh data from Supabase when navigating to specific data views
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (activeTab === 'ingredients') {
+      refreshIngredientsData();
+    } else if (activeTab === 'movements') {
+      refreshMovementsData();
+    } else if (activeTab === 'products') {
+      refreshProductsData();
+    }
+  }, [activeTab, isAuthenticated, refreshIngredientsData, refreshMovementsData, refreshProductsData]);
+
   // Supabase Realtime for live production updates, inventory changes, and live order notifications
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -519,17 +531,31 @@ export const App: React.FC = () => {
       debounceTimer = setTimeout(async () => {
         if (type === 'production') {
           invalidateAdminCache('admin_production_runs');
-          const runs = await fetchProductionRuns(true).catch(() => null);
+          invalidateAdminCache('admin_ingredients');
+          invalidateAdminCache('admin_products');
+          invalidateAdminCache('admin_stock_movements');
+          const [runs, ings, prods, movs] = await Promise.all([
+            fetchProductionRuns(true).catch(() => null),
+            fetchIngredients(true).catch(() => null),
+            fetchProducts(true).catch(() => null),
+            fetchStockMovements(true).catch(() => null),
+          ]);
           if (runs) setProductionRuns(runs);
+          if (ings) setIngredients(ings);
+          if (prods) setProducts(prods);
+          if (movs) setStockMovements(movs);
         } else if (type === 'inventory') {
           invalidateAdminCache('admin_ingredients');
           invalidateAdminCache('admin_products');
-          const [ings, prods] = await Promise.all([
+          invalidateAdminCache('admin_stock_movements');
+          const [ings, prods, movs] = await Promise.all([
             fetchIngredients(true).catch(() => null),
             fetchProducts(true).catch(() => null),
+            fetchStockMovements(true).catch(() => null),
           ]);
           if (ings) setIngredients(ings);
           if (prods) setProducts(prods);
+          if (movs) setStockMovements(movs);
         }
       }, 400);
     };
@@ -541,6 +567,13 @@ export const App: React.FC = () => {
         { event: '*', schema: 'public', table: 'production_runs' },
         () => {
           debouncedSync('production');
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'stock_movements' },
+        () => {
+          debouncedSync('inventory');
         }
       )
       .on(

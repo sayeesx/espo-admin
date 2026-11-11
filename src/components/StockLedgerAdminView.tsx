@@ -344,13 +344,39 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
 
       // 3. Movement direction / type filter
       if (filterType !== 'all') {
-        const isIn = m.movementType === 'in' || m.movementType === 'purchase' || m.movementType === 'production_output';
-        const isOut = m.movementType === 'out' || m.movementType === 'production_consumption' || m.category === 'wages';
-        const isAdjust = m.movementType === 'adjust' || m.movementType === 'cancellation_reversal' || m.movementType === 'opening';
+        const delta = Number(m.quantity) || 0;
+        const isWage = m.category === 'wages';
+        const isAdjustment =
+          !isWage &&
+          (m.movementType === 'adjustment' ||
+            m.movementType === 'adjust' ||
+            m.movementType === 'opening' ||
+            m.movementType === 'cancellation_reversal');
+
+        const isIn =
+          !isWage &&
+          !isAdjustment &&
+          (m.movementType === 'in' ||
+            m.movementType === 'purchase' ||
+            m.movementType === 'purchase_inward' ||
+            m.movementType === 'production_output' ||
+            m.movementType === 'packing_reversal' ||
+            m.movementType === 'sale_reversal' ||
+            (delta > 0 && !m.movementType.includes('consumption') && !m.movementType.includes('out')));
+
+        const isOut =
+          isWage ||
+          (!isAdjustment &&
+            (m.movementType === 'out' ||
+              m.movementType === 'production_consumption' ||
+              m.movementType === 'packing_deduction' ||
+              m.movementType === 'wastage' ||
+              m.movementType === 'sale' ||
+              (delta < 0 && !isIn)));
 
         if (filterType === 'in' && !isIn) return false;
         if (filterType === 'out' && !isOut) return false;
-        if (filterType === 'adjust' && !isAdjust) return false;
+        if (filterType === 'adjust' && !isAdjustment) return false;
       }
 
       // 4. Text search
@@ -967,9 +993,35 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-[#2E2828]/60">
                 {paginatedEntries.map((m) => {
-                  const isIn = m.movementType === 'in' || m.movementType === 'purchase' || m.movementType === 'production_output';
-                  const isOut = m.movementType === 'out' || m.movementType === 'production_consumption' || m.category === 'wages';
+                  const deltaNum = Number(m.quantity) || 0;
                   const isWage = m.category === 'wages';
+                  const isAdjustment =
+                    !isWage &&
+                    (m.movementType === 'adjustment' ||
+                      m.movementType === 'adjust' ||
+                      m.movementType === 'opening' ||
+                      m.movementType === 'cancellation_reversal');
+
+                  const isIn =
+                    !isWage &&
+                    !isAdjustment &&
+                    (m.movementType === 'in' ||
+                      m.movementType === 'purchase' ||
+                      m.movementType === 'purchase_inward' ||
+                      m.movementType === 'production_output' ||
+                      m.movementType === 'packing_reversal' ||
+                      m.movementType === 'sale_reversal' ||
+                      (deltaNum > 0 && !m.movementType.includes('consumption') && !m.movementType.includes('out')));
+
+                  const isOut =
+                    isWage ||
+                    (!isAdjustment &&
+                      (m.movementType === 'out' ||
+                        m.movementType === 'production_consumption' ||
+                        m.movementType === 'packing_deduction' ||
+                        m.movementType === 'wastage' ||
+                        m.movementType === 'sale' ||
+                        (deltaNum < 0 && !isIn)));
 
                   return (
                     <tr key={m.id} className="hover:bg-stone-50/80 dark:hover:bg-[#252020] transition-colors">
@@ -1023,12 +1075,20 @@ export const StockLedgerAdminView: React.FC<StockLedgerAdminViewProps> = ({
                           className={
                             isWage
                               ? 'text-indigo-600 dark:text-indigo-400'
-                              : isIn
+                              : deltaNum > 0 || (deltaNum === 0 && m.newBalance > m.previousBalance)
                               ? 'text-emerald-600 dark:text-emerald-400'
                               : 'text-red-600 dark:text-red-400'
                           }
                         >
-                          {isIn ? '+' : '-'}{m.unit === '₹' ? '₹' : ''}{m.quantity.toLocaleString('en-IN')} {m.unit !== '₹' ? m.unit : ''}
+                          {isWage
+                            ? '-'
+                            : deltaNum > 0 || (deltaNum === 0 && m.newBalance > m.previousBalance)
+                            ? '+'
+                            : deltaNum < 0 || (deltaNum === 0 && m.newBalance < m.previousBalance)
+                            ? '-'
+                            : ''}
+                          {m.unit === '₹' ? '₹' : ''}
+                          {Math.abs(deltaNum).toLocaleString('en-IN')} {m.unit !== '₹' ? m.unit : ''}
                         </span>
                       </td>
 

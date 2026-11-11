@@ -699,16 +699,50 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
                   {/* Progress Bar: Quantity Pending from Last Stock */}
                   {(() => {
-                    const lastInward = stockMovements.find(
+                    const ingNameNorm = ing.name ? ing.name.trim().toLowerCase() : '';
+                    const itemMovements = stockMovements.filter(
                       (m) =>
-                        (m.itemId === ing.id || m.itemName.toLowerCase() === ing.name.toLowerCase()) &&
-                        (m.movementType === 'in' || m.movementType === 'purchase' || m.movementType === 'opening' || m.quantity > 0)
+                        (m.itemId && ing.id && m.itemId === ing.id) ||
+                        (m.itemName && ingNameNorm && m.itemName.trim().toLowerCase() === ingNameNorm)
                     );
-                    const lastStockTotal = lastInward
-                      ? Math.max(Number(lastInward.newBalance) || 0, Number(lastInward.previousBalance) || 0, ing.currentStock)
-                      : Math.max(ing.currentStock, (ing.minStock || 5) * 2, 10);
+
+                    // Find the most recent inward / purchase movement (movements are sorted newest first)
+                    const lastInwardIdx = itemMovements.findIndex(
+                      (m) =>
+                        m.movementType === 'in' ||
+                        m.movementType === 'purchase' ||
+                        m.movementType === 'purchase_inward' ||
+                        m.movementType === 'opening' ||
+                        (m.movementType === 'adjustment' && Number(m.quantity) > 0) ||
+                        Number(m.quantity) > 0
+                    );
+
+                    let lastStockTotal = 0;
+
+                    if (lastInwardIdx !== -1) {
+                      const lastInward = itemMovements[lastInwardIdx];
+                      // Benchmark is the balance after that inward, or peak balance seen since that inward
+                      const recentMovements = itemMovements.slice(0, lastInwardIdx + 1);
+                      lastStockTotal = recentMovements.reduce(
+                        (max, m) => Math.max(max, Number(m.newBalance) || 0, Number(m.previousBalance) || 0),
+                        Number(lastInward.newBalance) || Number(lastInward.previousBalance) || ing.currentStock
+                      );
+                    } else if (itemMovements.length > 0) {
+                      // No inward movement found in history: use peak recorded balance before consumptions
+                      const maxRecordedStock = itemMovements.reduce(
+                        (max, m) => Math.max(max, Number(m.previousBalance) || 0, Number(m.newBalance) || 0),
+                        0
+                      );
+                      lastStockTotal = Math.max(maxRecordedStock, ing.currentStock);
+                    } else {
+                      // No movements at all
+                      lastStockTotal = Math.max(ing.currentStock, (ing.minStock || 5) * 2, 10);
+                    }
+
                     const percentRemaining =
-                      lastStockTotal > 0
+                      ing.currentStock <= 0
+                        ? 0
+                        : lastStockTotal > 0
                         ? Math.min(100, Math.max(0, Math.round((ing.currentStock / lastStockTotal) * 100)))
                         : 0;
 

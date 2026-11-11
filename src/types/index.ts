@@ -127,12 +127,30 @@ export interface ProductionRun {
   totalPacketsPacked?: number;
 }
 
+export type MovementType =
+  | 'in'
+  | 'out'
+  | 'adjust'
+  | 'adjustment'
+  | 'opening'
+  | 'purchase'
+  | 'purchase_inward'
+  | 'production_consumption'
+  | 'production_output'
+  | 'cancellation_reversal'
+  | 'packing_deduction'
+  | 'packing_reversal'
+  | 'sale'
+  | 'sale_reversal'
+  | 'wastage'
+  | 'damage';
+
 export interface StockMovement {
   id: string;
   itemId: string;
   itemType: 'raw' | 'finished' | 'ingredient' | 'product';
   itemName: string;
-  movementType: 'in' | 'out' | 'adjust' | 'opening' | 'purchase' | 'production_consumption' | 'production_output' | 'cancellation_reversal' | 'packing_reversal' | 'sale' | 'sale_reversal' | 'wastage';
+  movementType: MovementType;
   quantity: number;
   unit: string;
   previousBalance: number;
