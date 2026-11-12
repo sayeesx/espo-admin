@@ -490,20 +490,31 @@ export const App: React.FC = () => {
     if (tabRefreshing['settings']) return;
     setTabRefreshing((prev) => ({ ...prev, settings: true }));
     try {
-      invalidateAdminCache('admin_products');
-      invalidateAdminCache('admin_ingredients');
-      invalidateAdminCache('admin_production_runs');
-      invalidateAdminCache('admin_audit_logs');
-      const [pRes, iRes, rRes, lRes] = await Promise.allSettled([
+      invalidateAdminCache();
+      const todayStr = new Date().toISOString().split('T')[0];
+      const [pRes, iRes, recRes, rRes, mRes, lRes, wRes, twRes] = await Promise.allSettled([
         fetchProducts(true),
         fetchIngredients(true),
+        fetchRecipes(true),
         fetchProductionRuns(true),
+        fetchStockMovements(true),
         fetchAuditLogs(true),
+        fetchDailyWages(90, true),
+        fetchDailyWage(todayStr),
       ]);
       if (pRes.status === 'fulfilled') setProducts(pRes.value);
       if (iRes.status === 'fulfilled') setIngredients(iRes.value);
+      if (recRes.status === 'fulfilled') setRecipes(recRes.value);
       if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+      if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
       if (lRes.status === 'fulfilled') setAuditLogs(lRes.value);
+      if (wRes.status === 'fulfilled') setDailyWages(wRes.value);
+      if (twRes.status === 'fulfilled') {
+        const tw = twRes.value;
+        setIsTodayWageAdded(Boolean(tw && tw.totalWageBudget > 0));
+      } else {
+        setIsTodayWageAdded(false);
+      }
     } finally {
       setTabRefreshing((prev) => ({ ...prev, settings: false }));
     }
@@ -588,6 +599,25 @@ export const App: React.FC = () => {
         { event: '*', schema: 'public', table: 'products' },
         () => {
           debouncedSync('inventory');
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'daily_wages' },
+        () => {
+          invalidateAdminCache('daily_wages');
+          fetchDailyWages(90, true).then(setDailyWages).catch(() => {});
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'audit_logs' },
+        (payload: any) => {
+          if (typeof payload?.new?.action === 'string' && payload.new.action.startsWith('RESET_')) {
+            debouncedSync('production');
+            invalidateAdminCache();
+            fetchDailyWages(90, true).then(setDailyWages).catch(() => {});
+          }
         }
       )
       .on(

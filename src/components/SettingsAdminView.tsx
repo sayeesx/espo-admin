@@ -13,7 +13,7 @@ import {
   FiSave,
   FiKey,
 } from 'react-icons/fi';
-import { supabase, invalidateAdminCache, resetAllStocksToZero } from '../services/supabase';
+import { supabase, executeAdminReset, AdminResetType } from '../services/supabase';
 import {
   Product,
   Ingredient,
@@ -29,7 +29,7 @@ interface SettingsAdminViewProps {
   ingredients: Ingredient[];
   productionRuns: ProductionRun[];
   stockMovements: StockMovement[];
-  onRefresh: () => void;
+  onRefresh: () => Promise<void> | void;
 }
 
 export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
@@ -77,14 +77,20 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   // ==========================================
   // 3. DATA RESET MODAL & ACTION
   // ==========================================
-  type ResetActionType = 'sales' | 'batches' | 'ledger' | 'stock' | 'zero_all_stocks' | 'full';
-  const [resetModalType, setResetModalType] = useState<ResetActionType | null>(null);
+  const [resetModalType, setResetModalType] = useState<AdminResetType | null>(null);
   const [enteredPin, setEnteredPin] = useState<string>('');
   const [resetConfirmationText, setResetConfirmationText] = useState<string>('');
   const [resetError, setResetError] = useState<string>('');
   const [resetLoading, setResetLoading] = useState<boolean>(false);
   const [resetSuccessNotice, setResetSuccessNotice] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
+  const openResetModal = (type: AdminResetType) => {
+    setResetModalType(type);
+    setEnteredPin('');
+    setResetConfirmationText('');
+    setResetError('');
+  };
 
   const handleRefresh = async () => {
     if (isRefreshing) return;
@@ -212,14 +218,12 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
   // Execute Data Reset
   const handleExecuteReset = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!resetModalType) return;
     setResetError('');
 
-    // PIN verification: strictly verify 5-digit Admin PIN 98096
     const cleanPin = enteredPin.trim();
-    const isPinCorrect = cleanPin === '98096';
-
-    if (!isPinCorrect) {
-      setResetError('നൽകിയ അഡ്മിൻ പിൻ തെറ്റാണ്! (Invalid Admin PIN)');
+    if (!/^\d{4,8}$/.test(cleanPin)) {
+      setResetError('സാധുവായ അഡ്മിൻ പിൻ നൽകുക (Enter valid 4-8 digit Admin PIN)');
       return;
     }
 
@@ -228,201 +232,28 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
       return;
     }
 
+    const RESET_NOTICES: Record<AdminResetType, string> = {
+      sales: 'വിൽപ്പന രേഖകൾ പൂർണ്ണമായി റീസെറ്റ് ചെയ്തു (Sales cleared)',
+      batches: 'പ്രൊഡക്ഷൻ ബാച്ചുകളും പാക്കറ്റുകളും റീസെറ്റ് ചെയ്തു, സ്റ്റോക്ക് ക്രമീകരിച്ചു (Batches & packets cleared, stocks reversed)',
+      ledger: 'സ്റ്റോക്ക് ലെഡ്ജർ ക്ലിയർ ചെയ്തു (Stock ledger cleared)',
+      stock: 'ചേരുവകളുടെ സ്റ്റോക്ക് ക്രമീകരിച്ചു (Ingredient stock reset)',
+      zero_all_stocks: 'എല്ലാ ഉൽപ്പന്നങ്ങൾ, ചേരുവകൾ, പാക്കറ്റുകൾ എന്നിവയുടെ സ്റ്റോക്ക് പൂജ്യമാക്കി (0)! (All stocks reset to 0)',
+      full: 'ഫാക്ടറി ഡാറ്റ പൂർണ്ണമായി റീസെറ്റ് ചെയ്തു (Full factory reset complete)',
+    };
+
     setResetLoading(true);
     try {
-      if (resetModalType === 'sales') {
-        // Clear sales
-        const { error: sErr } = await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (sErr) throw sErr;
-        invalidateAdminCache();
-        setResetSuccessNotice('വിൽപ്പന രേഖകൾ പൂർണ്ണമായി റീസെറ്റ് ചെയ്തു (Sales cleared)');
-        showToast('വിൽപ്പന രേഖകൾ പൂർണ്ണമായി റീസെറ്റ് ചെയ്തു!', 'success');
-      } else if (resetModalType === 'batches') {
-        // 1. Reverse product stock produced and restore ingredient consumption for all runs
-        const { data: allRuns } = await supabase
-          .from('production_runs')
-          .select(`
-            id,
-            actual_quantity,
-            product_id,
-            production_consumption (
-              ingredient_id,
-              actual_quantity
-            )
-          `);
+      await executeAdminReset(resetModalType, cleanPin);
 
-        if (allRuns && allRuns.length > 0) {
-          const prodDeductMap = new Map<string, number>();
-          const ingRestoreMap = new Map<string, number>();
-
-          for (const run of allRuns) {
-            if (run.product_id && Number(run.actual_quantity) > 0) {
-              prodDeductMap.set(run.product_id, (prodDeductMap.get(run.product_id) || 0) + Number(run.actual_quantity));
-            }
-            if (run.production_consumption && (run.production_consumption as any[]).length > 0) {
-              for (const pc of run.production_consumption as any[]) {
-                if (pc.ingredient_id && Number(pc.actual_quantity) > 0) {
-                  ingRestoreMap.set(pc.ingredient_id, (ingRestoreMap.get(pc.ingredient_id) || 0) + Number(pc.actual_quantity));
-                }
-              }
-            }
-          }
-
-          // Deduct produced kg from products
-          for (const [pId, qty] of prodDeductMap.entries()) {
-            const { data: prod } = await supabase.from('products').select('current_stock').eq('id', pId).maybeSingle();
-            if (prod) {
-              const newStock = Math.max(0, Number(((prod.current_stock || 0) - qty).toFixed(3)));
-              await supabase.from('products').update({ current_stock: newStock, updated_at: new Date().toISOString() }).eq('id', pId);
-            }
-          }
-
-          // Restore consumed ingredients back to stock
-          for (const [iId, qty] of ingRestoreMap.entries()) {
-            const { data: ing } = await supabase.from('ingredients').select('current_stock').eq('id', iId).maybeSingle();
-            if (ing) {
-              const newStock = Number(((ing.current_stock || 0) + qty).toFixed(3));
-              await supabase.from('ingredients').update({ current_stock: newStock, updated_at: new Date().toISOString() }).eq('id', iId);
-            }
-          }
-        }
-
-        // 2. Restore packet stock and clear all packing records for products (so packets are not kept active on costing)
-        try {
-          const { data: allPackingRecs } = await supabase
-            .from('packing_records')
-            .select('packet_size, packets_packed, cover_unit_cost');
-          if (allPackingRecs && allPackingRecs.length > 0) {
-            const pktRestoreMap = new Map<string, number>();
-            for (const rec of allPackingRecs) {
-              if (rec.packet_size && Number(rec.packets_packed) > 0) {
-                pktRestoreMap.set(rec.packet_size, (pktRestoreMap.get(rec.packet_size) || 0) + Number(rec.packets_packed));
-              }
-            }
-            for (const [pktName, restoreQty] of pktRestoreMap.entries()) {
-              const { data: pt } = await supabase
-                .from('packet_types')
-                .select('id, bundle_quantity, cost_per_packet')
-                .eq('name', pktName)
-                .maybeSingle();
-              if (pt) {
-                const newQty = Math.max(0, Number(pt.bundle_quantity ?? 0)) + restoreQty;
-                const unitCost = Number(pt.cost_per_packet) || 0;
-                await supabase
-                  .from('packet_types')
-                  .update({
-                    bundle_quantity: newQty,
-                    bundle_cost: Number((newQty * unitCost).toFixed(2)),
-                    updated_at: new Date().toISOString(),
-                  })
-                  .eq('id', pt.id);
-              }
-            }
-          }
-        } catch (restorePktErr) {
-          console.warn('Restore packet stock on batch reset error:', restorePktErr);
-        }
-
-        const { error: pkrErr } = await supabase
-          .from('packing_records')
-          .delete()
-          .neq('id', '00000000-0000-0000-0000-000000000000');
-        if (pkrErr) {
-          console.warn('Clear packing records error:', pkrErr);
-        }
-
-        // 3. Clear runs, consumption, closings, allocations
-        const { error: pcErr } = await supabase.from('production_consumption').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (pcErr) throw pcErr;
-        const { error: prErr } = await supabase.from('production_runs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (prErr) throw prErr;
-        const { error: dcErr } = await supabase.from('daily_closings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (dcErr) throw dcErr;
-        const { error: dcaErr } = await supabase.from('daily_cost_allocations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (dcaErr) throw dcaErr;
-
-        invalidateAdminCache();
-        setResetSuccessNotice('പ്രൊഡക്ഷൻ ബാച്ചുകളും പാക്കറ്റുകളും റീസെറ്റ് ചെയ്തു, സ്റ്റോക്ക് ക്രമീകരിച്ചു (Batches & packets cleared, stocks reversed)');
-        showToast('പ്രൊഡക്ഷൻ ബാച്ചുകളും പാക്കറ്റുകളും റീസെറ്റ് ചെയ്തു, സ്റ്റോക്ക് ക്രമീകരിച്ചു!', 'success');
-      } else if (resetModalType === 'ledger') {
-        // Clear stock movements
-        const { error: smErr } = await supabase.from('stock_movements').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (smErr) throw smErr;
-        invalidateAdminCache();
-        setResetSuccessNotice('സ്റ്റോക്ക് ലെഡ്ജർ ക്ലിയർ ചെയ്തു (Stock ledger cleared)');
-        showToast('സ്റ്റോക്ക് ലെഡ്ജർ ക്ലിയർ ചെയ്തു!', 'success');
-      } else if (resetModalType === 'stock') {
-        // Reset raw ingredients to baseline
-        for (const ing of ingredients) {
-          const baseline = ing.category === 'basic' ? 50 : 20;
-          const { error } = await supabase.from('ingredients').update({ current_stock: baseline, updated_at: new Date().toISOString() }).eq('id', ing.id);
-          if (error) throw error;
-        }
-        invalidateAdminCache();
-        setResetSuccessNotice('ചേരുവകളുടെ സ്റ്റോക്ക് ക്രമീകരിച്ചു (Ingredient stock reset)');
-        showToast('ചേരുവകളുടെ സ്റ്റോക്ക് ആരംഭ അളവിലേക്ക് പുനഃസ്ഥാപിച്ചു!', 'success');
-      } else if (resetModalType === 'zero_all_stocks') {
-        // Reset all products, ingredients, and packaging items current_stock to 0
-        const res = await resetAllStocksToZero();
-        if (!res.success) {
-          throw new Error(res.message);
-        }
-        invalidateAdminCache();
-        setResetSuccessNotice('എല്ലാ ഉൽപ്പന്നങ്ങൾ, ചേരുവകൾ, പാക്കറ്റുകൾ എന്നിവയുടെ സ്റ്റോക്ക് പൂജ്യമാക്കി (0)! (All stocks reset to 0)');
-        showToast('എല്ലാ ഉൽപ്പന്നങ്ങൾ, ചേരുവകൾ, പാക്കറ്റുകൾ എന്നിവയുടെ സ്റ്റോക്ക് പൂജ്യമാക്കി (0)!', 'success');
-      } else if (resetModalType === 'full') {
-        // Full factory reset: clear sales, runs, consumption, closings, allocations, stock movements, reset product stock to 0, ingredients to baseline
-        const { error: sErr } = await supabase.from('sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (sErr) throw sErr;
-        try {
-          await supabase.from('packing_records').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        } catch {}
-        const { error: pcErr } = await supabase.from('production_consumption').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (pcErr) throw pcErr;
-        const { error: prErr } = await supabase.from('production_runs').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (prErr) throw prErr;
-        const { error: dcErr } = await supabase.from('daily_closings').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (dcErr) throw dcErr;
-        const { error: dcaErr } = await supabase.from('daily_cost_allocations').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (dcaErr) throw dcaErr;
-        const { error: smErr } = await supabase.from('stock_movements').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-        if (smErr) throw smErr;
-
-        // Reset product stocks to 0
-        const { error: pZeroErr } = await supabase.from('products').update({ current_stock: 0, updated_at: new Date().toISOString() }).neq('id', '00000000-0000-0000-0000-000000000000');
-        if (pZeroErr) throw pZeroErr;
-
-        // Reset ingredients to baseline
-        for (const ing of ingredients) {
-          const baseline = ing.category === 'basic' ? 50 : 20;
-          await supabase.from('ingredients').update({ current_stock: baseline, updated_at: new Date().toISOString() }).eq('id', ing.id);
-        }
-
-        invalidateAdminCache();
-        setResetSuccessNotice('ഫാക്ടറി ഡാറ്റ പൂർണ്ണമായി റീസെറ്റ് ചെയ്തു (Full factory reset complete)');
-        showToast('ഫാക്ടറി ഡാറ്റ പൂർണ്ണമായി റീസെറ്റ് ചെയ്തു!', 'success');
-      }
-
-      // Audit log
-      try {
-        await supabase.from('audit_logs').insert([
-          {
-            actor: 'Super Admin',
-            action: `RESET_${(resetModalType || 'DATA').toUpperCase()}`,
-            entity_type: 'SYSTEM',
-            entity_id: 'MAINTENANCE',
-            details: { type: resetModalType, executed_at: new Date().toISOString() },
-          },
-        ]);
-      } catch (logErr) {
-        console.warn('Audit log write error (non-fatal):', logErr);
-      }
+      const notice = RESET_NOTICES[resetModalType];
+      setResetSuccessNotice(notice);
+      showToast(notice, 'success');
 
       setResetModalType(null);
       setEnteredPin('');
       setResetConfirmationText('');
       window.dispatchEvent(new Event('storage'));
-      onRefresh();
+      await onRefresh();
     } catch (err: any) {
       setResetError(`റീസെറ്റ് ചെയ്യുന്നതിൽ തടസ്സം: ${err?.message || 'Error executing reset'}`);
     } finally {
@@ -754,11 +585,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setResetModalType('sales');
-                  setEnteredPin('');
-                  setResetError('');
-                }}
+                onClick={() => openResetModal('sales')}
                 className="px-3 py-1.5 rounded-xl bg-red-100 hover:bg-red-200 dark:bg-red-950/40 dark:hover:bg-red-900/40 text-red-700 dark:text-red-300 font-bold shrink-0 press-apple cursor-pointer text-[11px]"
               >
                 Reset Sales
@@ -777,11 +604,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setResetModalType('batches');
-                  setEnteredPin('');
-                  setResetError('');
-                }}
+                onClick={() => openResetModal('batches')}
                 className="px-3 py-1.5 rounded-xl bg-red-100 hover:bg-red-200 dark:bg-red-950/40 dark:hover:bg-red-900/40 text-red-700 dark:text-red-300 font-bold shrink-0 press-apple cursor-pointer text-[11px]"
               >
                 Reset Runs
@@ -800,11 +623,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setResetModalType('ledger');
-                  setEnteredPin('');
-                  setResetError('');
-                }}
+                onClick={() => openResetModal('ledger')}
                 className="px-3 py-1.5 rounded-xl bg-red-100 hover:bg-red-200 dark:bg-red-950/40 dark:hover:bg-red-900/40 text-red-700 dark:text-red-300 font-bold shrink-0 press-apple cursor-pointer text-[11px]"
               >
                 Clear Ledger
@@ -823,11 +642,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setResetModalType('zero_all_stocks');
-                  setEnteredPin('');
-                  setResetError('');
-                }}
+                onClick={() => openResetModal('zero_all_stocks')}
                 className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold shrink-0 shadow-sm press-apple cursor-pointer text-[11px]"
               >
                 Set to 0
@@ -846,11 +661,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setResetModalType('stock');
-                  setEnteredPin('');
-                  setResetError('');
-                }}
+                onClick={() => openResetModal('stock')}
                 className="px-3 py-1.5 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/40 dark:hover:bg-amber-900/40 text-amber-800 dark:text-amber-300 font-bold shrink-0 press-apple cursor-pointer text-[11px]"
               >
                 Reset Stock
@@ -869,12 +680,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
               </div>
               <button
                 type="button"
-                onClick={() => {
-                  setResetModalType('full');
-                  setEnteredPin('');
-                  setResetConfirmationText('');
-                  setResetError('');
-                }}
+                onClick={() => openResetModal('full')}
                 className="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold shrink-0 shadow-sm press-apple cursor-pointer text-[11px]"
               >
                 Full Reset
@@ -911,7 +717,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
               </div>
 
               <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4 leading-relaxed">
-                ഈ പ്രക്രിയ തിരഞ്ഞെടുത്ത ഡാറ്റ പൂർണ്ണമായി മായ്ച്ചുകളയുന്നതാണ്. മുന്നോട്ട് പോകുന്നതിന് പ്രൊഡക്ഷൻ പിൻ നൽകുക.
+                ഈ പ്രക്രിയ തിരഞ്ഞെടുത്ത ഡാറ്റ പൂർണ്ണമായി മായ്ച്ചുകളയുന്നതാണ്. മുന്നോട്ട് പോകുന്നതിന് അഡ്മിൻ പിൻ നൽകുക.
               </p>
 
               <form onSubmit={handleExecuteReset} className="space-y-4 text-xs font-malayalam">
@@ -937,7 +743,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                   </label>
                   <input
                     type="password"
-                    maxLength={5}
+                    maxLength={8}
                     required
                     autoFocus
                     value={enteredPin}
@@ -965,7 +771,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
                   </button>
                   <button
                     type="submit"
-                    disabled={resetLoading || enteredPin.length !== 5}
+                    disabled={resetLoading || enteredPin.length < 4}
                     className="px-5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold shadow-sm press-apple flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                   >
                     {resetLoading ? (

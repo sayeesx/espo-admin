@@ -63,24 +63,61 @@ function resolveSupabaseConfig(): { url: string; anonKey: string } {
 
 const { url: supabaseUrl, anonKey: supabaseAnonKey } = resolveSupabaseConfig();
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+let activeAdminSessionToken: string | null =
+  typeof window !== 'undefined' && typeof sessionStorage !== 'undefined'
+    ? sessionStorage.getItem('epso_admin_session')
+    : null;
 
-export function setAdminSessionHeader(token: string | null): void {
-  const rest = (supabase as any).rest;
-  if (rest && rest.headers) {
-    if (token && token.trim() !== '') {
-      rest.headers['x-admin-session-token'] = token.trim();
+const sessionAwareFetch: typeof fetch = (input, init) => {
+  const token =
+    activeAdminSessionToken ||
+    (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined'
+      ? sessionStorage.getItem('epso_admin_session')
+      : null);
+
+  if (token && token.trim() !== '') {
+    const headers = new Headers(init?.headers || (input instanceof Request ? input.headers : undefined));
+    if (!headers.has('x-admin-session-token')) {
+      headers.set('x-admin-session-token', token.trim());
+    }
+    return globalThis.fetch(input, { ...init, headers });
+  }
+
+  return globalThis.fetch(input, init);
+};
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: {
+    fetch: sessionAwareFetch,
+  },
+});
+
+function updateRestHeaders(headers: any, key: string, value: string | null): void {
+  if (!headers) return;
+  if (typeof Headers !== 'undefined' && headers instanceof Headers) {
+    if (value) {
+      headers.set(key, value);
     } else {
-      delete rest.headers['x-admin-session-token'];
+      headers.delete(key);
+    }
+  } else {
+    if (value) {
+      headers[key] = value;
+    } else {
+      delete headers[key];
     }
   }
 }
 
-if (typeof window !== 'undefined' && typeof sessionStorage !== 'undefined') {
-  const initialAdminToken = sessionStorage.getItem('epso_admin_session');
-  if (initialAdminToken) {
-    setAdminSessionHeader(initialAdminToken);
-  }
+export function setAdminSessionHeader(token: string | null): void {
+  const clean = token && token.trim() !== '' ? token.trim() : null;
+  activeAdminSessionToken = clean;
+  updateRestHeaders((supabase as any).rest?.headers, 'x-admin-session-token', clean);
+  updateRestHeaders((supabase as any).headers, 'x-admin-session-token', clean);
+}
+
+if (activeAdminSessionToken) {
+  setAdminSessionHeader(activeAdminSessionToken);
 }
 
 export function invalidateAdminCache(pattern?: string): void {
@@ -2764,22 +2801,314 @@ export async function bulkPurchaseIngredients(
   dbCache.invalidate('admin_stock_movements');
 }
 
+export type AdminResetType = 'sales' | 'batches' | 'ledger' | 'stock' | 'zero_all_stocks' | 'full';
+
 export async function resetAllStocksToZero(): Promise<{ success: boolean; message: string }> {
   try {
     const now = new Date().toISOString();
-    const { error: pErr } = await supabase.from('products').update({ current_stock: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
+    const zeroFilter = '00000000-0000-0000-0000-000000000000';
+    const { error: pErr } = await supabase.from('products').update({ current_stock: 0, updated_at: now }).neq('id', zeroFilter);
     if (pErr) throw pErr;
-    const { error: iErr } = await supabase.from('ingredients').update({ current_stock: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
+    const { error: iErr } = await supabase.from('ingredients').update({ current_stock: 0, updated_at: now }).neq('id', zeroFilter);
     if (iErr) throw iErr;
-    const { error: packErr } = await supabase.from('packaging_items').update({ current_stock: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
+    const { error: packErr } = await supabase.from('packaging_items').update({ current_stock: 0, updated_at: now }).neq('id', zeroFilter);
     if (packErr) throw packErr;
-    const { error: ptErr } = await supabase.from('packet_types').update({ bundle_quantity: 0, bundle_cost: 0, updated_at: now }).neq('id', '00000000-0000-0000-0000-000000000000');
+    const { error: ptErr } = await supabase.from('packet_types').update({ bundle_quantity: 0, bundle_cost: 0, updated_at: now }).neq('id', zeroFilter);
     if (ptErr) throw ptErr;
     invalidateAdminCache();
     return { success: true, message: 'All stocks have been reset to zero successfully.' };
   } catch (err: any) {
     return { success: false, message: err?.message || 'Failed to reset stocks to zero.' };
   }
+}
+
+async function restorePacketsFromPackingRecords(): Promise<void> {
+  const { data: allPackingRecs } = await supabase
+    .from('packing_records')
+    .select('packet_size, packets_packed, covers_consumed, packaging_item_id');
+
+  if (!allPackingRecs || allPackingRecs.length === 0) return;
+
+  const pktRestoreMap = new Map<string, number>();
+  const packItemRestoreMap = new Map<string, number>();
+  for (const rec of allPackingRecs) {
+    if (rec.packet_size && Number(rec.packets_packed) > 0) {
+      const key = rec.packet_size.trim().toLowerCase();
+      pktRestoreMap.set(key, (pktRestoreMap.get(key) || 0) + Number(rec.packets_packed));
+    }
+    if (rec.packaging_item_id && Number(rec.packets_packed) > 0) {
+      const covers = Number(rec.covers_consumed) || Number(rec.packets_packed);
+      packItemRestoreMap.set(
+        rec.packaging_item_id,
+        (packItemRestoreMap.get(rec.packaging_item_id) || 0) + covers
+      );
+    }
+  }
+
+  if (pktRestoreMap.size > 0) {
+    const { data: packetTypes } = await supabase.from('packet_types').select('id, name, bundle_quantity, cost_per_packet');
+    for (const pt of packetTypes || []) {
+      const restoreQty = pktRestoreMap.get((pt.name || '').trim().toLowerCase());
+      if (restoreQty && restoreQty > 0) {
+        const newQty = Math.max(0, Number(pt.bundle_quantity ?? 0)) + restoreQty;
+        const unitCost = Number(pt.cost_per_packet) || 0;
+        await supabase
+          .from('packet_types')
+          .update({
+            bundle_quantity: newQty,
+            bundle_cost: Number((newQty * unitCost).toFixed(2)),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', pt.id);
+      }
+    }
+  }
+
+  for (const [packItemId, restoreCovers] of packItemRestoreMap.entries()) {
+    const { data: pi } = await supabase
+      .from('packaging_items')
+      .select('current_stock')
+      .eq('id', packItemId)
+      .maybeSingle();
+    if (pi) {
+      const newStock = Math.max(0, Number(pi.current_stock ?? 0)) + restoreCovers;
+      await supabase
+        .from('packaging_items')
+        .update({ current_stock: newStock, updated_at: new Date().toISOString() })
+        .eq('id', packItemId);
+    }
+  }
+}
+
+export async function executeAdminReset(
+  resetType: AdminResetType,
+  adminPin: string
+): Promise<{ success: boolean; details?: Record<string, any> }> {
+  const cleanPin = adminPin.trim();
+  const sessionToken =
+    activeAdminSessionToken ||
+    (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('epso_admin_session') || '' : '');
+
+  // 1. Prefer authoritative server-side atomic RPC (migration 020)
+  const { data: rpcData, error: rpcErr } = await supabase.rpc('admin_reset_data', {
+    p_reset_type: resetType,
+    p_session_token: sessionToken || null,
+    p_admin_pin: cleanPin,
+  });
+
+  if (!rpcErr) {
+    if (rpcData && rpcData.success === true) {
+      invalidateAdminCache();
+      return { success: true, details: rpcData };
+    }
+    throw new Error(rpcData?.error || 'റീസെറ്റ് പരാജയപ്പെട്ടു (Reset failed)');
+  }
+
+  const isMissingRpc =
+    rpcErr.code === 'PGRST202' ||
+    rpcErr.code === '42883' ||
+    Boolean(rpcErr.message?.includes('Could not find the function')) ||
+    Boolean(rpcErr.message?.match(/function\s+(public\.)?admin_reset_data.*does not exist/i));
+
+  if (!isMissingRpc) {
+    throw new Error(rpcErr.message || 'Database reset error');
+  }
+
+  const writeResetAuditLog = async (type: AdminResetType, timestamp: string) => {
+    try {
+      await supabase.from('audit_logs').insert([
+        {
+          actor: 'Super Admin',
+          action: `RESET_${type.toUpperCase()}`,
+          entity_type: 'SYSTEM',
+          entity_id: 'MAINTENANCE',
+          details: { type, executed_at: timestamp },
+        },
+      ]);
+    } catch (logErr) {
+      console.warn('Audit log write error (non-fatal):', logErr);
+    }
+  };
+
+  // 2. Fallback when migration 020 RPC has not yet been applied
+  const pinRes = await verifyAdminPin(cleanPin);
+  if (!pinRes.success) {
+    throw new Error(pinRes.error || 'നൽകിയ അഡ്മിൻ പിൻ തെറ്റാണ്! (Invalid Admin PIN)');
+  }
+  if (pinRes.session_token && typeof sessionStorage !== 'undefined') {
+    sessionStorage.setItem('epso_admin_session', pinRes.session_token);
+    setAdminSessionHeader(pinRes.session_token);
+  }
+
+  const zeroFilter = '00000000-0000-0000-0000-000000000000';
+  const now = new Date().toISOString();
+
+  if (resetType === 'sales') {
+    const { error } = await supabase.from('sales').delete().neq('id', zeroFilter);
+    if (error) throw error;
+  } else if (resetType === 'batches') {
+    const { data: allRuns } = await supabase
+      .from('production_runs')
+      .select(`
+        id,
+        status,
+        actual_quantity,
+        product_id,
+        production_consumption (
+          ingredient_id,
+          actual_quantity,
+          unit
+        )
+      `);
+
+    const { data: ingRows } = await supabase.from('ingredients').select('id, unit, current_stock');
+    const ingUnitMap = new Map<string, string>();
+    const ingStockMap = new Map<string, number>();
+    for (const ing of ingRows || []) {
+      ingUnitMap.set(ing.id, (ing.unit || 'kg').trim().toLowerCase());
+      ingStockMap.set(ing.id, Number(ing.current_stock) || 0);
+    }
+
+    if (allRuns && allRuns.length > 0) {
+      const prodDeductMap = new Map<string, number>();
+      const ingRestoreMap = new Map<string, number>();
+
+      for (const run of allRuns) {
+        if (run.status === 'cancelled') continue;
+        if (run.product_id && Number(run.actual_quantity) > 0) {
+          prodDeductMap.set(run.product_id, (prodDeductMap.get(run.product_id) || 0) + Number(run.actual_quantity));
+        }
+        if (Array.isArray(run.production_consumption)) {
+          for (const pc of run.production_consumption as any[]) {
+            if (pc.ingredient_id && Number(pc.actual_quantity) > 0) {
+              const pcUnit = (pc.unit || '').trim().toLowerCase();
+              const targetUnit = ingUnitMap.get(pc.ingredient_id) || 'kg';
+              const normalizedQty =
+                ['g', 'ml', 'gm', 'gram', 'grams'].includes(pcUnit) &&
+                ['kg', 'l', 'liter', 'litre'].includes(targetUnit)
+                  ? Number(pc.actual_quantity) / 1000
+                  : Number(pc.actual_quantity);
+              ingRestoreMap.set(pc.ingredient_id, (ingRestoreMap.get(pc.ingredient_id) || 0) + normalizedQty);
+            }
+          }
+        }
+      }
+
+      for (const [pId, qty] of prodDeductMap.entries()) {
+        const { data: prod } = await supabase.from('products').select('current_stock').eq('id', pId).maybeSingle();
+        if (prod) {
+          const newStock = Math.max(0, Number(((Number(prod.current_stock) || 0) - qty).toFixed(3)));
+          await supabase.from('products').update({ current_stock: newStock, updated_at: now }).eq('id', pId);
+        }
+      }
+
+      for (const [iId, qty] of ingRestoreMap.entries()) {
+        const base = ingStockMap.get(iId) ?? 0;
+        const newStock = Number((base + qty).toFixed(3));
+        ingStockMap.set(iId, newStock);
+        await supabase.from('ingredients').update({ current_stock: newStock, updated_at: now }).eq('id', iId);
+      }
+    }
+
+    await restorePacketsFromPackingRecords();
+
+    const { error: pkrErr } = await supabase.from('packing_records').delete().neq('id', zeroFilter);
+    if (pkrErr) throw pkrErr;
+    const { error: pcErr } = await supabase.from('production_consumption').delete().neq('id', zeroFilter);
+    if (pcErr) throw pcErr;
+    const { error: prErr } = await supabase.from('production_runs').delete().neq('id', zeroFilter);
+    if (prErr) throw prErr;
+    const { error: dcaErr } = await supabase.from('daily_cost_allocations').delete().neq('id', zeroFilter);
+    if (dcaErr) throw dcaErr;
+    const { error: dcErr } = await supabase.from('daily_closings').delete().neq('id', zeroFilter);
+    if (dcErr) throw dcErr;
+
+    await supabase
+      .from('stock_movements')
+      .delete()
+      .or(
+        'movement_type.in.(production_consumption,production_output,packing_reversal,cancellation_reversal,packing_deduction),reference.ilike.Daily Closing%,reference.ilike.Run %,reference.ilike.Del Run %,reference.ilike.Reversal of %,reference.ilike.Packing %,reason.ilike.Daily basic ingredient usage%'
+      );
+
+    const { count: remainingBatchMovements } = await supabase
+      .from('stock_movements')
+      .select('id', { count: 'exact', head: true })
+      .or(
+        'movement_type.in.(production_consumption,production_output,packing_reversal,cancellation_reversal,packing_deduction),reference.ilike.Daily Closing%,reference.ilike.Run %,reference.ilike.Del Run %,reference.ilike.Reversal of %,reference.ilike.Packing %,reason.ilike.Daily basic ingredient usage%'
+      );
+
+    if ((remainingBatchMovements || 0) > 0) {
+      await writeResetAuditLog(resetType, now);
+      invalidateAdminCache();
+      throw new Error(
+        'ബാച്ചുകളും ക്ലോസിംഗും ക്ലിയർ ചെയ്തു, എന്നാൽ സ്റ്റോക്ക് ലെഡ്ജറിലെ ബാച്ച്/ബേസിക് ലോഗുകൾ നീക്കം ചെയ്യാൻ Supabase Migration 020 (admin_reset_data) അപ്ലൈ ചെയ്യുക. (Apply 020_admin_reset_data_rpc.sql in Supabase SQL Editor)'
+      );
+    }
+  } else if (resetType === 'ledger') {
+    await supabase.from('stock_movements').delete().neq('id', zeroFilter);
+    const { count } = await supabase.from('stock_movements').select('id', { count: 'exact', head: true });
+    if ((count || 0) > 0) {
+      throw new Error(
+        'സ്റ്റോക്ക് ലെഡ്ജർ ക്ലിയർ ചെയ്യാൻ Supabase Migration 020 (admin_reset_data) റൺ ചെയ്യേണ്ടതുണ്ട്. (RLS blocks direct DELETE on stock_movements — apply migration 020_admin_reset_data_rpc.sql)'
+      );
+    }
+  } else if (resetType === 'stock') {
+    const { data: ingRows, error: fetchErr } = await supabase.from('ingredients').select('id, category');
+    if (fetchErr) throw fetchErr;
+    for (const ing of ingRows || []) {
+      const baseline = ing.category === 'basic' ? 50 : 20;
+      const { error } = await supabase.from('ingredients').update({ current_stock: baseline, updated_at: now }).eq('id', ing.id);
+      if (error) throw error;
+    }
+  } else if (resetType === 'zero_all_stocks') {
+    const res = await resetAllStocksToZero();
+    if (!res.success) throw new Error(res.message);
+  } else if (resetType === 'full') {
+    await restorePacketsFromPackingRecords();
+
+    const { error: sErr } = await supabase.from('sales').delete().neq('id', zeroFilter);
+    if (sErr) throw sErr;
+    const { error: pkrErr } = await supabase.from('packing_records').delete().neq('id', zeroFilter);
+    if (pkrErr) throw pkrErr;
+    const { error: pcErr } = await supabase.from('production_consumption').delete().neq('id', zeroFilter);
+    if (pcErr) throw pcErr;
+    const { error: prErr } = await supabase.from('production_runs').delete().neq('id', zeroFilter);
+    if (prErr) throw prErr;
+    const { error: dcaErr } = await supabase.from('daily_cost_allocations').delete().neq('id', zeroFilter);
+    if (dcaErr) throw dcaErr;
+    const { error: dcErr } = await supabase.from('daily_closings').delete().neq('id', zeroFilter);
+    if (dcErr) throw dcErr;
+    const { error: dwErr } = await supabase.from('daily_wages').delete().neq('id', zeroFilter);
+    if (dwErr) throw dwErr;
+
+    await supabase.from('stock_movements').delete().neq('id', zeroFilter);
+
+    const { error: pZeroErr } = await supabase
+      .from('products')
+      .update({ current_stock: 0, avg_cost_per_unit: 0, updated_at: now })
+      .neq('id', zeroFilter);
+    if (pZeroErr) throw pZeroErr;
+
+    const { data: ingRows } = await supabase.from('ingredients').select('id, category');
+    for (const ing of ingRows || []) {
+      const baseline = ing.category === 'basic' ? 50 : 20;
+      await supabase.from('ingredients').update({ current_stock: baseline, updated_at: now }).eq('id', ing.id);
+    }
+
+    const { count } = await supabase.from('stock_movements').select('id', { count: 'exact', head: true });
+    if ((count || 0) > 0) {
+      await writeResetAuditLog(resetType, now);
+      invalidateAdminCache();
+      throw new Error(
+        'സെയിൽസും ബാച്ചുകളും ക്ലിയർ ചെയ്തു, എന്നാൽ സ്റ്റോക്ക് ലെഡ്ജർ ക്ലിയർ ചെയ്യാൻ Supabase Migration 020 (admin_reset_data) അപ്ലൈ ചെയ്യുക. (Apply 020_admin_reset_data_rpc.sql in Supabase SQL Editor)'
+      );
+    }
+  }
+
+  await writeResetAuditLog(resetType, now);
+
+  invalidateAdminCache();
+  return { success: true };
 }
 
 
