@@ -212,6 +212,13 @@ export function isBasicIngredientName(name: string): boolean {
     return false;
   }
 
+  const isPowderedSugar =
+    n.includes('പൊടി') ||
+    n.includes('powder') ||
+    n.includes('icing');
+  const isBasicSugar =
+    !isPowderedSugar && (n.includes('പഞ്ചസാര') || n === 'sugar' || /\bsugar\b/.test(n));
+
   return (
     n.includes('ഉപ്പ്') ||
     n.includes('salt') ||
@@ -222,8 +229,36 @@ export function isBasicIngredientName(name: string): boolean {
     n.includes('chippli') ||
     n.includes('കറിവേപ്പില') ||
     n.includes('കറിവേപ്പി') ||
-    n.includes('curry')
+    n.includes('curry') ||
+    isBasicSugar
   );
+}
+
+/**
+ * Returns true if an ingredient record is a daily shared basic ingredient
+ * (by category === 'basic' or known basic name, excluding wages, covers, and black salt).
+ */
+export function isBasicIngredientRecord(ing: { name?: string; category?: string }): boolean {
+  const n = (ing.name || '').toLowerCase().trim();
+  if (!n) return false;
+  if (
+    n.includes('black salt') ||
+    n.includes('black') ||
+    n.includes('കറുത്ത ഉപ്പ്') ||
+    n.includes('കറുത്ത') ||
+    n.includes('ബ്ലാക്ക്') ||
+    n.includes('കാലാ നമക്') ||
+    n.includes('kala namak') ||
+    n.includes('കൂലി') ||
+    n.includes('wage') ||
+    n.includes('salary') ||
+    n === 'കവർ' ||
+    n === 'cover' ||
+    n.startsWith('കവർ')
+  ) {
+    return false;
+  }
+  return ing.category === 'basic' || isBasicIngredientName(n);
 }
 
 /**

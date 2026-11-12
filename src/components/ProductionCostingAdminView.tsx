@@ -18,6 +18,7 @@ import {
   roundCurrency,
   roundStock,
   isBasicIngredientName,
+  isBasicIngredientRecord,
   isEligibleProductionBatch,
   computeDailyBatchCostMaps,
   parsePacketWeightKg,
@@ -155,22 +156,32 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
         : ((stockMovements && stockMovements.length > 0) ? stockMovements : (fetchedMovements || []));
       setAllMovements(movements);
 
-      // Build ingredients cost lookup
+      // Build ingredients cost lookup and dynamic basic ingredient sets
       const ingCostMap = new Map<string, number>();
+      const basicIngIdSet = new Set<string>();
+      const basicIngNameSet = new Set<string>();
       for (const ing of ingredients || []) {
         if (ing.id) ingCostMap.set(ing.id, Number(ing.avgCostPerUnit) || 0);
         if (ing.name) ingCostMap.set(ing.name.toLowerCase().trim(), Number(ing.avgCostPerUnit) || 0);
+        if (isBasicIngredientRecord(ing)) {
+          if (ing.id) basicIngIdSet.add(ing.id);
+          if (ing.name) basicIngNameSet.add(ing.name.toLowerCase().trim());
+        }
       }
 
       // Compute daily basic ingredients consumption cost by date
-      // Basic ingredients: ഉപ്പ്, അണ്ടി തോട്, ചിപ്പ്ളി പൊടി, കറിവേപ്പില
+      // Basic ingredients: ഉപ്പ്, അണ്ടി തോട്, ചിപ്പ്ളി പൊടി, കറിവേപ്പില, പഞ്ചസാര, and any category === 'basic'
       const basicCostByDate: Record<string, number> = {};
       for (const m of movements) {
         if ((m.quantity || 0) >= 0) continue;
         const itemName = (m.itemName || '').toLowerCase().trim();
         const reason = (m.reason || '').toLowerCase();
 
-        const isBasic = isBasicIngredientName(itemName) || reason.includes('daily basic ingredient usage');
+        const isBasic =
+          isBasicIngredientName(itemName) ||
+          (m.itemId ? basicIngIdSet.has(m.itemId) : false) ||
+          basicIngNameSet.has(itemName) ||
+          reason.includes('daily basic ingredient usage');
         if (!isBasic) continue;
 
         // Exclude oil (oil is tracked separately via daily closings)
@@ -254,7 +265,14 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
         for (const run of pRuns) {
           if (run.ingredientsConsumed && Array.isArray(run.ingredientsConsumed) && run.ingredientsConsumed.length > 0) {
             for (const ing of run.ingredientsConsumed) {
-              if (isBasicIngredientName(ing.ingredientName || '')) continue;
+              const ingNameLower = (ing.ingredientName || '').toLowerCase().trim();
+              if (
+                isBasicIngredientName(ing.ingredientName || '') ||
+                (ing.ingredientId ? basicIngIdSet.has(ing.ingredientId) : false) ||
+                basicIngNameSet.has(ingNameLower)
+              ) {
+                continue;
+              }
               ingredientCost += (ing.totalCost || 0);
             }
           } else if (run.totalIngredientCost) {
@@ -409,10 +427,16 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
     );
 
     const ingCostMap = new Map<string, number>();
+    const basicIngIdSet = new Set<string>();
+    const basicIngNameSet = new Set<string>();
     ingredients.forEach((ing) => {
       const cost = Number(ing.avgCostPerUnit) || 0;
       if (ing.id) ingCostMap.set(ing.id, cost);
       if (ing.name) ingCostMap.set(ing.name.toLowerCase().trim(), cost);
+      if (isBasicIngredientRecord(ing)) {
+        if (ing.id) basicIngIdSet.add(ing.id);
+        if (ing.name) basicIngNameSet.add(ing.name.toLowerCase().trim());
+      }
     });
 
     const ingMap: Record<string, { name: string; unit: string; qty: number; cost: number; isBasic?: boolean }> = {};
@@ -422,7 +446,10 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
       if (run.ingredientsConsumed) {
         for (const ing of run.ingredientsConsumed) {
           const ingName = ing.ingredientName || ing.ingredientId || 'Unknown';
-          const isBasic = isBasicIngredientName(ingName);
+          const isBasic =
+            isBasicIngredientName(ingName) ||
+            (ing.ingredientId ? basicIngIdSet.has(ing.ingredientId) : false) ||
+            basicIngNameSet.has(ingName.toLowerCase().trim());
           const key = (ing.ingredientId || ingName).toLowerCase().trim();
           if (!ingMap[key]) {
             ingMap[key] = {
@@ -482,12 +509,17 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
         }
       }
 
-      // B. Daily basic ingredients from stock movements (Salt, Cashew Shell, Chippli, Curry Leaves, etc.)
+      // B. Daily basic ingredients from stock movements (Salt, Cashew Shell, Chippli, Curry Leaves, Sugar, etc.)
       for (const m of movements) {
         if ((m.quantity || 0) >= 0) continue;
         const itemName = (m.itemName || '').trim();
+        const itemNameLower = itemName.toLowerCase();
         const reason = (m.reason || '').toLowerCase();
-        const isBasic = isBasicIngredientName(itemName) || reason.includes('daily basic ingredient usage');
+        const isBasic =
+          isBasicIngredientName(itemName) ||
+          (m.itemId ? basicIngIdSet.has(m.itemId) : false) ||
+          basicIngNameSet.has(itemNameLower) ||
+          reason.includes('daily basic ingredient usage');
         if (!isBasic) continue;
         if (itemName.toLowerCase().includes('oil') || itemName.includes('ഓയിൽ')) continue;
 
@@ -712,7 +744,13 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
       for (const r of runs) {
         if (r.ingredientsConsumed && Array.isArray(r.ingredientsConsumed) && r.ingredientsConsumed.length > 0) {
           for (const ing of r.ingredientsConsumed) {
-            if (isBasicIngredientName(ing.ingredientName || '')) continue;
+            const matchedBasic = ingredients.some(
+              (base) =>
+                isBasicIngredientRecord(base) &&
+                (base.id === ing.ingredientId ||
+                  base.name.toLowerCase().trim() === (ing.ingredientName || '').toLowerCase().trim())
+            );
+            if (isBasicIngredientName(ing.ingredientName || '') || matchedBasic) continue;
             ingCost += (ing.totalCost || 0);
           }
         } else if (r.totalIngredientCost) {

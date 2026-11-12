@@ -11,6 +11,7 @@ import {
 import {
   roundCurrency,
   isBasicIngredientName,
+  isBasicIngredientRecord,
   computeDailyBatchCostMaps,
 } from '../services/costing';
 
@@ -57,22 +58,32 @@ export function useFullCostStockValuation(products: Product[], productionRuns: P
           closingMap[c.productionDate] = c;
         }
 
-        // Map ingredients by id and lowercase name for unit cost lookup
+        // Map ingredients by id and lowercase name for unit cost lookup, and track dynamic basic ingredients
         const ingCostMap = new Map<string, number>();
+        const basicIngIdSet = new Set<string>();
+        const basicIngNameSet = new Set<string>();
         for (const ing of ingredientsList || []) {
           if (ing.id) ingCostMap.set(ing.id, Number(ing.avgCostPerUnit) || 0);
           if (ing.name) ingCostMap.set(ing.name.toLowerCase().trim(), Number(ing.avgCostPerUnit) || 0);
+          if (isBasicIngredientRecord(ing)) {
+            if (ing.id) basicIngIdSet.add(ing.id);
+            if (ing.name) basicIngNameSet.add(ing.name.toLowerCase().trim());
+          }
         }
 
         // Compute daily basic ingredients consumption cost by date
-        // Basic ingredients: ഉപ്പ്, അണ്ടി തോട്, ചിപ്പ്ളി പൊടി, കറിവേപ്പില
+        // Basic ingredients: ഉപ്പ്, അണ്ടി തോട്, ചിപ്പ്ളി പൊടി, കറിവേപ്പില, പഞ്ചസാര, plus any new category='basic' ingredients
         const basicCostByDate: Record<string, number> = {};
         for (const m of movementsList || []) {
           if ((m.quantity || 0) >= 0) continue;
           const itemName = (m.itemName || '').toLowerCase().trim();
           const reason = (m.reason || '').toLowerCase();
 
-          const isBasic = isBasicIngredientName(itemName) || reason.includes('daily basic ingredient usage');
+          const isBasic =
+            (m.itemId ? basicIngIdSet.has(m.itemId) : false) ||
+            basicIngNameSet.has(itemName) ||
+            isBasicIngredientName(itemName) ||
+            reason.includes('daily basic ingredient usage');
           if (!isBasic) continue;
 
           // Exclude oil (tracked separately via daily closings)
@@ -119,7 +130,12 @@ export function useFullCostStockValuation(products: Product[], productionRuns: P
           for (const run of pRuns) {
             if (run.ingredientsConsumed && Array.isArray(run.ingredientsConsumed) && run.ingredientsConsumed.length > 0) {
               for (const ing of run.ingredientsConsumed) {
-                if (isBasicIngredientName(ing.ingredientName || '')) continue;
+                const ingNameLower = (ing.ingredientName || '').toLowerCase().trim();
+                const isBasicConsumed =
+                  (ing.ingredientId ? basicIngIdSet.has(ing.ingredientId) : false) ||
+                  basicIngNameSet.has(ingNameLower) ||
+                  isBasicIngredientName(ing.ingredientName || '');
+                if (isBasicConsumed) continue;
                 ingredientCost += ing.totalCost || 0;
               }
             } else if (run.totalIngredientCost) {

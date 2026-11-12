@@ -180,7 +180,18 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
       showToast('ദയവായി പ്രിന്റ് ചെയ്യുന്നതിനായി കുറഞ്ഞത് ഒരു ഇനമെങ്കിലും ടിക്ക് ചെയ്യുക.', 'warning');
       return;
     }
+    const originalTitle = document.title;
+    let restored = false;
+    const restoreTitle = () => {
+      if (restored) return;
+      restored = true;
+      document.title = originalTitle;
+      window.removeEventListener('afterprint', restoreTitle);
+    };
+    document.title = 'EPSO Purchase List';
+    window.addEventListener('afterprint', restoreTitle);
     window.print();
+    setTimeout(restoreTitle, 1000);
   };
 
   const handleCopyWhatsapp = () => {
@@ -226,6 +237,15 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
       {/* Print CSS block embedded cleanly with 14 items page break */}
       <style>{`
         @media print {
+          @page {
+            size: A4 portrait;
+            margin: 0;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+          }
           body * {
             visibility: hidden !important;
           }
@@ -238,7 +258,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
             top: 0 !important;
             width: 100% !important;
             margin: 0 !important;
-            padding: 12px 16px !important;
+            padding: 0 !important;
             background: #ffffff !important;
             color: #000000 !important;
             display: block !important;
@@ -249,6 +269,8 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
             page-break-after: always !important;
             break-after: page !important;
             min-height: 98vh;
+            padding: 10mm 12mm;
+            box-sizing: border-box;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -259,10 +281,6 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
           }
           .no-print-area {
             display: none !important;
-          }
-          @page {
-            size: A4 portrait;
-            margin: 10mm 12mm;
           }
         }
       `}</style>
@@ -684,31 +702,37 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
                 </table>
               </div>
 
-              {/* Print Summary & Signatures (Displayed on the last page) */}
-              {isLastPage && (
-                <div style={{ marginTop: 'auto', paddingTop: '10px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', borderTop: '1px dashed #666666', paddingTop: '8px', marginBottom: '24px' }}>
-                    <div>
-                      <strong>Total Items to Purchase:</strong> {selectedIngredients.length}
+              {/* Print Summary, Signatures (last page) & Footer */}
+              <div style={{ marginTop: 'auto', paddingTop: '10px' }}>
+                {isLastPage && (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', borderTop: '1px dashed #666666', paddingTop: '8px', marginBottom: '24px' }}>
+                      <div>
+                        <strong>Total Items to Purchase:</strong> {selectedIngredients.length}
+                      </div>
                     </div>
-                  </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', fontSize: '11px', paddingTop: '12px', borderTop: '1px solid #dddddd' }}>
-                    <div>
-                      <div><strong>Prepared by:</strong></div>
-                      <div style={{ marginTop: '26px' }}>Admin / Kitchen Manager</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', fontSize: '11px', paddingTop: '12px', borderTop: '1px solid #dddddd', marginBottom: '16px' }}>
+                      <div>
+                        <div><strong>Prepared by:</strong></div>
+                        <div style={{ marginTop: '26px' }}>Admin / Kitchen Manager</div>
+                      </div>
+                      <div>
+                        <div><strong>Purchased by:</strong></div>
+                        <div style={{ marginTop: '26px' }}>___________________________</div>
+                      </div>
+                      <div>
+                        <div><strong>Received & Verified by:</strong></div>
+                        <div style={{ marginTop: '26px' }}>___________________________</div>
+                      </div>
                     </div>
-                    <div>
-                      <div><strong>Purchased by:</strong></div>
-                      <div style={{ marginTop: '26px' }}>___________________________</div>
-                    </div>
-                    <div>
-                      <div><strong>Received & Verified by:</strong></div>
-                      <div style={{ marginTop: '26px' }}>___________________________</div>
-                    </div>
-                  </div>
+                  </>
+                )}
+
+                <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: '6px', fontSize: '10px', color: '#555555' }}>
+                  Powered by Narrs.
                 </div>
-              )}
+              </div>
             </div>
           );
         })}
