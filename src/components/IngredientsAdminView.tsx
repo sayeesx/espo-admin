@@ -81,14 +81,14 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     }
   };
 
-  // Tab state: Raw Ingredients vs Packet Types (persisted across reloads)
+  // Tab state: Raw Ingredients vs Packet Types (persisted across reloads, reset when navigating tabs)
   const [activeIngredientTab, setActiveIngredientTab] = useState<'ingredients' | 'packets'>(() => {
     try {
+      const saved = localStorage.getItem('epso_admin_ingredients_active_subtab');
+      if (saved === 'ingredients') return 'ingredients';
       const params = new URLSearchParams(window.location.search);
       const sub = params.get('subtab');
-      if (sub === 'packets') return 'packets';
-      const saved = localStorage.getItem('epso_admin_ingredients_active_subtab');
-      if (saved === 'packets') return 'packets';
+      if (sub === 'packets' || saved === 'packets') return 'packets';
     } catch {
       // ignore
     }
@@ -110,6 +110,20 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
       // ignore
     }
   };
+
+  useEffect(() => {
+    if (activeIngredientTab === 'ingredients') {
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('subtab')) {
+          url.searchParams.delete('subtab');
+          window.history.replaceState({ tab: 'ingredients', subtab: 'ingredients' }, '', url.toString());
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [activeIngredientTab]);
 
   const handleOpenDetailIngredient = (ing: Ingredient) => {
     setDetailIngredient(ing);
@@ -330,7 +344,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Stock Adjust states
-  const [adjustDelta, setAdjustDelta] = useState<number | string>(0);
+  const [adjustDelta, setAdjustDelta] = useState<number | string>('');
   const [adjustReason, setAdjustReason] = useState<string>('പുതിയ പർച്ചേസ് (Purchase Inward)');
   const [adjustIsAdd, setAdjustIsAdd] = useState<boolean>(true);
 
@@ -340,8 +354,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     setCategory('other');
     setUnit('kg');
     setCurrentStock(0);
-    setMinStock(5);
-    setAvgCostPerUnit(0);
+    setMinStock('5');
+    setAvgCostPerUnit('');
     setNotes('');
     setIsActive(true);
     setFormModalOpen(true);
@@ -353,8 +367,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     setCategory(ing.category);
     setUnit(ing.unit);
     setCurrentStock(ing.currentStock);
-    setMinStock(ing.minStock);
-    setAvgCostPerUnit(ing.avgCostPerUnit);
+    setMinStock(ing.minStock ? String(ing.minStock) : '');
+    setAvgCostPerUnit(ing.avgCostPerUnit ? String(ing.avgCostPerUnit) : '');
     setNotes(ing.notes || '');
     setIsActive(ing.isActive);
     setFormModalOpen(true);
@@ -362,7 +376,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
   const openAdjustModal = (ing: Ingredient) => {
     setSelectedIngredient(ing);
-    setAdjustDelta(0);
+    setAdjustDelta('');
     setAdjustReason('പുതിയ പർച്ചേസ് (Purchase Inward)');
     setAdjustIsAdd(true);
     setAdjustModalOpen(true);
@@ -370,7 +384,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (isSubmitting || !name.trim()) return;
 
     setIsSubmitting(true);
     try {
@@ -397,6 +411,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
   const handleAdjustSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     const deltaAmount = Number(adjustDelta) || 0;
     if (!selectedIngredient || deltaAmount <= 0) return;
 
@@ -673,7 +688,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       സ്റ്റോക്ക് (Current Stock):
                     </span>
                     <span className={`font-extrabold text-sm ${isLowStock ? 'text-amber-600 dark:text-amber-400' : 'text-stone-900 dark:text-white'}`}>
-                      {ing.currentStock} {ing.unit}
+                      {Number((Number(ing.currentStock) || 0).toFixed(3))} {ing.unit}
                     </span>
                   </div>
 
@@ -683,7 +698,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       കുറഞ്ഞ പരിധി (Min Alert):
                     </span>
                     <span className="font-semibold text-stone-600 dark:text-stone-300">
-                      {ing.minStock} {ing.unit}
+                      {Number((Number(ing.minStock) || 0).toFixed(3))} {ing.unit}
                     </span>
                   </div>
 
@@ -761,7 +776,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                                 : 'text-red-500'
                             }`}
                           >
-                            {ing.currentStock} {ing.unit} ({percentRemaining}%)
+                            {Number((Number(ing.currentStock) || 0).toFixed(3))} {ing.unit} ({percentRemaining}%)
                           </span>
                         </div>
                         <div className="w-full h-2 rounded-full bg-stone-200/70 dark:bg-stone-800 overflow-hidden">
@@ -1221,12 +1236,12 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   <input
                     type="number"
                     step="any"
-                    min="0.01"
+                    min="0.001"
                     required
-                    value={adjustDelta === 0 ? '' : adjustDelta}
-                    onChange={(e) => setAdjustDelta(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    value={adjustDelta}
+                    onChange={(e) => setAdjustDelta(e.target.value)}
                     onFocus={(e) => e.target.select()}
-                    placeholder={`0.00 ${selectedIngredient.unit}`}
+                    placeholder={`0.000 ${selectedIngredient.unit}`}
                     className="w-full google-input text-base font-bold"
                   />
                 </div>
@@ -1256,7 +1271,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 <div className="p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] text-xs">
                   <span className="text-stone-400 font-malayalam block">പുതിയ സ്റ്റോക്ക് ബാലൻസ്:</span>
                   <span className={`text-base font-extrabold ${!adjustIsAdd && Number(adjustDelta) > selectedIngredient.currentStock ? 'text-red-600' : 'text-stone-900 dark:text-white'}`}>
-                    {Math.max(0, selectedIngredient.currentStock + (adjustIsAdd ? (Number(adjustDelta) || 0) : -(Number(adjustDelta) || 0)))}{' '}
+                    {Number(Math.max(0, selectedIngredient.currentStock + (adjustIsAdd ? (Number(adjustDelta) || 0) : -(Number(adjustDelta) || 0))).toFixed(3))}{' '}
                     {selectedIngredient.unit}
                   </span>
                 </div>
@@ -1363,8 +1378,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       type="number"
                       step="any"
                       min="0"
-                      value={minStock === 0 ? '' : minStock}
-                      onChange={(e) => setMinStock(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      value={minStock}
+                      onChange={(e) => setMinStock(e.target.value)}
                       onFocus={(e) => e.target.select()}
                       className="w-full google-input text-sm font-medium"
                     />
@@ -1378,8 +1393,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       type="number"
                       step="any"
                       min="0"
-                      value={avgCostPerUnit === 0 ? '' : avgCostPerUnit}
-                      onChange={(e) => setAvgCostPerUnit(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      value={avgCostPerUnit}
+                      onChange={(e) => setAvgCostPerUnit(e.target.value)}
                       onFocus={(e) => e.target.select()}
                       className="w-full google-input text-sm font-medium"
                     />

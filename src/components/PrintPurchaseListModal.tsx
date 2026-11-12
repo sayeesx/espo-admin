@@ -47,7 +47,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Custom order quantities per ingredient id
-  const [orderQuantities, setOrderQuantities] = useState<Record<string, number>>({});
+  const [orderQuantities, setOrderQuantities] = useState<Record<string, number | string>>({});
 
   // Custom remarks per ingredient id
   const [remarks, setRemarks] = useState<Record<string, string>>({});
@@ -121,7 +121,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
   // Calculate estimated total cost
   const totalEstimatedCost = useMemo(() => {
     return selectedIngredients.reduce((acc, ing) => {
-      const qty = orderQuantities[ing.id] || 0;
+      const qty = Number(orderQuantities[ing.id]) || 0;
       const unitCost = ing.avgCostPerUnit || 0;
       return acc + normalizeQuantityForCost(qty, ing.unit) * unitCost;
     }, 0);
@@ -161,10 +161,10 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
     });
   };
 
-  const handleQtyChange = (id: string, val: number) => {
+  const handleQtyChange = (id: string, val: string) => {
     setOrderQuantities((prev) => ({
       ...prev,
-      [id]: Math.max(0.1, Number(val) || 0),
+      [id]: val,
     }));
   };
 
@@ -504,7 +504,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
                             step="any"
                             value={qty}
                             disabled={!isChecked}
-                            onChange={(e) => handleQtyChange(ing.id, parseFloat(e.target.value))}
+                            onChange={(e) => handleQtyChange(ing.id, e.target.value)}
                             className="w-16 px-2 py-1 text-xs text-right font-bold bg-white dark:bg-stone-900 border border-stone-300 dark:border-stone-700 rounded-lg text-stone-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-epso-orange disabled:opacity-40"
                           />
                           <span className="text-xs font-bold text-stone-500 w-6">{ing.unit}</span>

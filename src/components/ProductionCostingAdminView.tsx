@@ -137,20 +137,22 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
   // Per-product detail data
   const [detailIngredients, setDetailIngredients] = useState<any[]>([]);
 
-  const loadCostingData = useCallback(async (dateFilter: string) => {
+  const loadCostingData = useCallback(async (dateFilter: string, force = false) => {
     setIsLoading(true);
     try {
       // 1. Fetch all needed data in parallel (auto-fetched)
       const [closings, allPackingRecords, wageList, pricesData, packetTypesList, fetchedMovements] = await Promise.all([
-        fetchDailyClosings(90),
-        fetchPackingRecords({ limit: 500 }),
-        fetchDailyWages(90),
-        fetchProductSellingPrices(),
-        fetchPacketTypes().catch(() => []),
-        fetchStockMovements(false).catch(() => []),
+        fetchDailyClosings(90, force),
+        fetchPackingRecords({ limit: 500 }, force),
+        fetchDailyWages(90, force),
+        fetchProductSellingPrices(force),
+        fetchPacketTypes(force).catch(() => []),
+        fetchStockMovements(force).catch(() => []),
       ]);
 
-      const movements = (stockMovements && stockMovements.length > 0) ? stockMovements : (fetchedMovements || []);
+      const movements = force
+        ? ((fetchedMovements && fetchedMovements.length > 0) ? fetchedMovements : (stockMovements || []))
+        : ((stockMovements && stockMovements.length > 0) ? stockMovements : (fetchedMovements || []));
       setAllMovements(movements);
 
       // Build ingredients cost lookup
@@ -533,12 +535,13 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
 
   // Refresh handler to reload latest data without reloading the whole page
   const handleRefresh = async () => {
+    if (isLoading) return;
     setIsLoading(true);
     try {
       if (onRefresh) {
         await onRefresh();
       }
-      await loadCostingData(selectedDate);
+      await loadCostingData(selectedDate, true);
       if (selectedProduct) {
         await loadProductDetail(selectedProduct.productId);
       }
@@ -1272,7 +1275,7 @@ export const ProductionCostingAdminView: React.FC<ProductionCostingAdminViewProp
                     )}
                   </span>
                   <span className="text-right text-stone-600 dark:text-stone-400 font-mono">
-                    {Number(ing.qty).toFixed(ing.qty < 0.1 && ing.qty > 0 ? 3 : 2)} {ing.unit}
+                    {Number((Number(ing.qty) || 0).toFixed(3))} {ing.unit}
                   </span>
                   <span className="text-right font-bold text-stone-900 dark:text-white font-mono">
                     {formatCurrency(ing.cost)}

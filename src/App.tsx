@@ -83,6 +83,7 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTab>(getInitialTab);
   const [changingTab, setChangingTab] = useState<AdminTab | null>(null);
   const [costingNavKey, setCostingNavKey] = useState(0);
+  const [ingredientsNavKey, setIngredientsNavKey] = useState(0);
 
   const handleTabChange = useCallback((newTab: AdminTab) => {
     checkVersion();
@@ -93,6 +94,9 @@ export const App: React.FC = () => {
       setCostingNavKey((k) => k + 1);
       loadAllData(true);
     }
+    if (newTab === 'ingredients') {
+      setIngredientsNavKey((k) => k + 1);
+    }
     setChangingTab(newTab);
     setTimeout(() => {
       setActiveTab(newTab);
@@ -102,9 +106,13 @@ export const App: React.FC = () => {
     try {
       localStorage.setItem(ACTIVE_TAB_KEY, newTab);
       localStorage.removeItem('epso_admin_costing_selected_product_id');
+      localStorage.setItem('epso_admin_ingredients_active_subtab', 'ingredients');
+      localStorage.removeItem('epso_admin_selected_ingredient_id');
       const url = new URL(window.location.href);
       url.searchParams.delete('productId');
-      if (url.searchParams.get('tab') !== newTab || newTab === 'costing') {
+      url.searchParams.delete('subtab');
+      url.searchParams.delete('ingredientId');
+      if (url.searchParams.get('tab') !== newTab || newTab === 'costing' || newTab === 'ingredients') {
         url.searchParams.set('tab', newTab);
         window.history.pushState({ tab: newTab }, '', url.toString());
       }
@@ -117,10 +125,24 @@ export const App: React.FC = () => {
   useEffect(() => {
     try {
       const url = new URL(window.location.href);
-      if (activeTab !== 'costing') {
+      let urlChanged = false;
+      if (activeTab !== 'costing' && url.searchParams.has('productId')) {
         url.searchParams.delete('productId');
+        urlChanged = true;
       }
-      if (url.searchParams.get('tab') !== activeTab) {
+      if (activeTab !== 'ingredients') {
+        if (url.searchParams.has('subtab')) {
+          url.searchParams.delete('subtab');
+          urlChanged = true;
+        }
+        if (url.searchParams.has('ingredientId')) {
+          url.searchParams.delete('ingredientId');
+          urlChanged = true;
+        }
+        localStorage.setItem('epso_admin_ingredients_active_subtab', 'ingredients');
+        localStorage.removeItem('epso_admin_selected_ingredient_id');
+      }
+      if (url.searchParams.get('tab') !== activeTab || urlChanged) {
         url.searchParams.set('tab', activeTab);
         window.history.replaceState({ tab: activeTab }, '', url.toString());
       }
@@ -372,16 +394,27 @@ export const App: React.FC = () => {
   }), [runTabRefresh]);
 
   const refreshCostingData = useCallback(() => runTabRefresh('costing', async () => {
+    invalidateAdminCache('admin_products');
+    invalidateAdminCache('admin_ingredients');
     invalidateAdminCache('admin_production_runs');
     invalidateAdminCache('admin_stock_movements');
-    invalidateAdminCache('daily_closings');
-    invalidateAdminCache('daily_wages');
-    const [rRes, mRes] = await Promise.allSettled([
+    invalidateAdminCache('admin_daily_closings');
+    invalidateAdminCache('admin_daily_wages');
+    invalidateAdminCache('admin_packing_records');
+    invalidateAdminCache('admin_packet_types');
+    invalidateAdminCache('admin_selling_prices');
+    const [pRes, iRes, rRes, mRes, wRes] = await Promise.allSettled([
+      fetchProducts(true),
+      fetchIngredients(true),
       fetchProductionRuns(true),
       fetchStockMovements(true),
+      fetchDailyWages(90, true),
     ]);
+    if (pRes.status === 'fulfilled') setProducts(pRes.value);
+    if (iRes.status === 'fulfilled') setIngredients(iRes.value);
     if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
     if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
+    if (wRes.status === 'fulfilled') setDailyWages(wRes.value);
   }), [runTabRefresh]);
 
   const refreshNotificationsData = useCallback(() => runTabRefresh('notifications', async () => {
@@ -804,6 +837,7 @@ export const App: React.FC = () => {
 
               {activeTab === 'ingredients' && (
                 <IngredientsAdminView
+                  key={ingredientsNavKey}
                   ingredients={ingredients}
                   products={products}
                   stockMovements={stockMovements}

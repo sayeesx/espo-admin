@@ -143,13 +143,13 @@ export const IngredientDetailModal: React.FC<IngredientDetailModalProps> = ({
   const dailyUsageList = useMemo(() => {
     if (isOil && dailyClosings.length > 0) {
       return dailyClosings.map((c) => {
-        let poured = c.totalOilUsedKg ?? c.oilConsumed;
-        let remaining = c.oilLeftoverKg ?? 0;
+        const poured = Number((Number(c.totalOilUsedKg ?? c.oilConsumed ?? 0)).toFixed(3));
+        const remaining = Number((Number(c.oilLeftoverKg ?? 0)).toFixed(3));
         return {
           date: c.productionDate,
           poured,
           remaining,
-          consumed: c.oilConsumed,
+          consumed: Number((Number(c.oilConsumed) || 0).toFixed(3)),
           note: `${poured} kg ഒഴിച്ചു • ${remaining} kg ബാക്കി`,
         };
       });
@@ -236,7 +236,7 @@ export const IngredientDetailModal: React.FC<IngredientDetailModalProps> = ({
               <span className={`text-lg sm:text-xl font-black tabular-nums block mt-0.5 ${
                 isLowStock ? 'text-amber-600 dark:text-amber-400' : 'text-stone-900 dark:text-white'
               }`}>
-                {ingredient.currentStock} <span className="text-xs font-semibold">{ingredient.unit}</span>
+                {Number((Number(ingredient.currentStock) || 0).toFixed(3))} <span className="text-xs font-semibold">{ingredient.unit}</span>
               </span>
             </div>
 
@@ -246,7 +246,7 @@ export const IngredientDetailModal: React.FC<IngredientDetailModalProps> = ({
                 ആകെ ഉപയോഗിച്ചത്
               </span>
               <span className="text-lg sm:text-xl font-black text-amber-800 dark:text-amber-300 tabular-nums block mt-0.5">
-                {Number(totalQuantityUsed.toFixed(1))} <span className="text-xs font-semibold">{ingredient.unit}</span>
+                {Number(totalQuantityUsed.toFixed(3))} <span className="text-xs font-semibold">{ingredient.unit}</span>
               </span>
             </div>
 
@@ -354,7 +354,7 @@ export const IngredientDetailModal: React.FC<IngredientDetailModalProps> = ({
                       </span>
                     </div>
                     <span className="font-extrabold text-stone-800 dark:text-stone-200 font-mono">
-                      {Number(item.quantity.toFixed(1))} {ingredient.unit}
+                      {Number(item.quantity.toFixed(3))} {ingredient.unit}
                     </span>
                   </div>
                 ))}
@@ -385,7 +385,7 @@ export const IngredientDetailModal: React.FC<IngredientDetailModalProps> = ({
                         {day.date}
                       </span>
                       <span className="font-bold text-stone-900 dark:text-stone-100 font-mono">
-                        {Number(day.quantity.toFixed(1))} {ingredient.unit}
+                        {Number(day.quantity.toFixed(3))} {ingredient.unit}
                       </span>
                     </div>
                   ))}

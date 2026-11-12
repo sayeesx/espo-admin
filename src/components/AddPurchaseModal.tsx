@@ -96,6 +96,7 @@ export const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
   };
 
   const handleSave = async () => {
+    if (isSaving) return;
     const purchases: Array<{ ingredientId: string; amount: number; costPerUnit: number }> = [];
 
     for (const ing of validIngredients) {
@@ -177,14 +178,14 @@ export const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
                     <p className="text-[10px] text-stone-400 dark:text-stone-500 font-mono">{ing.unit}</p>
                   </div>
                   <p className={`text-xs font-bold text-right font-mono ${ing.currentStock <= 0 ? 'text-red-500' : ing.currentStock <= ing.minStock ? 'text-amber-500' : 'text-stone-600 dark:text-stone-300'}`}>
-                    {ing.currentStock.toFixed(1)}
+                    {Number((Number(ing.currentStock) || 0).toFixed(3))}
                   </p>
                   <input
                     type="number"
                     value={purchaseAmounts[ing.id] || ''}
                     onChange={(e) => handleAmountChange(ing.id, e.target.value)}
                     min="0"
-                    step="0.1"
+                    step="any"
                     placeholder="0"
                     className="w-full px-2 py-1.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1A1616] text-xs font-bold text-right font-mono text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
                   />

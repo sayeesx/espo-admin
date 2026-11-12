@@ -91,7 +91,7 @@ export const NotificationsAdminView: React.FC<NotificationsAdminViewProps> = ({
           },
         });
       } else if (ing.minStock > 0 && ing.currentStock <= ing.minStock) {
-        const deficit = Number((ing.minStock - ing.currentStock).toFixed(2));
+        const deficit = Number((ing.minStock - ing.currentStock).toFixed(3));
         list.push({
           id: `stock-low-${ing.id}`,
           type: 'low_stock',
