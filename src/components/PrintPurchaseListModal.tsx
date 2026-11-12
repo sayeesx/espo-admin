@@ -244,31 +244,29 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
           html, body {
             margin: 0 !important;
             padding: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            min-height: 0 !important;
+            overflow: visible !important;
             background: #ffffff !important;
           }
-          body * {
-            visibility: hidden !important;
-          }
-          #epso-printable-purchase-sheet, #epso-printable-purchase-sheet * {
-            visibility: visible !important;
+          body > *:not(#epso-printable-purchase-sheet) {
+            display: none !important;
           }
           #epso-printable-purchase-sheet {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
+            position: static !important;
             width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             background: #ffffff !important;
             color: #000000 !important;
             display: block !important;
-            z-index: 99999 !important;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
           }
           .epso-print-page {
             page-break-after: always !important;
             break-after: page !important;
-            min-height: 98vh;
+            min-height: 290mm;
             padding: 10mm 12mm;
             box-sizing: border-box;
             display: flex;
@@ -592,8 +590,9 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
       document.body
     )}
 
-      {/* Hidden Pure Printable Sheet (Paginated at exactly 14 items per page) */}
-      <div id="epso-printable-purchase-sheet" style={{ display: 'none' }}>
+      {/* Hidden Pure Printable Sheet (Portaled to body so #root height never creates blank print pages) */}
+      {createPortal(
+        <div id="epso-printable-purchase-sheet" style={{ display: 'none' }}>
         {printPages.map((pageItems, pageIdx) => {
           const isLastPage = pageIdx === printPages.length - 1;
           const startIdx = pageIdx * itemsPerPage;
@@ -626,9 +625,7 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
                       <div><strong>Date:</strong> {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
                       <div><strong>Time:</strong> {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</div>
                       {vendorName.trim() && <div><strong>Store / Vendor:</strong> {vendorName.trim()}</div>}
-                      <div style={{ marginTop: '2px', fontWeight: 'bold' }}>
-                        Page {pageIdx + 1} of {printPages.length}
-                      </div>
+                      <div><strong>Phone:</strong> 98096 65188</div>
                     </div>
                   </div>
                 </div>
@@ -736,7 +733,9 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
             </div>
           );
         })}
-      </div>
+        </div>,
+        document.body
+      )}
     </>
   );
 };
