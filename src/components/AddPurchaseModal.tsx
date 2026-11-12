@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Ingredient } from '../types';
 import { FiX, FiSearch, FiSave, FiRefreshCw } from 'react-icons/fi';
@@ -41,9 +41,17 @@ export const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
     });
   }, [ingredients]);
 
-  // Initialize costs from existing avg_cost_per_unit when modal opens
+  const wasOpenRef = useRef(false);
+
+  // Initialize costs & reset quantities only when the modal opens (never overwrite typed values on background updates)
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      return;
+    }
+
+    if (!wasOpenRef.current) {
+      wasOpenRef.current = true;
       const initialCosts: Record<string, string> = {};
       const initialAmounts: Record<string, string> = {};
       validIngredients.forEach((ing) => {
@@ -55,6 +63,18 @@ export const AddPurchaseModal: React.FC<AddPurchaseModalProps> = ({
       setPurchaseCosts(initialCosts);
       setPurchaseAmounts(initialAmounts);
       setSearchTerm('');
+    } else {
+      setPurchaseCosts((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const ing of validIngredients) {
+          if (ing.isActive && !(ing.id in next)) {
+            next[ing.id] = ing.avgCostPerUnit > 0 ? String(ing.avgCostPerUnit) : '';
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
     }
   }, [isOpen, validIngredients]);
 

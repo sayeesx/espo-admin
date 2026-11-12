@@ -235,7 +235,7 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
     const RESET_NOTICES: Record<AdminResetType, string> = {
       sales: 'വിൽപ്പന രേഖകൾ പൂർണ്ണമായി റീസെറ്റ് ചെയ്തു (Sales cleared)',
       batches: 'പ്രൊഡക്ഷൻ ബാച്ചുകളും പാക്കറ്റുകളും റീസെറ്റ് ചെയ്തു, സ്റ്റോക്ക് ക്രമീകരിച്ചു (Batches & packets cleared, stocks reversed)',
-      ledger: 'സ്റ്റോക്ക് ലെഡ്ജർ ക്ലിയർ ചെയ്തു (Stock ledger cleared)',
+      ledger: 'സ്റ്റോക്ക് ലെഡ്ജറും കൂലി വിഹിതവും ക്ലിയർ ചെയ്തു (Stock & Wage Ledger cleared)',
       stock: 'ചേരുവകളുടെ സ്റ്റോക്ക് ക്രമീകരിച്ചു (Ingredient stock reset)',
       zero_all_stocks: 'എല്ലാ ഉൽപ്പന്നങ്ങൾ, ചേരുവകൾ, പാക്കറ്റുകൾ എന്നിവയുടെ സ്റ്റോക്ക് പൂജ്യമാക്കി (0)! (All stocks reset to 0)',
       full: 'ഫാക്ടറി ഡാറ്റ പൂർണ്ണമായി റീസെറ്റ് ചെയ്തു (Full factory reset complete)',
@@ -615,10 +615,10 @@ export const SettingsAdminView: React.FC<SettingsAdminViewProps> = ({
             <div className="p-3 rounded-2xl bg-stone-50 dark:bg-[#181515] border border-stone-200/80 dark:border-[#282323] flex items-center justify-between gap-3">
               <div>
                 <span className="font-bold text-stone-900 dark:text-white block">
-                  ക്ലിയർ ലെഡ്ജർ (Clear Stock Movements)
+                  ക്ലിയർ ലെഡ്ജർ (Clear Stock & Wage Ledger)
                 </span>
                 <span className="text-[11px] text-stone-400 block">
-                  സ്റ്റോക്ക് ഇൻ/ഔട്ട് ലോഗുകൾ ({stockMovements.length} logs) ക്ലിയർ ചെയ്യുന്നു.
+                  സ്റ്റോക്ക് ഇൻ/ഔട്ട് ലോഗുകളും ({stockMovements.length} logs) കൂലി വിഹിതം എൻട്രികളും ക്ലിയർ ചെയ്യുന്നു.
                 </span>
               </div>
               <button

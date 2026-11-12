@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Ingredient } from '../types';
 import { normalizeQuantityForCost } from '../services/costing';
@@ -59,34 +59,41 @@ export const PrintPurchaseListModal: React.FC<PrintPurchaseListModalProps> = ({
     );
   }, [ingredients]);
 
-  // Initialize selections when modal opens or when stockOutIngredients change
+  const wasOpenRef = useRef(false);
+
+  // Initialize selections only when modal freshly opens so background updates don't wipe user edits
   useEffect(() => {
-    if (isOpen) {
-      const initialSelected = new Set<string>();
-      const initialQtys: Record<string, number> = {};
-
-      ingredients.forEach((ing) => {
-        const isLow = ing.isActive && (ing.currentStock <= (ing.minStock || 0) || ing.currentStock <= 0);
-        if (isLow) {
-          initialSelected.add(ing.id);
-        }
-
-        // Suggested purchase qty calculation
-        let suggestedQty = 5;
-        if (ing.currentStock <= 0) {
-          suggestedQty = Math.max(1, ing.minStock > 0 ? ing.minStock * 2 : 10);
-        } else if (ing.currentStock < ing.minStock) {
-          suggestedQty = Math.max(1, ing.minStock * 2 - ing.currentStock);
-        } else {
-          suggestedQty = Math.max(1, ing.minStock || 5);
-        }
-
-        initialQtys[ing.id] = suggestedQty;
-      });
-
-      setSelectedIds(initialSelected);
-      setOrderQuantities(initialQtys);
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      return;
     }
+    if (wasOpenRef.current) return;
+    wasOpenRef.current = true;
+
+    const initialSelected = new Set<string>();
+    const initialQtys: Record<string, number> = {};
+
+    ingredients.forEach((ing) => {
+      const isLow = ing.isActive && (ing.currentStock <= (ing.minStock || 0) || ing.currentStock <= 0);
+      if (isLow) {
+        initialSelected.add(ing.id);
+      }
+
+      // Suggested purchase qty calculation
+      let suggestedQty = 5;
+      if (ing.currentStock <= 0) {
+        suggestedQty = Math.max(1, ing.minStock > 0 ? ing.minStock * 2 : 10);
+      } else if (ing.currentStock < ing.minStock) {
+        suggestedQty = Math.max(1, ing.minStock * 2 - ing.currentStock);
+      } else {
+        suggestedQty = Math.max(1, ing.minStock || 5);
+      }
+
+      initialQtys[ing.id] = suggestedQty;
+    });
+
+    setSelectedIds(initialSelected);
+    setOrderQuantities(initialQtys);
   }, [isOpen, ingredients]);
 
   // Filtered ingredients to display in the modal table

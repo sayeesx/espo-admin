@@ -3,7 +3,7 @@ if (typeof window !== 'undefined' && window.location.hostname === 'espo-admin.ve
   window.location.replace('https://epso-admin.vercel.app' + window.location.pathname + window.location.search + window.location.hash);
 }
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from './context/AuthContext';
 import { useFeedback } from './context/FeedbackContext';
 import { PinGate } from './components/PinGate';
@@ -279,246 +279,194 @@ export const App: React.FC = () => {
 
   const handleForceRefresh = useCallback(() => loadAllData(true), [loadAllData]);
 
-  // Tab-specific targeted refresh states and handlers to avoid reloading the entire application
+  // Tab-specific targeted refresh states and handlers to avoid reloading the entire application.
+  // Use a ref guard so callbacks stay identity-stable and tab effects never loop infinitely.
   const [tabRefreshing, setTabRefreshing] = useState<Record<string, boolean>>({});
+  const tabRefreshingRef = useRef<Record<string, boolean>>({});
 
-  const refreshDashboardData = useCallback(async () => {
-    if (tabRefreshing['dashboard']) return;
-    setTabRefreshing((prev) => ({ ...prev, dashboard: true }));
+  const runTabRefresh = useCallback(async (tabKey: string, task: () => Promise<void>) => {
+    if (tabRefreshingRef.current[tabKey]) return;
+    tabRefreshingRef.current[tabKey] = true;
+    setTabRefreshing((prev) => ({ ...prev, [tabKey]: true }));
     try {
-      invalidateAdminCache('admin_products');
-      invalidateAdminCache('admin_ingredients');
-      invalidateAdminCache('admin_production_runs');
-      invalidateAdminCache('daily_wages');
-      const todayStr = new Date().toISOString().split('T')[0];
-      const [pRes, iRes, rRes, wRes, twRes] = await Promise.allSettled([
-        fetchProducts(true),
-        fetchIngredients(true),
-        fetchProductionRuns(true),
-        fetchDailyWages(90, true),
-        fetchDailyWage(todayStr),
-      ]);
-      if (pRes.status === 'fulfilled') setProducts(pRes.value);
-      if (iRes.status === 'fulfilled') setIngredients(iRes.value);
-      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
-      if (wRes.status === 'fulfilled') setDailyWages(wRes.value);
-      if (twRes.status === 'fulfilled') {
-        const tw = twRes.value;
-        setIsTodayWageAdded(Boolean(tw && tw.totalWageBudget > 0));
-      }
+      await task();
     } finally {
-      setTabRefreshing((prev) => ({ ...prev, dashboard: false }));
+      tabRefreshingRef.current[tabKey] = false;
+      setTabRefreshing((prev) => ({ ...prev, [tabKey]: false }));
     }
-  }, [tabRefreshing]);
+  }, []);
 
-  const refreshInventoryData = useCallback(async () => {
-    if (tabRefreshing['inventory']) return;
-    setTabRefreshing((prev) => ({ ...prev, inventory: true }));
-    try {
-      invalidateAdminCache('admin_products');
-      invalidateAdminCache('admin_production_runs');
-      const [pRes, rRes] = await Promise.allSettled([
-        fetchProducts(true),
-        fetchProductionRuns(true),
-      ]);
-      if (pRes.status === 'fulfilled') setProducts(pRes.value);
-      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
-    } finally {
-      setTabRefreshing((prev) => ({ ...prev, inventory: false }));
+  const refreshDashboardData = useCallback(() => runTabRefresh('dashboard', async () => {
+    invalidateAdminCache('admin_products');
+    invalidateAdminCache('admin_ingredients');
+    invalidateAdminCache('admin_production_runs');
+    invalidateAdminCache('daily_wages');
+    const todayStr = new Date().toISOString().split('T')[0];
+    const [pRes, iRes, rRes, wRes, twRes] = await Promise.allSettled([
+      fetchProducts(true),
+      fetchIngredients(true),
+      fetchProductionRuns(true),
+      fetchDailyWages(90, true),
+      fetchDailyWage(todayStr),
+    ]);
+    if (pRes.status === 'fulfilled') setProducts(pRes.value);
+    if (iRes.status === 'fulfilled') setIngredients(iRes.value);
+    if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+    if (wRes.status === 'fulfilled') setDailyWages(wRes.value);
+    if (twRes.status === 'fulfilled') {
+      const tw = twRes.value;
+      setIsTodayWageAdded(Boolean(tw && tw.totalWageBudget > 0));
     }
-  }, [tabRefreshing]);
+  }), [runTabRefresh]);
 
-  const refreshInsightsData = useCallback(async () => {
-    if (tabRefreshing['insights']) return;
-    setTabRefreshing((prev) => ({ ...prev, insights: true }));
-    try {
-      invalidateAdminCache('admin_products');
-      invalidateAdminCache('admin_ingredients');
-      invalidateAdminCache('admin_production_runs');
-      invalidateAdminCache('admin_stock_movements');
-      const [pRes, iRes, rRes, mRes] = await Promise.allSettled([
-        fetchProducts(true),
-        fetchIngredients(true),
-        fetchProductionRuns(true),
-        fetchStockMovements(true),
-      ]);
-      if (pRes.status === 'fulfilled') setProducts(pRes.value);
-      if (iRes.status === 'fulfilled') setIngredients(iRes.value);
-      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
-      if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
-    } finally {
-      setTabRefreshing((prev) => ({ ...prev, insights: false }));
-    }
-  }, [tabRefreshing]);
+  const refreshInventoryData = useCallback(() => runTabRefresh('inventory', async () => {
+    invalidateAdminCache('admin_products');
+    invalidateAdminCache('admin_production_runs');
+    const [pRes, rRes] = await Promise.allSettled([
+      fetchProducts(true),
+      fetchProductionRuns(true),
+    ]);
+    if (pRes.status === 'fulfilled') setProducts(pRes.value);
+    if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+  }), [runTabRefresh]);
 
-  const refreshSalesData = useCallback(async () => {
-    if (tabRefreshing['sales']) return;
-    setTabRefreshing((prev) => ({ ...prev, sales: true }));
-    try {
-      invalidateAdminCache('admin_products');
-      invalidateAdminCache('sales');
-      const pRes = await fetchProducts(true);
-      setProducts(pRes);
-    } finally {
-      setTabRefreshing((prev) => ({ ...prev, sales: false }));
-    }
-  }, [tabRefreshing]);
+  const refreshInsightsData = useCallback(() => runTabRefresh('insights', async () => {
+    invalidateAdminCache('admin_products');
+    invalidateAdminCache('admin_ingredients');
+    invalidateAdminCache('admin_production_runs');
+    invalidateAdminCache('admin_stock_movements');
+    const [pRes, iRes, rRes, mRes] = await Promise.allSettled([
+      fetchProducts(true),
+      fetchIngredients(true),
+      fetchProductionRuns(true),
+      fetchStockMovements(true),
+    ]);
+    if (pRes.status === 'fulfilled') setProducts(pRes.value);
+    if (iRes.status === 'fulfilled') setIngredients(iRes.value);
+    if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+    if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
+  }), [runTabRefresh]);
 
-  const refreshWagesData = useCallback(async () => {
-    if (tabRefreshing['wages']) return;
-    setTabRefreshing((prev) => ({ ...prev, wages: true }));
-    try {
-      invalidateAdminCache('admin_production_runs');
-      invalidateAdminCache('daily_wages');
-      const todayStr = new Date().toISOString().split('T')[0];
-      const [rRes, wRes, twRes] = await Promise.allSettled([
-        fetchProductionRuns(true),
-        fetchDailyWages(90, true),
-        fetchDailyWage(todayStr),
-      ]);
-      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
-      if (wRes.status === 'fulfilled') setDailyWages(wRes.value);
-      if (twRes.status === 'fulfilled') {
-        const tw = twRes.value;
-        setIsTodayWageAdded(Boolean(tw && tw.totalWageBudget > 0));
-      }
-    } finally {
-      setTabRefreshing((prev) => ({ ...prev, wages: false }));
-    }
-  }, [tabRefreshing]);
+  const refreshSalesData = useCallback(() => runTabRefresh('sales', async () => {
+    invalidateAdminCache('admin_products');
+    invalidateAdminCache('sales');
+    const pRes = await fetchProducts(true);
+    setProducts(pRes);
+  }), [runTabRefresh]);
 
-  const refreshCostingData = useCallback(async () => {
-    if (tabRefreshing['costing']) return;
-    setTabRefreshing((prev) => ({ ...prev, costing: true }));
-    try {
-      invalidateAdminCache('admin_production_runs');
-      invalidateAdminCache('admin_stock_movements');
-      invalidateAdminCache('daily_closings');
-      invalidateAdminCache('daily_wages');
-      const [rRes, mRes] = await Promise.allSettled([
-        fetchProductionRuns(true),
-        fetchStockMovements(true),
-      ]);
-      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
-      if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
-    } finally {
-      setTabRefreshing((prev) => ({ ...prev, costing: false }));
+  const refreshWagesData = useCallback(() => runTabRefresh('wages', async () => {
+    invalidateAdminCache('admin_production_runs');
+    invalidateAdminCache('daily_wages');
+    const todayStr = new Date().toISOString().split('T')[0];
+    const [rRes, wRes, twRes] = await Promise.allSettled([
+      fetchProductionRuns(true),
+      fetchDailyWages(90, true),
+      fetchDailyWage(todayStr),
+    ]);
+    if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+    if (wRes.status === 'fulfilled') setDailyWages(wRes.value);
+    if (twRes.status === 'fulfilled') {
+      const tw = twRes.value;
+      setIsTodayWageAdded(Boolean(tw && tw.totalWageBudget > 0));
     }
-  }, [tabRefreshing]);
+  }), [runTabRefresh]);
 
-  const refreshNotificationsData = useCallback(async () => {
-    if (tabRefreshing['notifications']) return;
-    setTabRefreshing((prev) => ({ ...prev, notifications: true }));
-    try {
-      invalidateAdminCache('admin_audit_logs');
-      invalidateAdminCache('admin_ingredients');
-      invalidateAdminCache('admin_products');
-      invalidateAdminCache('admin_production_runs');
-      const [lRes, iRes, pRes, rRes] = await Promise.allSettled([
-        fetchAuditLogs(true),
-        fetchIngredients(true),
-        fetchProducts(true),
-        fetchProductionRuns(true),
-      ]);
-      if (lRes.status === 'fulfilled') setAuditLogs(lRes.value);
-      if (iRes.status === 'fulfilled') setIngredients(iRes.value);
-      if (pRes.status === 'fulfilled') setProducts(pRes.value);
-      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
-    } finally {
-      setTabRefreshing((prev) => ({ ...prev, notifications: false }));
-    }
-  }, [tabRefreshing]);
+  const refreshCostingData = useCallback(() => runTabRefresh('costing', async () => {
+    invalidateAdminCache('admin_production_runs');
+    invalidateAdminCache('admin_stock_movements');
+    invalidateAdminCache('daily_closings');
+    invalidateAdminCache('daily_wages');
+    const [rRes, mRes] = await Promise.allSettled([
+      fetchProductionRuns(true),
+      fetchStockMovements(true),
+    ]);
+    if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+    if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
+  }), [runTabRefresh]);
 
-  const refreshProductsData = useCallback(async () => {
-    if (tabRefreshing['products']) return;
-    setTabRefreshing((prev) => ({ ...prev, products: true }));
-    try {
-      invalidateAdminCache('admin_products');
-      invalidateAdminCache('admin_recipes');
-      const [pRes, rRes] = await Promise.allSettled([
-        fetchProducts(true),
-        fetchRecipes(true),
-      ]);
-      if (pRes.status === 'fulfilled') setProducts(pRes.value);
-      if (rRes.status === 'fulfilled') setRecipes(rRes.value);
-    } finally {
-      setTabRefreshing((prev) => ({ ...prev, products: false }));
-    }
-  }, [tabRefreshing]);
+  const refreshNotificationsData = useCallback(() => runTabRefresh('notifications', async () => {
+    invalidateAdminCache('admin_audit_logs');
+    invalidateAdminCache('admin_ingredients');
+    invalidateAdminCache('admin_products');
+    invalidateAdminCache('admin_production_runs');
+    const [lRes, iRes, pRes, rRes] = await Promise.allSettled([
+      fetchAuditLogs(true),
+      fetchIngredients(true),
+      fetchProducts(true),
+      fetchProductionRuns(true),
+    ]);
+    if (lRes.status === 'fulfilled') setAuditLogs(lRes.value);
+    if (iRes.status === 'fulfilled') setIngredients(iRes.value);
+    if (pRes.status === 'fulfilled') setProducts(pRes.value);
+    if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+  }), [runTabRefresh]);
 
-  const refreshIngredientsData = useCallback(async () => {
-    if (tabRefreshing['ingredients']) return;
-    setTabRefreshing((prev) => ({ ...prev, ingredients: true }));
-    try {
-      invalidateAdminCache('admin_ingredients');
-      invalidateAdminCache('admin_stock_movements');
-      const [iRes, mRes] = await Promise.allSettled([
-        fetchIngredients(true),
-        fetchStockMovements(true),
-      ]);
-      if (iRes.status === 'fulfilled') setIngredients(iRes.value);
-      if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
-    } finally {
-      setTabRefreshing((prev) => ({ ...prev, ingredients: false }));
-    }
-  }, [tabRefreshing]);
+  const refreshProductsData = useCallback(() => runTabRefresh('products', async () => {
+    invalidateAdminCache('admin_products');
+    invalidateAdminCache('admin_recipes');
+    const [pRes, rRes] = await Promise.allSettled([
+      fetchProducts(true),
+      fetchRecipes(true),
+    ]);
+    if (pRes.status === 'fulfilled') setProducts(pRes.value);
+    if (rRes.status === 'fulfilled') setRecipes(rRes.value);
+  }), [runTabRefresh]);
 
-  const refreshMovementsData = useCallback(async () => {
-    if (tabRefreshing['movements']) return;
-    setTabRefreshing((prev) => ({ ...prev, movements: true }));
-    try {
-      invalidateAdminCache('admin_stock_movements');
-      invalidateAdminCache('admin_production_runs');
-      invalidateAdminCache('admin_ingredients');
-      invalidateAdminCache('daily_wages');
-      const [mRes, rRes, iRes, wRes] = await Promise.allSettled([
-        fetchStockMovements(true),
-        fetchProductionRuns(true),
-        fetchIngredients(true),
-        fetchDailyWages(90, true),
-      ]);
-      if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
-      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
-      if (iRes.status === 'fulfilled') setIngredients(iRes.value);
-      if (wRes.status === 'fulfilled') setDailyWages(wRes.value);
-    } finally {
-      setTabRefreshing((prev) => ({ ...prev, movements: false }));
-    }
-  }, [tabRefreshing]);
+  const refreshIngredientsData = useCallback(() => runTabRefresh('ingredients', async () => {
+    invalidateAdminCache('admin_ingredients');
+    invalidateAdminCache('admin_stock_movements');
+    const [iRes, mRes] = await Promise.allSettled([
+      fetchIngredients(true),
+      fetchStockMovements(true),
+    ]);
+    if (iRes.status === 'fulfilled') setIngredients(iRes.value);
+    if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
+  }), [runTabRefresh]);
 
-  const refreshSettingsData = useCallback(async () => {
-    if (tabRefreshing['settings']) return;
-    setTabRefreshing((prev) => ({ ...prev, settings: true }));
-    try {
-      invalidateAdminCache();
-      const todayStr = new Date().toISOString().split('T')[0];
-      const [pRes, iRes, recRes, rRes, mRes, lRes, wRes, twRes] = await Promise.allSettled([
-        fetchProducts(true),
-        fetchIngredients(true),
-        fetchRecipes(true),
-        fetchProductionRuns(true),
-        fetchStockMovements(true),
-        fetchAuditLogs(true),
-        fetchDailyWages(90, true),
-        fetchDailyWage(todayStr),
-      ]);
-      if (pRes.status === 'fulfilled') setProducts(pRes.value);
-      if (iRes.status === 'fulfilled') setIngredients(iRes.value);
-      if (recRes.status === 'fulfilled') setRecipes(recRes.value);
-      if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
-      if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
-      if (lRes.status === 'fulfilled') setAuditLogs(lRes.value);
-      if (wRes.status === 'fulfilled') setDailyWages(wRes.value);
-      if (twRes.status === 'fulfilled') {
-        const tw = twRes.value;
-        setIsTodayWageAdded(Boolean(tw && tw.totalWageBudget > 0));
-      } else {
-        setIsTodayWageAdded(false);
-      }
-    } finally {
-      setTabRefreshing((prev) => ({ ...prev, settings: false }));
+  const refreshMovementsData = useCallback(() => runTabRefresh('movements', async () => {
+    invalidateAdminCache('admin_stock_movements');
+    invalidateAdminCache('admin_production_runs');
+    invalidateAdminCache('admin_ingredients');
+    invalidateAdminCache('daily_wages');
+    const [mRes, rRes, iRes, wRes] = await Promise.allSettled([
+      fetchStockMovements(true),
+      fetchProductionRuns(true),
+      fetchIngredients(true),
+      fetchDailyWages(90, true),
+    ]);
+    if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
+    if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+    if (iRes.status === 'fulfilled') setIngredients(iRes.value);
+    if (wRes.status === 'fulfilled') setDailyWages(wRes.value);
+  }), [runTabRefresh]);
+
+  const refreshSettingsData = useCallback(() => runTabRefresh('settings', async () => {
+    invalidateAdminCache();
+    const todayStr = new Date().toISOString().split('T')[0];
+    const [pRes, iRes, recRes, rRes, mRes, lRes, wRes, twRes] = await Promise.allSettled([
+      fetchProducts(true),
+      fetchIngredients(true),
+      fetchRecipes(true),
+      fetchProductionRuns(true),
+      fetchStockMovements(true),
+      fetchAuditLogs(true),
+      fetchDailyWages(90, true),
+      fetchDailyWage(todayStr),
+    ]);
+    if (pRes.status === 'fulfilled') setProducts(pRes.value);
+    if (iRes.status === 'fulfilled') setIngredients(iRes.value);
+    if (recRes.status === 'fulfilled') setRecipes(recRes.value);
+    if (rRes.status === 'fulfilled') setProductionRuns(rRes.value);
+    if (mRes.status === 'fulfilled') setStockMovements(mRes.value);
+    if (lRes.status === 'fulfilled') setAuditLogs(lRes.value);
+    if (wRes.status === 'fulfilled') setDailyWages(wRes.value);
+    if (twRes.status === 'fulfilled') {
+      const tw = twRes.value;
+      setIsTodayWageAdded(Boolean(tw && tw.totalWageBudget > 0));
+    } else {
+      setIsTodayWageAdded(false);
     }
-  }, [tabRefreshing]);
+  }), [runTabRefresh]);
 
   // Auto-refresh fresh data from Supabase when navigating to specific data views
   useEffect(() => {

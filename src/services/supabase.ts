@@ -3045,11 +3045,13 @@ export async function executeAdminReset(
       );
     }
   } else if (resetType === 'ledger') {
+    const { error: dwErr } = await supabase.from('daily_wages').delete().neq('id', zeroFilter);
+    if (dwErr) throw dwErr;
     await supabase.from('stock_movements').delete().neq('id', zeroFilter);
     const { count } = await supabase.from('stock_movements').select('id', { count: 'exact', head: true });
     if ((count || 0) > 0) {
       throw new Error(
-        'സ്റ്റോക്ക് ലെഡ്ജർ ക്ലിയർ ചെയ്യാൻ Supabase Migration 020 (admin_reset_data) റൺ ചെയ്യേണ്ടതുണ്ട്. (RLS blocks direct DELETE on stock_movements — apply migration 020_admin_reset_data_rpc.sql)'
+        'സ്റ്റോക്ക് ലെഡ്ജർ ക്ലിയർ ചെയ്യാൻ Supabase Migration 020/021 (admin_reset_data) റൺ ചെയ്യേണ്ടതുണ്ട്. (RLS blocks direct DELETE on stock_movements — apply migration 021_clear_ledger_includes_wages.sql)'
       );
     }
   } else if (resetType === 'stock') {
