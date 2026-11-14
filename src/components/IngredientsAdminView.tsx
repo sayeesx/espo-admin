@@ -222,24 +222,24 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
   const openCreatePacketModal = () => {
     setSelectedPackagingItem(null);
-    setPackProductId(products.length > 0 ? products[0].id : '');
-    setPackSizeLabel('100g');
+    setPackProductId('');
+    setPackSizeLabel('');
     setPackSizeGrams(100);
-    setPackCurrentStock(500);
-    setPackUnitCost(1.5);
-    setPackLabourRate(1.0);
+    setPackCurrentStock('');
+    setPackUnitCost('');
+    setPackLabourRate(0);
     setPackIsActive(true);
     setPacketModalOpen(true);
   };
 
   const openEditPacketModal = (item: PackagingItem) => {
     setSelectedPackagingItem(item);
-    setPackProductId(item.productId);
+    setPackProductId(item.productId || '');
     setPackSizeLabel(item.sizeLabel);
-    setPackSizeGrams(item.sizeGrams);
+    setPackSizeGrams(item.sizeGrams || 100);
     setPackCurrentStock(item.currentStock);
     setPackUnitCost(item.unitCost);
-    setPackLabourRate(item.packingLabourRate);
+    setPackLabourRate(item.packingLabourRate || 0);
     setPackIsActive(item.isActive);
     setPacketModalOpen(true);
   };
@@ -254,8 +254,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
   const handlePacketSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!packProductId || !packSizeLabel.trim()) {
-      showToast('ഉൽപ്പന്നവും പാക്കറ്റ് അളവും തിരഞ്ഞെടുക്കണം (Please select product and size)', 'warning');
+    if (!packSizeLabel.trim()) {
+      showToast('പാക്കറ്റ് പേര് / തരം നൽകുക (Please enter packet name)', 'warning');
       return;
     }
 
@@ -263,12 +263,12 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
     try {
       await savePackagingItem({
         id: selectedPackagingItem?.id,
-        productId: packProductId,
+        productId: packProductId || undefined,
         sizeLabel: packSizeLabel.trim(),
         sizeGrams: Number(packSizeGrams) || 100,
         currentStock: Number(packCurrentStock) || 0,
         unitCost: Number(packUnitCost) || 0,
-        packingLabourRate: Number(packLabourRate) || 1.0,
+        packingLabourRate: 0,
         isActive: packIsActive,
       });
       showToast('പാക്കറ്റ് വിജയകരമായി സൂക്ഷിച്ചു', 'success');
@@ -1081,12 +1081,18 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                             <FiPackage className="w-5 h-5" />
                           </div>
                           <div className="min-w-0">
-                            <h3 className="font-bold text-sm text-stone-900 dark:text-white font-malayalam leading-tight truncate">
-                              {item.productName || 'Product'}
+                            <h3 className="font-bold text-sm text-stone-900 dark:text-white font-mono leading-tight truncate">
+                              {item.sizeLabel || item.productName || 'Packet'}
                             </h3>
-                            <span className="inline-block mt-0.5 px-2 py-0.5 rounded-md bg-stone-100 dark:bg-[#282323] text-stone-700 dark:text-stone-300 text-[11px] font-black font-mono">
-                              {item.sizeLabel} ({item.sizeGrams}g)
-                            </span>
+                            {item.productName ? (
+                              <span className="inline-block mt-0.5 px-2 py-0.5 rounded-md bg-stone-100 dark:bg-[#282323] text-stone-600 dark:text-stone-400 text-[10px] font-sans">
+                                {item.productName}
+                              </span>
+                            ) : (
+                              <span className="inline-block mt-0.5 px-2 py-0.5 rounded-md bg-stone-100 dark:bg-[#282323] text-stone-500 dark:text-stone-400 text-[10px] font-malayalam">
+                                എല്ലാ ഉൽപ്പന്നങ്ങൾക്കും (Shared)
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -1104,17 +1110,11 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                       </div>
 
                       {/* Detail Metrics */}
-                      <div className="grid grid-cols-3 gap-2 py-2.5 px-3 rounded-xl bg-stone-50 dark:bg-[#181515] border border-stone-100 dark:border-[#282323] text-[11px] mb-3">
+                      <div className="grid grid-cols-2 gap-2 py-2.5 px-3 rounded-xl bg-stone-50 dark:bg-[#181515] border border-stone-100 dark:border-[#282323] text-[11px] mb-3">
                         <div>
                           <span className="text-stone-400 block text-[9px] uppercase font-bold">കവർ വില</span>
                           <span className="font-black font-mono text-stone-800 dark:text-stone-200">
-                            ₹{Number(item.unitCost).toFixed(2)}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-stone-400 block text-[9px] uppercase font-bold">കൂലി നിരക്ക്</span>
-                          <span className="font-black font-mono text-stone-800 dark:text-stone-200">
-                            ₹{Number(item.packingLabourRate).toFixed(2)}
+                            ₹{Number(item.unitCost).toFixed(2)} / pc
                           </span>
                         </div>
                         <div className="text-right">
@@ -1490,63 +1490,27 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 {selectedPackagingItem ? 'പാക്കറ്റ് തരം തിരുത്തുക (Edit Packet)' : 'പുതിയ പാക്കറ്റ് തരം (New Packet Type)'}
               </h2>
               <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam mb-4">
-                ഉൽപ്പന്നത്തിൻ്റെ പാക്കറ്റ് സൈസ്, കവർ സ്റ്റോക്ക് (Cover Stock), പാക്കിംഗ് കൂലി നിരക്ക്
+                പാക്കറ്റ് തരം, കവർ സ്റ്റോക്ക് (Cover Stock in pcs), കവർ ഒന്നിന് വില
               </p>
 
               <form onSubmit={handlePacketSubmit} className="space-y-4 text-xs font-malayalam">
-                {/* Product Select */}
+                {/* Packet Type Name */}
                 <div>
-                  <ThemeSelect
-                    label="ഉൽപ്പന്നം (Product) *"
-                    value={packProductId}
-                    onChange={(val) => setPackProductId(val)}
-                    options={products.map((p) => ({
-                      value: p.id,
-                      label: `${p.name} (${p.unit})`,
-                    }))}
+                  <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
+                    പാക്കറ്റ് പേര് / തരം (Packet Type Name) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={packSizeLabel}
+                    onChange={(e) => setPackSizeLabel(e.target.value)}
+                    placeholder="ഉദാ: 2KG HM Packet, 10 x 12 Packet, 500g Pouch"
+                    className="w-full google-input font-bold text-sm"
                   />
-                  {products.length === 0 && (
-                    <p className="text-[11px] text-amber-500 mt-1">
-                      ഉൽപ്പന്നങ്ങൾ ലഭ്യമല്ല. ആദ്യം Products ടാബിൽ ഉൽപ്പന്നങ്ങൾ ചേർക്കുക.
-                    </p>
-                  )}
-                </div>
-
-                {/* Size Label & Grams */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                      പാക്കറ്റ് പേര് / അളവ് (Size Label) *
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={packSizeLabel}
-                      onChange={(e) => setPackSizeLabel(e.target.value)}
-                      placeholder="ഉദാ: 100g, 250g, 500g, 1kg"
-                      className="w-full google-input font-mono font-bold text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                      ഗ്രാം തൂക്കം (Size in Grams) *
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      min="1"
-                      required
-                      value={packSizeGrams === 0 ? '' : packSizeGrams}
-                      onChange={(e) => setPackSizeGrams(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                      placeholder="100"
-                      className="w-full google-input font-mono font-bold text-sm"
-                    />
-                  </div>
                 </div>
 
                 {/* Cover Current Stock (pcs) & Unit Cost (₹) */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
                       കവർ സ്റ്റോക്ക് (Cover Stock in pcs) *
@@ -1580,36 +1544,20 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   </div>
                 </div>
 
-                {/* Labour Rate & Total Valuation */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-bold text-stone-700 dark:text-stone-300 mb-1">
-                      പാക്കിംഗ് കൂലി നിരക്ക് (Labour ₹ / pc) *
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      required
-                      value={packLabourRate === 0 ? '' : packLabourRate}
-                      onChange={(e) => setPackLabourRate(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                      placeholder="1.00"
-                      className="w-full google-input font-mono font-bold text-sm"
-                    />
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] flex flex-col justify-center">
-                    <span className="text-[10px] text-stone-400 font-bold block uppercase">കവർ ഇൻവെന്ററി മൂല്യം</span>
-                    <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                      ₹{Math.round((Number(packCurrentStock) || 0) * (Number(packUnitCost) || 0)).toLocaleString('en-IN')}
-                    </span>
-                  </div>
+                {/* Inventory Valuation Card */}
+                <div className="p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828] flex items-center justify-between">
+                  <span className="text-stone-500 dark:text-stone-400 font-bold uppercase text-[10px]">
+                    കവർ ഇൻവെന്ററി മൂല്യം (Valuation):
+                  </span>
+                  <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                    ₹{Math.round((Number(packCurrentStock) || 0) * (Number(packUnitCost) || 0)).toLocaleString('en-IN')}
+                  </span>
                 </div>
 
                 {/* Active Checkbox */}
                 <div className="flex items-center justify-between p-3 rounded-xl bg-stone-50 dark:bg-[#141212] border border-stone-200 dark:border-[#2E2828]">
                   <span className="font-bold text-stone-900 dark:text-white">
-                    Active (ഈ പാക്കറ്റ് സൈസ് സജീവമാണ്)
+                    Active (ഈ പാക്കറ്റ് സജീവമാണ്)
                   </span>
                   <input
                     type="checkbox"
@@ -1630,7 +1578,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                   </button>
                   <button
                     type="submit"
-                    disabled={isSubmitting || !packProductId}
+                    disabled={isSubmitting || !packSizeLabel.trim()}
                     className="px-5 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold shadow-sm press-apple flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
                   >
                     {isSubmitting ? (

@@ -770,22 +770,42 @@ export async function savePacketType(packet: Partial<PacketType> & { name: strin
 export async function recordPacketPurchase(params: {
   packetTypeId: string;
   quantity: number;
-  totalPrice: number;
+  totalPrice?: number;
   operatorName?: string;
 }): Promise<PacketType> {
   const { packetTypeId, quantity, totalPrice, operatorName = 'Admin' } = params;
   if (quantity <= 0) throw new Error('Quantity must be greater than zero');
-  if (totalPrice < 0) throw new Error('Total price cannot be negative');
+  if (totalPrice !== undefined && totalPrice !== null && totalPrice < 0) {
+    throw new Error('Total price cannot be negative');
+  }
 
   dbCache.invalidate('admin_packet_types');
   dbCache.invalidate('admin_stock_movements');
+
+  // Pre-fetch packet type to inspect current unit cost if totalPrice is omitted
+  let existingUnitCost = 0;
+  try {
+    const { data: pt } = await supabase
+      .from('packet_types')
+      .select('bundle_quantity, cost_per_packet')
+      .eq('id', packetTypeId)
+      .single();
+    if (pt) {
+      existingUnitCost = Number(pt.cost_per_packet) || 0;
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  const hasTotalPrice = totalPrice !== undefined && totalPrice !== null && totalPrice > 0;
+  const effectiveTotalPrice = hasTotalPrice ? totalPrice : Math.round(quantity) * existingUnitCost;
 
   // 1. Attempt atomic RPC execution
   try {
     const { data: rpcData, error: rpcErr } = await supabase.rpc('record_packet_purchase', {
       p_packet_type_id: packetTypeId,
       p_quantity: Math.round(quantity),
-      p_total_cost: totalPrice,
+      p_total_cost: effectiveTotalPrice,
       p_operator_name: operatorName,
     });
 
@@ -817,12 +837,12 @@ export async function recordPacketPurchase(params: {
   const currStock = Math.max(0, Number(pt.bundle_quantity ?? 0));
   const currUnitCost = Number(pt.cost_per_packet) || 0;
   const purchasedQty = Math.round(quantity);
-  const purchasedUnitCost = purchasedQty > 0 ? Number((totalPrice / purchasedQty).toFixed(4)) : 0;
+  const purchasedUnitCost = purchasedQty > 0 ? Number((effectiveTotalPrice / purchasedQty).toFixed(4)) : currUnitCost;
 
   const newStock = currStock + purchasedQty;
   const newUnitCost = currStock <= 0
     ? purchasedUnitCost
-    : Number(((currStock * currUnitCost + totalPrice) / newStock).toFixed(4));
+    : (hasTotalPrice ? Number(((currStock * currUnitCost + effectiveTotalPrice) / newStock).toFixed(4)) : currUnitCost);
   const newBundleCost = Number((newStock * newUnitCost).toFixed(2));
 
   const { data: updated, error: updateErr } = await supabase
@@ -853,7 +873,9 @@ export async function recordPacketPurchase(params: {
       cost_per_unit: newUnitCost,
       reference: 'Purchase Inward',
       operator_name: operatorName,
-      reason: `Purchased ${purchasedQty} pcs at ₹${totalPrice} (Weighted Avg: ₹${newUnitCost}/pkt)`,
+      reason: hasTotalPrice
+        ? `Purchased ${purchasedQty} pcs at ₹${effectiveTotalPrice} (Weighted Avg: ₹${newUnitCost}/pkt)`
+        : `Added ${purchasedQty} pcs stock (Preserved Rate: ₹${newUnitCost}/pkt)`,
       created_at: new Date().toISOString(),
     });
   } catch (smErr) {
@@ -2127,14 +2149,14 @@ export async function fetchPackagingItems(productId?: string): Promise<Packaging
   }));
 }
 
-export async function savePackagingItem(item: Partial<PackagingItem> & { productId: string; sizeLabel: string }): Promise<PackagingItem> {
+export async function savePackagingItem(item: Partial<PackagingItem> & { productId?: string; sizeLabel: string }): Promise<PackagingItem> {
   const payload = {
-    product_id: item.productId,
+    product_id: item.productId || null,
     size_label: item.sizeLabel.trim(),
     size_grams: item.sizeGrams ?? 100,
     current_stock: item.currentStock ?? 0,
     unit_cost: item.unitCost ?? 0,
-    packing_labour_rate: item.packingLabourRate ?? 1.00,
+    packing_labour_rate: item.packingLabourRate ?? 0.00,
     is_active: item.isActive ?? true,
     updated_at: new Date().toISOString(),
   };

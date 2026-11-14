@@ -216,9 +216,9 @@ export interface DailyCostAllocation {
 
 export interface PackagingItem {
   id: string;
-  productId: string;
+  productId?: string;
   productName?: string;
-  sizeLabel: string; // e.g. '100g', '250g', '500g'
+  sizeLabel: string; // e.g. '100g', '250g', '500g', '2KG HM Packet'
   sizeGrams: number;
   currentStock: number;
   unitCost: number;

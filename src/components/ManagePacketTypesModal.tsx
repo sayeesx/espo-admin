@@ -111,14 +111,15 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
   // Auto-calculated Weighted Average Unit Cost for Inward Purchase:
   const numQty = parseFloat(String(quantity)) || 0;
   const numTotal = parseFloat(String(totalPrice)) || 0;
+  const hasTotalPrice = String(totalPrice).trim() !== '' && numTotal > 0;
   const currStock = selectedPacket ? Number(selectedPacket.bundleQuantity ?? 0) : 0;
   const currCost = selectedPacket ? Number(selectedPacket.costPerPacket ?? 0) : 0;
-  const purchasedUnitCost = numQty > 0 ? numTotal / numQty : 0;
+  const purchasedUnitCost = numQty > 0 ? (hasTotalPrice ? numTotal / numQty : currCost) : 0;
   const newPurchaseStock = currStock + Math.round(numQty);
   const newWeightedAvgCost = currStock <= 0
     ? purchasedUnitCost
     : numQty > 0
-    ? ((currStock * currCost) + numTotal) / newPurchaseStock
+    ? (hasTotalPrice ? ((currStock * currCost) + numTotal) / newPurchaseStock : currCost)
     : currCost;
 
   // Direct edit calculations:
@@ -152,19 +153,20 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
         }
 
         if (selectedPacket?.id) {
+          const finalTotalPrice = hasTotalPrice ? numTotal : Math.round(numQty) * currCost;
           await recordPacketPurchase({
             packetTypeId: selectedPacket.id,
             quantity: Math.round(numQty),
-            totalPrice: numTotal,
+            totalPrice: finalTotalPrice,
             operatorName: 'Admin',
           });
           showToast(
-            `${trimmedName}: ${Math.round(numQty)} pcs ചേർത്തു. പുതിയ സ്റ്റോക്ക്: ${newPurchaseStock} pcs (ശരാശരി: ₹${newWeightedAvgCost.toFixed(2)}/pkt)`,
+            `${trimmedName}: ${Math.round(numQty)} pcs ചേർത്തു. പുതിയ സ്റ്റോക്ക്: ${newPurchaseStock} pcs${hasTotalPrice ? ` (ശരാശരി: ₹${newWeightedAvgCost.toFixed(2)}/pkt)` : ` (@ ₹${currCost.toFixed(2)}/pkt)`}`,
             'success'
           );
         } else {
           // New packet type with initial purchase
-          const unitRate = numQty > 0 ? Number((numTotal / numQty).toFixed(4)) : 0;
+          const unitRate = numQty > 0 ? (hasTotalPrice ? Number((numTotal / numQty).toFixed(4)) : 0) : 0;
           const newQty = Math.round(numQty);
           const bundleCost = Number((newQty * unitRate).toFixed(2));
           await savePacketType({
@@ -357,11 +359,17 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
                   പാക്കറ്റ് തരം / പേര് (Packet Type Name) *
                 </label>
                 {selectedPacket && mode === 'purchase' ? (
-                  <div className="p-2.5 rounded-xl bg-stone-200/60 dark:bg-[#282323] flex items-center justify-between">
-                    <span className="font-bold text-stone-900 dark:text-white font-mono text-sm">{selectedPacket.name}</span>
-                    <span className="text-[11px] font-bold text-stone-500 font-mono">
-                      നിലവിലെ സ്റ്റോക്ക്: {currStock} pcs @ ₹{currCost.toFixed(2)}
-                    </span>
+                  <div className="p-3 rounded-xl bg-stone-100 dark:bg-[#282323] border border-stone-200 dark:border-[#383333] flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-stone-900 dark:text-white font-mono text-sm block">{selectedPacket.name}</span>
+                      <span className="text-[11px] text-stone-500 font-malayalam">തിരഞ്ഞെടുത്ത പാക്കറ്റ്</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-stone-400 block font-bold uppercase font-malayalam">നിലവിലെ സ്റ്റോക്ക് (Current Stock)</span>
+                      <span className="text-xs font-black text-amber-600 dark:text-amber-400 font-mono">
+                        {currStock} pcs <span className="text-stone-400 font-normal">(@ ₹{currCost.toFixed(2)}/pkt)</span>
+                      </span>
+                    </div>
                   </div>
                 ) : (
                   <input
@@ -379,34 +387,34 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
               {mode === 'purchase' && (
                 <>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    {/* 1. Quantity Purchased */}
+                    {/* 1. Quantity Purchased / Added */}
                     <div>
                       <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                        വാങ്ങിയ എണ്ണം / Quantity (pcs) *
+                        {selectedPacket ? 'വാങ്ങിയ എണ്ണം / ചേർക്കേണ്ട അളവ് (pcs) *' : 'വാങ്ങിയ എണ്ണം / Quantity (pcs) *'}
                       </label>
                       <input
                         type="number"
                         step="1"
                         min="1"
                         required
-                        placeholder="e.g. 500"
+                        placeholder={selectedPacket ? "e.g. 100" : "e.g. 500"}
                         value={quantity}
                         onChange={(e) => setQuantity(e.target.value)}
                         className="w-full google-input text-stone-900 dark:text-white font-bold font-mono text-sm"
                       />
                     </div>
 
-                    {/* 2. Total Purchase Price */}
+                    {/* 2. Total Purchase Price (Optional if existing packet) */}
                     <div>
                       <label className="block font-bold text-stone-700 dark:text-stone-300 font-malayalam mb-1">
-                        ആകെ തുക / Total Price (₹) *
+                        {selectedPacket ? 'ആകെ തുക / Total Price (₹) (Optional)' : 'ആകെ തുക / Total Price (₹) *'}
                       </label>
                       <input
                         type="number"
                         step="0.01"
                         min="0"
-                        required
-                        placeholder="e.g. 1250"
+                        required={!selectedPacket}
+                        placeholder={selectedPacket ? `ഒഴിവാക്കിയാൽ പഴയ നിരക്ക് (₹${currCost.toFixed(2)}) തുടരും` : "e.g. 1250"}
                         value={totalPrice}
                         onChange={(e) => setTotalPrice(e.target.value)}
                         className="w-full google-input text-stone-900 dark:text-white font-bold font-mono text-sm"
@@ -414,33 +422,57 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Weighted Average Live Calculation Card */}
+                  {/* Live Balance Preview Card */}
                   {numQty > 0 && (
-                    <div className="p-3.5 rounded-2xl bg-orange-500/10 border border-orange-500/20 space-y-1.5 font-malayalam">
+                    <div className="p-3.5 rounded-2xl bg-orange-500/10 border border-orange-500/20 space-y-2 font-malayalam">
+                      {/* Live Balance Preview matching Ingredient Adjust Stock */}
                       <div className="flex flex-wrap items-center justify-between text-xs">
                         <span className="font-bold text-stone-700 dark:text-stone-300">
-                          വാങ്ങിയ നിരക്ക് (Purchased Rate):
+                          പുതിയ സ്റ്റോക്ക് ബാലൻസ്:
                         </span>
-                        <span className="font-mono font-bold text-stone-900 dark:text-white">
-                          ₹{numTotal.toFixed(2)} / {Math.round(numQty)} pcs = ₹{purchasedUnitCost.toFixed(2)} / pkt
+                        <span className="text-sm font-black text-stone-900 dark:text-white font-mono">
+                          {selectedPacket ? (
+                            <>
+                              <span className="text-stone-600 dark:text-stone-400">{currStock}</span> + <span className="text-amber-600 dark:text-amber-400">{Math.round(numQty)}</span> = <span className="text-emerald-600 dark:text-emerald-400">{newPurchaseStock} pcs</span>
+                            </>
+                          ) : (
+                            <span className="text-emerald-600 dark:text-emerald-400">{newPurchaseStock} pcs</span>
+                          )}
                         </span>
                       </div>
 
-                      {selectedPacket && currStock > 0 && (
-                        <div className="flex flex-wrap items-center justify-between text-[11px] text-stone-500 dark:text-stone-400">
-                          <span>നിലവിലെ സ്റ്റോക്ക് & നിരക്ക്:</span>
-                          <span className="font-mono">{currStock} pcs @ ₹{currCost.toFixed(2)}/pkt</span>
-                        </div>
+                      {hasTotalPrice ? (
+                        <>
+                          <div className="flex flex-wrap items-center justify-between text-xs pt-1 border-t border-orange-500/20">
+                            <span className="text-stone-600 dark:text-stone-400">
+                              വാങ്ങിയ നിരക്ക് (Purchased Rate):
+                            </span>
+                            <span className="font-mono font-bold text-stone-900 dark:text-white">
+                              ₹{numTotal.toFixed(2)} / {Math.round(numQty)} pcs = ₹{purchasedUnitCost.toFixed(2)} / pkt
+                            </span>
+                          </div>
+
+                          <div className="pt-1 flex flex-wrap items-center justify-between text-xs">
+                            <span className="font-bold text-orange-950 dark:text-amber-300">
+                              പുതിയ ശരാശരി വില (Weighted Avg Cost):
+                            </span>
+                            <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">
+                              ₹{newWeightedAvgCost.toFixed(2)} / pkt
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        selectedPacket && (
+                          <div className="pt-1 border-t border-orange-500/20 flex flex-wrap items-center justify-between text-[11px]">
+                            <span className="text-stone-500 dark:text-stone-400">
+                              പഴയ നിരക്ക് മാറ്റമില്ലാതെ തുടരും:
+                            </span>
+                            <span className="font-mono font-bold text-stone-700 dark:text-stone-300">
+                              ₹{currCost.toFixed(2)} / pkt
+                            </span>
+                          </div>
+                        )
                       )}
-
-                      <div className="pt-1.5 border-t border-orange-500/20 flex flex-wrap items-center justify-between">
-                        <span className="font-bold text-orange-950 dark:text-amber-300">
-                          പുതിയ ശരാശരി വില (Weighted Avg Cost):
-                        </span>
-                        <span className="text-sm font-black text-emerald-600 dark:text-emerald-400 font-mono">
-                          ₹{newWeightedAvgCost.toFixed(2)} / pkt ({newPurchaseStock} pcs സ്റ്റോക്ക്)
-                        </span>
-                      </div>
                     </div>
                   )}
                 </>
