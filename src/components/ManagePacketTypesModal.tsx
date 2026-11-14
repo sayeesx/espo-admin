@@ -57,6 +57,13 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  const isSinglePacketMode = Boolean(initialPacket);
+  const displayedPackets = isSinglePacketMode
+    ? (packetTypes.filter((pkt) => pkt.id === initialPacket?.id).length > 0
+        ? packetTypes.filter((pkt) => pkt.id === initialPacket?.id)
+        : (initialPacket ? [initialPacket] : []))
+    : packetTypes;
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -564,13 +571,15 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
             <div className="space-y-2">
               <div className="flex items-center justify-between font-malayalam">
                 <span className="font-bold text-stone-700 dark:text-stone-300">
-                  നിലവിലെ പാക്കറ്റ് കവറുകൾ ({packetTypes.length} എണ്ണം):
+                  {isSinglePacketMode
+                    ? 'തിരഞ്ഞെടുത്ത പാക്കറ്റ് കവർ:'
+                    : `നിലവിലെ പാക്കറ്റ് കവറുകൾ (${packetTypes.length} എണ്ണം):`}
                 </span>
                 {loading && <span className="text-stone-400 animate-pulse text-[11px]">റീലോഡ് ചെയ്യുന്നു...</span>}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {packetTypes.map((pkt) => {
+              <div className={`grid gap-2.5 ${isSinglePacketMode ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'}`}>
+                {displayedPackets.map((pkt) => {
                   const isSelected = selectedPacket?.id === pkt.id;
                   const stockCount = Math.max(0, Number(pkt.bundleQuantity ?? 0));
                   const isOutOfStock = stockCount <= 0;
@@ -650,7 +659,7 @@ export const ManagePacketTypesModal: React.FC<ManagePacketTypesModalProps> = ({
                 })}
               </div>
 
-              {packetTypes.length === 0 && !loading && (
+              {displayedPackets.length === 0 && !loading && (
                 <div className="py-8 text-center text-stone-400 font-malayalam">
                   പാക്കറ്റുകൾ ചേർത്തിട്ടില്ല
                 </div>

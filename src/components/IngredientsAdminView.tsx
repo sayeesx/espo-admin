@@ -186,7 +186,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
   // Packaging Stock Adjust modal
   const [packAdjustModalOpen, setPackAdjustModalOpen] = useState(false);
   const [packAdjustItem, setPackAdjustItem] = useState<PackagingItem | null>(null);
-  const [packAdjustDelta, setPackAdjustDelta] = useState<number | string>(100);
+  const [packAdjustDelta, setPackAdjustDelta] = useState<number | string>('');
   const [packAdjustReason, setPackAdjustReason] = useState<string>('പുതിയ കവർ പർച്ചേസ് (New Covers Inward)');
   const [packAdjustIsAdd, setPackAdjustIsAdd] = useState<boolean>(true);
 
@@ -246,7 +246,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
   const openPackAdjustModal = (item: PackagingItem) => {
     setPackAdjustItem(item);
-    setPackAdjustDelta(100);
+    setPackAdjustDelta('');
     setPackAdjustReason('പുതിയ കവർ പർച്ചേസ് (New Covers Inward)');
     setPackAdjustIsAdd(true);
     setPackAdjustModalOpen(true);
@@ -524,10 +524,10 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                 type="button"
                 onClick={() => handleSelectSubTab('packets')}
                 className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer whitespace-nowrap shrink-0"
-                title="പാക്കറ്റ് തരങ്ങൾ (Packet Types & Covers)"
+                title="പാക്കറ്റ് തരങ്ങൾ"
               >
                 <FiPackage className="w-4 h-4 text-epso-orange" />
-                <span>പാക്കറ്റ് തരങ്ങൾ (Packet Types & Covers)</span>
+                <span>പാക്കറ്റ് തരങ്ങൾ</span>
                 <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-300 font-bold">
                   {packetTypes.length > 0 ? packetTypes.length : packagingItems.length}
                 </span>
@@ -855,21 +855,18 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
             <div>
               <h2 className="text-base font-black text-stone-900 dark:text-white flex items-center gap-2">
                 <span>പാക്കറ്റ് തരങ്ങളും കവർ സ്റ്റോക്കും</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-800 dark:text-orange-300 font-bold">
-                  {packetTypes.length} Packet Types {packagingItems.length > 0 ? `• ${packagingItems.length} Covers` : ''}
-                </span>
               </h2>
               <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
                 പാക്കറ്റ് തരങ്ങൾ (Packet Types Catalogue), കവറുകൾ (Pouches), കൂലി നിരക്ക്
               </p>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
               <button
                 type="button"
                 onClick={handleRefresh}
                 disabled={isRefreshing}
-                className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-50 font-malayalam"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-50 font-malayalam"
                 title="പാക്കറ്റുകൾ പുതുക്കുക"
               >
                 <FiRefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-epso-orange' : ''}`} />
@@ -878,17 +875,8 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
 
               <button
                 type="button"
-                onClick={() => handleSelectSubTab('ingredients')}
-                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-800 dark:text-stone-200 font-bold text-xs shadow-2xs press-apple transition-colors cursor-pointer"
-              >
-                <FiBox className="w-4 h-4 text-amber-500" />
-                <span>ചേരുവകൾ (Raw Materials)</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => { setSelectedPacketTypeForEdit(null); setManagePacketsOpen(true); }}
-                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
+                className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer whitespace-nowrap shrink-0"
                 title="പാക്കറ്റ് തരങ്ങൾ മാനേജ് ചെയ്യുക / തിരുത്തുക"
               >
                 <FiPackage className="w-4 h-4" />
@@ -898,7 +886,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
               <button
                 type="button"
                 onClick={openCreatePacketModal}
-                className="flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer"
+                className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-epso-red hover:bg-epso-red-hover dark:bg-amber-500 dark:hover:bg-amber-600 text-white dark:text-stone-950 font-bold text-xs shadow-sm press-apple transition-colors cursor-pointer whitespace-nowrap shrink-0"
               >
                 <FiPlus className="w-4 h-4" />
                 <span>New Cover (പുതിയ കവർ)</span>
@@ -907,7 +895,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
               <button
                 type="button"
                 onClick={() => handleSelectSubTab('ingredients')}
-                className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#332c2c] text-stone-700 dark:text-stone-200 font-bold text-xs transition-colors cursor-pointer border border-stone-200 dark:border-stone-700 shadow-2xs ml-1"
+                className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-[#282323] dark:hover:bg-[#332c2c] text-stone-700 dark:text-stone-200 font-bold text-xs transition-colors cursor-pointer border border-stone-200 dark:border-stone-700 shadow-2xs whitespace-nowrap shrink-0"
                 title="അടച്ച് ചേരുവകളിലേക്ക് തിരികെ പോകുക (Close and go back to ingredients)"
                 aria-label="Close"
               >
@@ -1655,7 +1643,7 @@ export const IngredientsAdminView: React.FC<IngredientsAdminViewProps> = ({
                     value={packAdjustDelta === 0 ? '' : packAdjustDelta}
                     onChange={(e) => setPackAdjustDelta(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                     onFocus={(e) => e.target.select()}
-                    placeholder="100 pcs"
+                    placeholder="0"
                     className="w-full google-input text-base font-bold font-mono"
                   />
                 </div>
