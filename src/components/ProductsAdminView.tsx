@@ -774,16 +774,6 @@ export const ProductsAdminView: React.FC<ProductsAdminViewProps> = ({
                     </span>
                   </div>
                 </div>
-
-                {/* Direct Quick Stock Adjust Button */}
-                <button
-                  onClick={() => openStockAdjustModal(p)}
-                  className="w-full flex items-center justify-center gap-1.5 py-2 px-3 mb-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 text-xs font-bold border border-emerald-200/70 dark:border-emerald-800/60 press-apple transition-colors cursor-pointer shadow-2xs"
-                  title="സ്റ്റോക്ക് മാറ്റുക (+ Add / - Reduce / Clear)"
-                >
-                  <FiSliders className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>സ്റ്റോക്ക് മാറ്റുക (+ / - Stock)</span>
-                </button>
               </div>
 
               {/* Action Buttons: Set Ingredients (Recipe), Edit, Delete */}

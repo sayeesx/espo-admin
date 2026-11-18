@@ -23,7 +23,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   }[] = [
     { id: 'dashboard', label: 'ഡാഷ്‌ബോർഡ്', icon: FiGrid },
     { id: 'sales', label: 'വിൽപ്പന', icon: FiShoppingBag },
-    { id: 'accounts', label: 'ലെഡ്ജർ', icon: FiCreditCard },
+    { id: 'accounts', label: 'അക്കൗണ്ട്സ്', icon: FiCreditCard },
     { id: 'products', label: 'ഉൽപ്പന്നങ്ങൾ', icon: FiPackage },
     { id: 'settings', label: 'സെറ്റിംഗ്സ്', icon: FiSettings },
   ];

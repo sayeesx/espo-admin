@@ -35,6 +35,7 @@ import {
   fetchSales,
 } from '../services/supabase';
 import { useFeedback } from '../context/FeedbackContext';
+import { AnimatedNumber } from './AnimatedNumber';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -120,39 +121,6 @@ const ModalBackdrop: React.FC<{ onClose: () => void; children: React.ReactNode }
     document.body
   );
 };
-
-// ─── KPI Card ─────────────────────────────────────────────────────────────────
-
-const KpiCard: React.FC<{
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-  value: string;
-  badge?: string;
-  valueClass?: string;
-}> = ({ icon, title, subtitle, value, badge, valueClass }) => (
-  <div className="bg-white dark:bg-[#181515] border border-stone-200 dark:border-[#2E2828] rounded-2xl p-4 min-w-[160px] flex-shrink-0 space-y-2">
-    <div className="flex items-center justify-between">
-      <div className="w-9 h-9 rounded-xl bg-stone-100 dark:bg-[#2E2828] flex items-center justify-center text-stone-500 dark:text-stone-400">
-        {icon}
-      </div>
-      {badge && (
-        <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-full font-malayalam">
-          {badge}
-        </span>
-      )}
-    </div>
-    <div>
-      <p className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam leading-tight">
-        {title}
-      </p>
-      <p className="text-[9px] text-stone-400 dark:text-stone-500">{subtitle}</p>
-    </div>
-    <p className={`text-lg font-black tracking-tight ${valueClass ?? 'text-stone-900 dark:text-white'}`}>
-      {value}
-    </p>
-  </div>
-);
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -526,101 +494,188 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
   }
 
   return (
-    <div className="space-y-5 pb-16">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-            <FiBookOpen className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-          </div>
+    <div className="space-y-6 pb-20 max-w-6xl">
+      {/* ── Top Header & Sub-Tab Toolbar (Analytics Design Pattern) ── */}
+      <div className="flex flex-col gap-4 pb-3 border-b border-stone-200 dark:border-[#2E2828]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-black text-stone-900 dark:text-white font-malayalam leading-tight">
-              അക്കൗണ്ട്സ് ലെഡ്ജർ
+            <h2 className="text-lg sm:text-xl font-black text-stone-900 dark:text-white flex items-center gap-2">
+              <FiCreditCard className="w-5 h-5 text-epso-orange" />
+              <span>അക്കൗണ്ട്സ് (Accounts)</span>
             </h2>
-            <p className="text-xs text-stone-500 dark:text-stone-400">Accounts Ledger</p>
+            <p className="text-xs text-stone-400 font-malayalam mt-0.5">
+              ബയർ ലെഡ്ജർ, ക്രെഡിറ്റ് കുടിശ്ശിക & പ്രവർത്തന ചെലവുകൾ
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Sub-tab segmented pill buttons */}
+            <div className="flex flex-wrap items-center gap-1.5 p-1 bg-stone-100 dark:bg-[#1E1B1B] rounded-xl border border-stone-200 dark:border-[#2E2828]">
+              <button
+                type="button"
+                onClick={() => setSubTab('buyer')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer font-malayalam ${
+                  subTab === 'buyer'
+                    ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs font-black'
+                    : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+                }`}
+              >
+                <FiUsers className="w-3.5 h-3.5" />
+                <span>ബയർ അക്കൗണ്ട്സ് (Buyers)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSubTab('expense')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer font-malayalam ${
+                  subTab === 'expense'
+                    ? 'bg-white dark:bg-stone-800 text-epso-red dark:text-amber-400 shadow-2xs font-black'
+                    : 'text-stone-500 hover:text-stone-800 dark:hover:text-stone-200'
+                }`}
+              >
+                <FiDollarSign className="w-3.5 h-3.5" />
+                <span>ചെലവ് കുറിപ്പുകൾ (Expenses)</span>
+              </button>
+            </div>
+
+            {/* Refresh Button */}
+            <button
+              type="button"
+              onClick={handleRefresh}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] text-stone-700 dark:text-stone-300 hover:bg-stone-50 dark:hover:bg-[#282323] text-xs font-bold press-apple transition-colors cursor-pointer disabled:opacity-50 shadow-2xs font-malayalam"
+              title="ഡാറ്റ പുതുക്കുക"
+            >
+              <FiRefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-epso-orange' : ''}`} />
+              <span>പുതുക്കുക</span>
+            </button>
           </div>
         </div>
-        <button
-          onClick={handleRefresh}
-          className="press-apple cursor-pointer flex items-center gap-2 px-3 py-2 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#181515] text-stone-600 dark:text-stone-300 text-xs font-bold hover:bg-stone-50 dark:hover:bg-[#1E1B1B] transition-colors"
-        >
-          <FiRefreshCw className="w-3.5 h-3.5" />
-          <span className="font-malayalam">പുതുക്കുക</span>
-        </button>
       </div>
 
-      {/* ── KPI Cards ── */}
-      <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
-        <KpiCard
-          icon={<FiShoppingBag className="w-4 h-4" />}
-          title="ആകെ ബില്ല്"
-          subtitle="Total Billed"
-          value={fmt(kpi.totalBilled)}
-        />
-        <KpiCard
-          icon={<FiCheck className="w-4 h-4" />}
-          title="അടച്ചത്"
-          subtitle="Cash Collected"
-          value={fmt(kpi.cashCollected)}
-          valueClass="text-emerald-600 dark:text-emerald-400"
-        />
-        <KpiCard
-          icon={<FiAlertCircle className="w-4 h-4" />}
-          title="ബാക്കി കുടിശ്ശിക"
-          subtitle="Outstanding Credit"
-          value={fmt(kpi.outstanding)}
-          valueClass={
-            kpi.outstanding > 0
-              ? 'text-amber-600 dark:text-amber-400'
-              : 'text-stone-900 dark:text-white'
-          }
-        />
-        <KpiCard
-          icon={<FiUsers className="w-4 h-4" />}
-          title="കുടിശ്ശികയുള്ളവർ"
-          subtitle="Buyers on Credit"
-          value={String(kpi.buyersWithCredit)}
-          valueClass={
-            kpi.buyersWithCredit > 0
-              ? 'text-amber-600 dark:text-amber-400'
-              : 'text-stone-900 dark:text-white'
-          }
-        />
-        <KpiCard
-          icon={<FiTrendingDown className="w-4 h-4" />}
-          title="പ്രവർത്തന ചെലവ്"
-          subtitle="Operational Expenses"
-          value={fmt(kpi.totalExpenses)}
-          badge="കുറിപ്പ് മാത്രം"
-        />
+      {/* ── Summary Indicators (Analytics Stat Row) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="p-3 bg-stone-50 dark:bg-[#1A1818] rounded-xl border border-stone-200 dark:border-[#2E2828]">
+          <div className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam tracking-tight">
+            ആകെ ബയർമാർ (Registered Buyers)
+          </div>
+          <div className="text-xl font-black text-stone-900 dark:text-white mt-0.5">
+            <AnimatedNumber value={buyers.length} suffix=" പേർ" />
+          </div>
+        </div>
+        <div className="p-3 bg-stone-50 dark:bg-[#1A1818] rounded-xl border border-stone-200 dark:border-[#2E2828]">
+          <div className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam tracking-tight">
+            കുടിശ്ശികയുള്ളവർ (Buyers on Credit)
+          </div>
+          <div className="text-xl font-black text-amber-500 mt-0.5">
+            <AnimatedNumber value={kpi.buyersWithCredit} suffix=" പേർ" />
+          </div>
+        </div>
+        <div className="p-3 bg-stone-50 dark:bg-[#1A1818] rounded-xl border border-stone-200 dark:border-[#2E2828]">
+          <div className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam tracking-tight">
+            പ്രവർത്തന ചെലവ് (Logged Expenses)
+          </div>
+          <div className="text-xl font-black text-epso-orange mt-0.5">
+            <AnimatedNumber value={kpi.totalExpenses} prefix="₹" />
+          </div>
+        </div>
       </div>
 
-      {/* ── Sub-Tab Navigation ── */}
-      <div className="flex gap-1 p-1 bg-stone-100 dark:bg-[#1A1717] rounded-2xl w-fit">
-        {(
-          [
-            { key: 'buyer', ml: 'ബയർ ലെഡ്ജർ', en: 'Buyer Ledger', icon: <FiUsers className="w-3.5 h-3.5" /> },
-            { key: 'expense', ml: 'ചെലവ് കുറിപ്പ്', en: 'Expense Notes', icon: <FiDollarSign className="w-3.5 h-3.5" /> },
-          ] as const
-        ).map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setSubTab(tab.key)}
-            className={`press-apple cursor-pointer flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all font-malayalam ${
-              subTab === tab.key
-                ? 'bg-epso-red text-white dark:bg-amber-500 dark:text-stone-950 shadow-sm'
-                : 'text-stone-600 dark:text-stone-400 hover:bg-white/50 dark:hover:bg-white/5'
-            }`}
-          >
-            {tab.icon}
-            <span>{tab.ml}</span>
-          </button>
-        ))}
+      {/* ── Financial Metric Strip (Exact Analytics 3-Card Strip) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Total Billed */}
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
+              ആകെ ബിൽ ചെയ്തത് (Total Billed Sales)
+            </span>
+            <div className="p-2 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-epso-orange">
+              <FiShoppingBag className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl sm:text-3xl font-black text-stone-900 dark:text-white">
+            <AnimatedNumber value={kpi.totalBilled} prefix="₹" />
+          </div>
+          <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
+            {sales.length} ഇൻവോയ്സുകളുടെ ആകെ തുക
+          </p>
+        </div>
+
+        {/* Cash Collected */}
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
+              ആകെ പണം ലഭിച്ചത് (Cash Collected)
+            </span>
+            <div className="p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400">
+              <FiCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="text-2xl sm:text-3xl font-black text-emerald-600 dark:text-emerald-400">
+            <AnimatedNumber value={kpi.cashCollected} prefix="₹" />
+          </div>
+          <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
+            സെയിൽസ് അടവുകളും ക്രെഡിറ്റ് പേയ്മെന്റുകളും
+          </p>
+        </div>
+
+        {/* Outstanding Credit */}
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-bold text-stone-500 dark:text-stone-400 font-malayalam">
+              ബാക്കി കുടിശ്ശിക (Outstanding Credit)
+            </span>
+            <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-500">
+              <FiAlertCircle className="w-4 h-4" />
+            </div>
+          </div>
+          <div className={`text-2xl sm:text-3xl font-black ${kpi.outstanding > 0 ? 'text-amber-500 dark:text-amber-400' : 'text-stone-900 dark:text-white'}`}>
+            <AnimatedNumber value={kpi.outstanding} prefix="₹" />
+          </div>
+          <p className="text-[11px] text-stone-400 mt-1 font-malayalam">
+            {kpi.buyersWithCredit} ബയർമാരിൽ നിന്ന് പിരിയാനുള്ള തുക
+          </p>
+        </div>
       </div>
 
-      {/* ═══════════════════════════════ TAB A: BUYER LEDGER ══════════════════════════════ */}
+      {/* ═══════════════════════════════ TAB A: BUYER DIRECTORY ══════════════════════════════ */}
       {subTab === 'buyer' && (
-        <div className="space-y-4">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100 dark:border-[#282323]">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400">
+                <FiUsers className="w-4 h-4 stroke-[2.5]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-stone-900 dark:text-white font-malayalam">
+                  ബയർ ഡയറക്ടറി & ക്രെഡിറ്റ് ലെഡ്ജർ
+                </h3>
+                <p className="text-[11px] text-stone-400">
+                  Buyer Directory & Credit Tracking
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowAddBuyer(true)}
+                className="press-apple cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold font-malayalam bg-epso-red text-white dark:bg-amber-500 dark:text-stone-950 shadow-sm"
+              >
+                <FiPlus className="w-3.5 h-3.5" />+ പുതിയ ബയർ
+              </button>
+              <button
+                onClick={handleImportFromSales}
+                disabled={importingFromSales}
+                className="press-apple cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold font-malayalam bg-white dark:bg-[#181515] text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-[#2E2828] disabled:opacity-50"
+              >
+                {importingFromSales ? (
+                  <FiRefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <FiShoppingBag className="w-3.5 h-3.5" />
+                )}
+                Sales-ൽ നിന്ന് ഇംപോർട്ട്
+              </button>
+            </div>
+          </div>
+
           {/* Controls */}
           <div className="flex flex-wrap gap-2 items-center">
             {/* Search */}
@@ -654,28 +709,6 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
             >
               <FiFilter className="w-3.5 h-3.5" />
               കുടിശ്ശിക മാത്രം
-            </button>
-
-            {/* Add buyer */}
-            <button
-              onClick={() => setShowAddBuyer(true)}
-              className="press-apple cursor-pointer flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold font-malayalam bg-epso-red text-white dark:bg-amber-500 dark:text-stone-950 shadow-sm"
-            >
-              <FiPlus className="w-3.5 h-3.5" />+ പുതിയ ബയർ
-            </button>
-
-            {/* Import from sales */}
-            <button
-              onClick={handleImportFromSales}
-              disabled={importingFromSales}
-              className="press-apple cursor-pointer flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold font-malayalam bg-white dark:bg-[#181515] text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-[#2E2828] disabled:opacity-50"
-            >
-              {importingFromSales ? (
-                <FiRefreshCw className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <FiShoppingBag className="w-3.5 h-3.5" />
-              )}
-              Sales-ൽ നിന്ന് ഇംപോർട്ട്
             </button>
           </div>
 
@@ -885,7 +918,29 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
 
       {/* ═══════════════════════════════ TAB B: EXPENSE NOTES ═════════════════════════════ */}
       {subTab === 'expense' && (
-        <div className="space-y-4">
+        <div className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100 dark:border-[#282323]">
+            <div className="flex items-center gap-2">
+              <div className="p-2 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-epso-orange">
+                <FiDollarSign className="w-4 h-4 stroke-[2.5]" />
+              </div>
+              <div>
+                <h3 className="text-sm font-black text-stone-900 dark:text-white font-malayalam">
+                  പ്രവർത്തന ചെലവുകൾ (കുറിപ്പുകൾ)
+                </h3>
+                <p className="text-[11px] text-stone-400">
+                  Operational Expense Logs (Reference Only)
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowAddExpense(true)}
+              className="press-apple cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold font-malayalam bg-epso-red text-white dark:bg-amber-500 dark:text-stone-950 shadow-sm"
+            >
+              <FiPlus className="w-3.5 h-3.5" />+ ചെലവ് ചേർക്കുക
+            </button>
+          </div>
           {/* Disclaimer */}
           <div className="flex gap-3 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-2xl">
             <FiAlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
@@ -949,16 +1004,6 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
                 <FiX className="w-3.5 h-3.5" />
               </button>
             )}
-
-            <div className="flex-1" />
-
-            {/* Log expense button */}
-            <button
-              onClick={() => setShowAddExpense(true)}
-              className="press-apple cursor-pointer flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-xs font-bold font-malayalam bg-epso-red text-white dark:bg-amber-500 dark:text-stone-950 shadow-sm"
-            >
-              <FiPlus className="w-3.5 h-3.5" />+ ചെലവ് ചേർക്കുക
-            </button>
           </div>
 
           {/* Expense table */}

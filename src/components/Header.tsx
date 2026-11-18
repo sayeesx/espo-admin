@@ -20,6 +20,7 @@ import {
   FiCpu,
   FiSettings,
   FiLayers,
+  FiCreditCard,
 } from 'react-icons/fi';
 
 export type AdminTab =
@@ -73,7 +74,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'sales', labelMl: 'വിൽപ്പന', icon: FiShoppingBag },
     { id: 'wages', labelMl: 'കൂലി', icon: FiUsers },
     { id: 'costing', labelMl: 'കോസ്റ്റിംഗ്', icon: FiDollarSign },
-    { id: 'accounts' as AdminTab, labelMl: 'ലെഡ്ജർ & അക്കൗണ്ട്സ്', icon: FiBookOpen },
+    { id: 'accounts' as AdminTab, labelMl: 'അക്കൗണ്ട്സ്', icon: FiCreditCard },
     { id: 'products', labelMl: 'ഉൽപ്പന്നങ്ങൾ', icon: FiPackage },
     { id: 'ingredients', labelMl: 'ചേരുവകൾ', icon: FiBox },
     { id: 'movements', labelMl: 'ലെഡ്ജർ', icon: FiClock },
