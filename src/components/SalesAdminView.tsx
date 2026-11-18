@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   FiDollarSign,
   FiPlus,
@@ -16,6 +16,8 @@ import {
   FiArrowLeft,
   FiShoppingBag,
   FiRotateCcw,
+  FiChevronDown,
+  FiUser,
 } from 'react-icons/fi';
 import { Product, SaleRecord, FactoryProfile, DEFAULT_FACTORY_PROFILE, ProductionRun } from '../types';
 import {
@@ -199,13 +201,37 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, produc
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
   const [invoiceDate, setInvoiceDate] = useState<string>(todayStr);
   const [invoiceNo, setInvoiceNo] = useState<string>('INV-00123');
-  const [customerName, setCustomerName] = useState<string>('Ramesh Traders');
+  const [customerName, setCustomerName] = useState<string>('');
+  const [isCustomerDropdownOpen, setIsCustomerDropdownOpen] = useState(false);
+  const customerDropdownRef = useRef<HTMLDivElement>(null);
   const [paymentMethod, setPaymentMethod] = useState<string>('cash');
   const [paymentStatus, setPaymentStatus] = useState<string>('paid');
   const [discountAmount, setDiscountAmount] = useState<string>('0');
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
+
+  // Close customer dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target as Node)) {
+        setIsCustomerDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredBuyersForInput = useMemo(() => {
+    const q = customerName.toLowerCase().trim();
+    if (!q) return buyersList;
+    return buyersList.filter(
+      (b) =>
+        b.name.toLowerCase().includes(q) ||
+        (b.shopName && b.shopName.toLowerCase().includes(q)) ||
+        (b.phone && b.phone.includes(q))
+    );
+  }, [buyersList, customerName]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -330,7 +356,7 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, produc
 
     setInvoiceNo(`INV-${String(Date.now()).slice(-5)}`);
     setInvoiceDate(todayStr);
-    setCustomerName(buyersList[0]?.name || 'Ramesh Traders');
+    setCustomerName('');
     setPaymentMethod('cash');
     setPaymentStatus('paid');
     setDiscountAmount('0');
@@ -1065,33 +1091,117 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
           {/* Settings Ribbon: Customer, Invoice No, Date, Payment Mode */}
           <div className="bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] rounded-2xl p-4 shadow-xs">
             <div className="flex items-center gap-4 flex-wrap">
-              {/* Customer Selector */}
+              {/* Customer Selector (Modern Apple/Tailwind themed dropdown) */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-stone-700 dark:text-stone-300 font-malayalam">ഉപഭോക്താവ്:</span>
-                <div className="relative">
-                  <input
-                    type="text"
-                    list="invoice-buyers-list"
-                    value={customerName}
-                    onChange={(e) => setCustomerName(e.target.value)}
-                    placeholder="e.g. Ramesh Traders"
-                    className="px-3 py-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-xs font-bold text-stone-900 dark:text-white min-w-[180px] focus:outline-none focus:ring-1 focus:ring-epso-orange"
-                  />
-                  <datalist id="invoice-buyers-list">
-                    {buyersList.map((b, idx) => (
-                      <option key={idx} value={b.name}>
-                        {b.shopName ? `${b.shopName} (${b.name})` : b.name}
-                      </option>
-                    ))}
-                  </datalist>
+                <span className="text-xs font-bold text-stone-700 dark:text-stone-300 font-malayalam whitespace-nowrap">
+                  ഉപഭോക്താവ്:
+                </span>
+                <div ref={customerDropdownRef} className="relative min-w-[210px] sm:min-w-[250px]">
+                  <div className="relative flex items-center">
+                    <FiUser className="absolute left-3 w-3.5 h-3.5 text-stone-400 dark:text-stone-500 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={customerName}
+                      onFocus={() => setIsCustomerDropdownOpen(true)}
+                      onChange={(e) => {
+                        setCustomerName(e.target.value);
+                        setIsCustomerDropdownOpen(true);
+                      }}
+                      placeholder="ഉപഭോക്താവ് / കസ്റ്റമർ..."
+                      className="w-full pl-8 pr-14 py-1.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#141212] text-xs font-bold text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-stone-500 placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-epso-orange/30 focus:border-epso-orange transition-all shadow-2xs"
+                    />
+                    <div className="absolute right-1.5 flex items-center gap-0.5">
+                      {customerName && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomerName('');
+                            setIsCustomerDropdownOpen(true);
+                          }}
+                          className="p-1 rounded-md text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition-colors"
+                          title="Clear"
+                        >
+                          <FiX className="w-3 h-3" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomerDropdownOpen((prev) => !prev)}
+                        className="p-1 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition-colors"
+                      >
+                        <FiChevronDown
+                          className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                            isCustomerDropdownOpen ? 'rotate-180 text-epso-orange' : ''
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Modern Dropdown Menu */}
+                  {isCustomerDropdownOpen && (
+                    <div className="absolute left-0 top-full mt-1.5 w-full max-h-60 overflow-y-auto rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark py-1.5 z-50 animate-scale-in">
+                      {filteredBuyersForInput.length > 0 ? (
+                        filteredBuyersForInput.map((b, idx) => {
+                          const isSelected = customerName.trim().toLowerCase() === b.name.trim().toLowerCase();
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={() => {
+                                setCustomerName(b.name);
+                                setIsCustomerDropdownOpen(false);
+                              }}
+                              className={`w-full px-3 py-2 text-left flex items-center justify-between gap-2 hover:bg-orange-50/60 dark:hover:bg-[#282323] transition-colors cursor-pointer ${
+                                isSelected ? 'bg-orange-50/80 dark:bg-[#2A2424]' : ''
+                              }`}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className={`text-xs truncate ${isSelected ? 'font-black text-epso-orange dark:text-amber-400' : 'font-bold text-stone-900 dark:text-white'}`}>
+                                  {b.name}
+                                </p>
+                                {b.shopName && (
+                                  <p className="text-[10px] text-stone-500 dark:text-stone-400 truncate">
+                                    {b.shopName} {b.phone ? `· ${b.phone}` : ''}
+                                  </p>
+                                )}
+                              </div>
+                              {isSelected && (
+                                <FiCheck className="w-3.5 h-3.5 text-epso-orange dark:text-amber-400 shrink-0" />
+                              )}
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div className="px-3 py-2 text-[11px] text-stone-400 dark:text-stone-500 text-center font-malayalam">
+                          {customerName ? `"${customerName}" ആയി രേഖപ്പെടുത്തും` : 'ബയർമാർ ലഭ്യമല്ല'}
+                        </div>
+                      )}
+
+                      <div className="border-t border-stone-100 dark:border-[#282323] mt-1 pt-1 px-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCustomerDropdownOpen(false);
+                            setShowAddBuyerModal(true);
+                          }}
+                          className="w-full px-2.5 py-1.5 rounded-xl text-left text-xs font-bold text-epso-orange dark:text-amber-400 hover:bg-orange-50 dark:hover:bg-[#252020] flex items-center gap-1.5 transition-colors cursor-pointer font-malayalam"
+                        >
+                          <FiPlus className="w-3.5 h-3.5" />
+                          <span>+ പുതിയ ബയറെ ചേർക്കുക (Add Buyer)</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
+
                 <button
                   type="button"
                   onClick={() => setShowAddBuyerModal(true)}
-                  className="p-1.5 rounded-xl border border-stone-300 dark:border-[#2E2828] hover:bg-stone-100 dark:hover:bg-[#282323] text-stone-600 dark:text-stone-300 transition-colors cursor-pointer"
-                  title="Add / Manage Buyers"
+                  className="p-1.5 rounded-xl border border-stone-200 dark:border-[#2E2828] bg-white dark:bg-[#1E1B1B] hover:bg-stone-50 dark:hover:bg-[#282323] text-stone-600 dark:text-stone-300 transition-colors cursor-pointer shadow-2xs"
+                  title="പുതിയ ബയറെ ചേർക്കുക (Add New Buyer)"
                 >
-                  <FiMenu className="w-4 h-4" />
+                  <FiUserPlus className="w-4 h-4 text-stone-600 dark:text-stone-300" />
                 </button>
               </div>
 
@@ -1635,7 +1745,7 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                 <input
                   type="text"
                   required
-                  placeholder="ഉദാ: Ramesh Traders, പ്രവീൺ..."
+                  placeholder="ഉദാ: പ്രവീൺ, അൽ-മദീന..."
                   value={newBuyerName}
                   onChange={(e) => setNewBuyerName(e.target.value)}
                   className="google-input"
