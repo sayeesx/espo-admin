@@ -13,6 +13,10 @@ import {
   DailyCostAllocation,
   PackagingItem,
   PackingRecord,
+  Buyer,
+  BuyerPayment,
+  OperationalExpense,
+  SaleRecord,
 } from '../types';
 import {
   allocateDailySharedExpenses,
@@ -3135,4 +3139,150 @@ export async function executeAdminReset(
   return { success: true };
 }
 
+// ============================================================================
+// ACCOUNTS & LEDGER: Buyer Directory
+// ============================================================================
 
+export async function fetchBuyers(): Promise<Buyer[]> {
+  const { data, error } = await supabase
+    .from('buyers')
+    .select('*')
+    .order('name', { ascending: true });
+  if (error) {
+    console.error('Error fetching buyers:', error);
+    return [];
+  }
+  return (data || []) as Buyer[];
+}
+
+export async function saveBuyer(buyer: Partial<Buyer>): Promise<Buyer> {
+  if (buyer.id) {
+    const { data, error } = await supabase
+      .from('buyers')
+      .update({ ...buyer, updated_at: new Date().toISOString() })
+      .eq('id', buyer.id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message || 'Failed to update buyer');
+    return data as Buyer;
+  } else {
+    const { data, error } = await supabase
+      .from('buyers')
+      .insert({ ...buyer })
+      .select()
+      .single();
+    if (error) throw new Error(error.message || 'Failed to create buyer');
+    return data as Buyer;
+  }
+}
+
+export async function deleteBuyer(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('buyers')
+    .update({ is_active: false, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw new Error(error.message || 'Failed to deactivate buyer');
+}
+
+export async function syncBuyersFromSales(sales: SaleRecord[]): Promise<void> {
+  const distinctNames = Array.from(
+    new Set(
+      sales
+        .map((s) => s.customer_name?.trim())
+        .filter(Boolean)
+        .filter((n) => n !== 'Counter Sale' && n !== 'Retail')
+    )
+  );
+  if (distinctNames.length === 0) return;
+
+  const { data: existing } = await supabase.from('buyers').select('name');
+  const existingNames = new Set((existing || []).map((b: any) => b.name?.trim().toLowerCase()));
+
+  const toInsert = distinctNames
+    .filter((n) => !existingNames.has(n!.toLowerCase()))
+    .map((n) => ({ name: n }));
+
+  if (toInsert.length === 0) return;
+  const { error } = await supabase.from('buyers').insert(toInsert);
+  if (error) console.error('Error syncing buyers from sales:', error);
+}
+
+// ============================================================================
+// ACCOUNTS & LEDGER: Buyer Payments (Credit Settlements)
+// ============================================================================
+
+export async function fetchBuyerPayments(buyerId?: string): Promise<BuyerPayment[]> {
+  let query = supabase
+    .from('buyer_payments')
+    .select('*')
+    .order('payment_date', { ascending: false });
+  if (buyerId) {
+    query = query.eq('buyer_id', buyerId);
+  }
+  const { data, error } = await query;
+  if (error) {
+    console.error('Error fetching buyer payments:', error);
+    return [];
+  }
+  return (data || []) as BuyerPayment[];
+}
+
+export async function recordBuyerPayment(
+  payment: Omit<BuyerPayment, 'id' | 'created_at'>
+): Promise<BuyerPayment> {
+  const { data, error } = await supabase
+    .from('buyer_payments')
+    .insert({ ...payment })
+    .select()
+    .single();
+  if (error) throw new Error(error.message || 'Failed to record buyer payment');
+  return data as BuyerPayment;
+}
+
+export async function deleteBuyerPayment(id: string): Promise<void> {
+  const { error } = await supabase.from('buyer_payments').delete().eq('id', id);
+  if (error) throw new Error(error.message || 'Failed to delete buyer payment');
+}
+
+// ============================================================================
+// ACCOUNTS & LEDGER: Operational Expenses (Strictly Informational)
+// ============================================================================
+
+export async function fetchOperationalExpenses(
+  startDate?: string,
+  endDate?: string
+): Promise<OperationalExpense[]> {
+  let query = supabase
+    .from('operational_expenses')
+    .select('*, products(name)')
+    .order('expense_date', { ascending: false });
+  if (startDate) query = query.gte('expense_date', startDate);
+  if (endDate) query = query.lte('expense_date', endDate);
+  const { data, error } = await query;
+  if (error) {
+    console.error('Error fetching operational expenses:', error);
+    return [];
+  }
+  return ((data || []) as any[]).map((e) => ({
+    ...e,
+    product_name: e.products?.name ?? undefined,
+  })) as OperationalExpense[];
+}
+
+export async function recordOperationalExpense(
+  expense: Omit<OperationalExpense, 'id' | 'created_at' | 'product_name'>
+): Promise<OperationalExpense> {
+  const { product_name: _ignored, ...payload } = expense as any;
+  const { data, error } = await supabase
+    .from('operational_expenses')
+    .insert({ ...payload })
+    .select()
+    .single();
+  if (error) throw new Error(error.message || 'Failed to record expense');
+  return data as OperationalExpense;
+}
+
+export async function deleteOperationalExpense(id: string): Promise<void> {
+  const { error } = await supabase.from('operational_expenses').delete().eq('id', id);
+  if (error) throw new Error(error.message || 'Failed to delete expense');
+}

@@ -34,7 +34,8 @@ export type AdminTab =
   | 'ingredients'
   | 'movements'
   | 'notifications'
-  | 'settings';
+  | 'settings'
+  | 'accounts';
 
 interface HeaderProps {
   activeTab: AdminTab;
@@ -72,6 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'sales', labelMl: 'വിൽപ്പന', icon: FiShoppingBag },
     { id: 'wages', labelMl: 'കൂലി', icon: FiUsers },
     { id: 'costing', labelMl: 'കോസ്റ്റിംഗ്', icon: FiDollarSign },
+    { id: 'accounts' as AdminTab, labelMl: 'ലെഡ്ജർ & അക്കൗണ്ട്സ്', icon: FiBookOpen },
     { id: 'products', labelMl: 'ഉൽപ്പന്നങ്ങൾ', icon: FiPackage },
     { id: 'ingredients', labelMl: 'ചേരുവകൾ', icon: FiBox },
     { id: 'movements', labelMl: 'ലെഡ്ജർ', icon: FiClock },

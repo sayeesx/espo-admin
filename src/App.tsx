@@ -26,6 +26,7 @@ import { AIAdminAssistant } from './components/AIAdminAssistant';
 import { SettingsAdminView } from './components/SettingsAdminView';
 import { InventoryStockAdminView } from './components/InventoryStockAdminView';
 import { CompulsoryUpdateModal } from './components/CompulsoryUpdateModal';
+import { AccountsLedgerAdminView } from './components/AccountsLedgerAdminView';
 import { useUpdateChecker } from './hooks/useUpdateChecker';
 import {
   fetchProducts,
@@ -67,6 +68,7 @@ export const App: React.FC = () => {
         'ingredients',
         'movements',
         'settings',
+        'accounts',
       ];
       if (tabParam && validTabs.includes(tabParam)) return tabParam;
       if (tabParam === ('recipes' as any)) return 'products';
@@ -171,6 +173,7 @@ export const App: React.FC = () => {
           'ingredients',
           'movements',
           'settings',
+          'accounts',
         ];
         if (tabParam && validTabs.includes(tabParam)) {
           setActiveTab(tabParam);
@@ -499,6 +502,10 @@ export const App: React.FC = () => {
     } else {
       setIsTodayWageAdded(false);
     }
+  }), [runTabRefresh]);
+
+  const refreshAccountsData = useCallback(() => runTabRefresh('accounts', async () => {
+    // AccountsLedgerAdminView manages its own data fetching internally
   }), [runTabRefresh]);
 
   // Auto-refresh fresh data from Supabase when navigating to specific data views
@@ -863,6 +870,13 @@ export const App: React.FC = () => {
                   productionRuns={productionRuns}
                   stockMovements={stockMovements}
                   onRefresh={refreshSettingsData}
+                />
+              )}
+
+              {activeTab === 'accounts' && (
+                <AccountsLedgerAdminView
+                  products={products}
+                  onRefresh={refreshAccountsData}
                 />
               )}
             </>

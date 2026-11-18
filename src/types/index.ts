@@ -300,6 +300,9 @@ export interface SaleRecord {
   payment_status?: 'paid' | 'pending' | 'partial' | string;
   notes?: string;
   created_at?: string;
+  buyer_id?: string;
+  paid_amount?: number;
+  balance_amount?: number;
 }
 
 export interface DailyWage {
@@ -350,3 +353,36 @@ export const DEFAULT_FACTORY_PROFILE: FactoryProfile = {
   fssai: '11322001000123',
   billFooter: 'നന്ദി! വീണ്ടും സന്ദർശിക്കുക.',
 };
+
+export interface Buyer {
+  id: string;
+  name: string;
+  phone?: string;
+  shop_name?: string;
+  address?: string;
+  notes?: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface BuyerPayment {
+  id: string;
+  buyer_id: string;
+  payment_date: string;
+  amount: number;
+  payment_method: 'cash' | 'upi' | 'bank' | 'other' | string;
+  notes?: string;
+  created_at?: string;
+}
+
+export interface OperationalExpense {
+  id: string;
+  expense_date: string;
+  category: string;
+  amount: number;
+  product_id?: string;
+  product_name?: string;
+  notes?: string;
+  created_at?: string;
+}
