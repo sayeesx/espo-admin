@@ -785,6 +785,7 @@ export const App: React.FC = () => {
               {activeTab === 'sales' && (
                 <SalesAdminView
                   products={products}
+                  productionRuns={productionRuns}
                   onRefresh={refreshSalesData}
                 />
               )}

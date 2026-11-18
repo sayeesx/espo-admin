@@ -3143,11 +3143,15 @@ export async function executeAdminReset(
 // ACCOUNTS & LEDGER: Buyer Directory
 // ============================================================================
 
-export async function fetchBuyers(): Promise<Buyer[]> {
-  const { data, error } = await supabase
+export async function fetchBuyers(includeInactive: boolean = false): Promise<Buyer[]> {
+  let query = supabase
     .from('buyers')
     .select('*')
     .order('name', { ascending: true });
+  if (!includeInactive) {
+    query = query.eq('is_active', true);
+  }
+  const { data, error } = await query;
   if (error) {
     console.error('Error fetching buyers:', error);
     return [];
@@ -3177,11 +3181,16 @@ export async function saveBuyer(buyer: Partial<Buyer>): Promise<Buyer> {
 }
 
 export async function deleteBuyer(id: string): Promise<void> {
-  const { error } = await supabase
-    .from('buyers')
-    .update({ is_active: false, updated_at: new Date().toISOString() })
-    .eq('id', id);
-  if (error) throw new Error(error.message || 'Failed to deactivate buyer');
+  // First try hard delete so buyer is completely deleted
+  const { error: delErr } = await supabase.from('buyers').delete().eq('id', id);
+  if (delErr) {
+    // If foreign key constraint prevents hard delete, soft delete
+    const { error: updErr } = await supabase
+      .from('buyers')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (updErr) throw new Error(updErr.message || 'Failed to delete buyer');
+  }
 }
 
 export async function syncBuyersFromSales(sales: SaleRecord[]): Promise<void> {

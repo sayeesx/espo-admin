@@ -161,7 +161,6 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
   });
   const [buyerSaving, setBuyerSaving] = useState(false);
   const [paymentSaving, setPaymentSaving] = useState(false);
-  const [importingFromSales, setImportingFromSales] = useState(false);
 
   // Tab B
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState('all');
@@ -189,9 +188,17 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
         fetchOperationalExpenses(),
       ]);
       setSales(s);
-      setBuyers(b);
       setPayments(p);
       setExpenses(e);
+
+      // Automatically sync buyers from sales in the background without needing a manual button
+      try {
+        await syncBuyersFromSales(s);
+        const freshBuyers = await fetchBuyers();
+        setBuyers(freshBuyers);
+      } catch {
+        setBuyers(b);
+      }
     } catch (err: any) {
       showToast(err?.message || 'ഡാറ്റ ലോഡ് ചെയ്യുന്നതിൽ പിഴവ് (Error loading data)', 'error');
     } finally {
@@ -232,18 +239,20 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
 
   // ── Buyer stats ──
   const buyerStats = useMemo<BuyerStats[]>(() => {
-    return buyers.map((buyer) => {
-      const linkedSales = sales.filter(
-        (s) =>
-          s.buyer_id === buyer.id ||
-          s.customer_name?.trim().toLowerCase() === buyer.name.trim().toLowerCase()
-      );
-      const totalBilled = linkedSales.reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0);
-      const buyerPayments = payments.filter((p) => p.buyer_id === buyer.id);
-      const totalPaid = buyerPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
-      const netCredit = totalBilled - totalPaid;
-      return { buyer, totalBilled, totalPaid, netCredit, linkedSales, payments: buyerPayments };
-    });
+    return buyers
+      .filter((buyer) => buyer.is_active !== false)
+      .map((buyer) => {
+        const linkedSales = sales.filter(
+          (s) =>
+            s.buyer_id === buyer.id ||
+            s.customer_name?.trim().toLowerCase() === buyer.name.trim().toLowerCase()
+        );
+        const totalBilled = linkedSales.reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0);
+        const buyerPayments = payments.filter((p) => p.buyer_id === buyer.id);
+        const totalPaid = buyerPayments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+        const netCredit = totalBilled - totalPaid;
+        return { buyer, totalBilled, totalPaid, netCredit, linkedSales, payments: buyerPayments };
+      });
   }, [buyers, sales, payments]);
 
   // ── Filtered buyers ──
@@ -274,21 +283,6 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
     () => filteredExpenses.reduce((s, e) => s + (Number(e.amount) || 0), 0),
     [filteredExpenses]
   );
-
-  // ── Import from sales ──
-  const handleImportFromSales = useCallback(async () => {
-    setImportingFromSales(true);
-    try {
-      await syncBuyersFromSales(sales);
-      const freshBuyers = await fetchBuyers();
-      setBuyers(freshBuyers);
-      showToast('Sales-ൽ നിന്ന് ബയർ ഇംപോർട്ട് ചെയ്തു (Buyers imported from sales)', 'success');
-    } catch (err: any) {
-      showToast(err?.message || 'ഇംപോർട്ട് പരാജയപ്പെട്ടു (Import failed)', 'error');
-    } finally {
-      setImportingFromSales(false);
-    }
-  }, [sales, showToast]);
 
   // ── Add buyer ──
   const handleSaveBuyer = useCallback(async () => {
@@ -323,16 +317,15 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
     async (buyer: Buyer) => {
       const confirmed = await confirm({
         title: 'ബയർ നീക്കം ചെയ്യണോ?',
-        message: `"${buyer.name}" നിഷ്ക്രിയമാക്കും. (This will deactivate the buyer.)`,
-        confirmLabel: 'നീക്കം ചെയ്യുക (Remove)',
+        message: `"${buyer.name}" നീക്കം ചെയ്യും. (Are you sure you want to delete this buyer?)`,
+        confirmLabel: 'ഡിലീറ്റ് ചെയ്യുക (Delete)',
         isDestructive: true,
       });
       if (!confirmed) return;
       try {
         await deleteBuyer(buyer.id);
-        const freshBuyers = await fetchBuyers();
-        setBuyers(freshBuyers);
-        showToast('ബയർ നിഷ്ക്രിയമാക്കി (Buyer deactivated)', 'success');
+        setBuyers((prev) => prev.filter((b) => b.id !== buyer.id));
+        showToast('ബയർ നീക്കം ചെയ്തു (Buyer deleted)', 'success');
       } catch (err: any) {
         showToast(err?.message || 'ഡിലീറ്റ് ചെയ്യുന്നതിൽ പിഴവ് (Error deleting buyer)', 'error');
       }
@@ -657,21 +650,9 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowAddBuyer(true)}
-                className="press-apple cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold font-malayalam bg-epso-red text-white dark:bg-amber-500 dark:text-stone-950 shadow-sm"
+                className="press-apple cursor-pointer flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold font-malayalam bg-epso-red text-white dark:bg-amber-500 dark:text-stone-950 shadow-sm"
               >
-                <FiPlus className="w-3.5 h-3.5" />+ പുതിയ ബയർ
-              </button>
-              <button
-                onClick={handleImportFromSales}
-                disabled={importingFromSales}
-                className="press-apple cursor-pointer flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold font-malayalam bg-white dark:bg-[#181515] text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-[#2E2828] disabled:opacity-50"
-              >
-                {importingFromSales ? (
-                  <FiRefreshCw className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <FiShoppingBag className="w-3.5 h-3.5" />
-                )}
-                Sales-ൽ നിന്ന് ഇംപോർട്ട്
+                <FiPlus className="w-3.5 h-3.5" />+ പുതിയ ബയർ (Add Buyer)
               </button>
             </div>
           </div>
@@ -724,7 +705,7 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
               </p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-5">
               {filteredBuyerStats.map((bs) => {
                 const isExpanded = expandedBuyerId === bs.buyer.id;
                 const timeline = isExpanded ? getBuyerTimeline(bs) : [];
@@ -738,68 +719,62 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
                 return (
                   <div
                     key={bs.buyer.id}
-                    className="bg-white dark:bg-[#181515] border border-stone-200 dark:border-[#2E2828] rounded-2xl overflow-hidden"
+                    className="p-5 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-apple-card dark:shadow-apple-card-dark flex flex-col justify-between transition-all hover:border-stone-300 dark:hover:border-stone-700"
                   >
-                    {/* Buyer header */}
-                    <div className="p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <p className="font-black text-stone-900 dark:text-white text-sm font-malayalam truncate">
+                    <div>
+                      {/* Buyer Header: Title, Shop & Phone */}
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-base font-bold text-stone-900 dark:text-white truncate">
                             {bs.buyer.name}
+                          </h3>
+                          <p className="text-[11px] text-stone-500 dark:text-stone-400 font-malayalam mt-0.5 truncate">
+                            {bs.buyer.shop_name || 'റീട്ടെയിൽ / കസ്റ്റമർ'} {bs.buyer.phone ? `· ${bs.buyer.phone}` : ''}
                           </p>
-                          {bs.buyer.shop_name && (
-                            <p className="text-xs text-stone-500 dark:text-stone-400 font-malayalam truncate">
-                              {bs.buyer.shop_name}
-                            </p>
-                          )}
-                          {bs.buyer.phone && (
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <FiPhone className="w-3 h-3 text-stone-400" />
-                              <p className="text-xs text-stone-500 dark:text-stone-400">{bs.buyer.phone}</p>
-                            </div>
-                          )}
                         </div>
-
-                        {/* Delete */}
                         <button
                           onClick={() => handleDeleteBuyer(bs.buyer)}
                           className="press-apple cursor-pointer p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-stone-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                          title="Delete Buyer"
                         >
                           <FiTrash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
 
-                      {/* Mini stats */}
-                      <div className="grid grid-cols-3 gap-2 mt-3">
-                        <div className="bg-stone-50 dark:bg-[#1A1717] rounded-xl p-2.5 text-center">
-                          <p className="text-[9px] font-bold text-stone-500 dark:text-stone-400 font-malayalam uppercase tracking-wide">
-                            വാങ്ങിയത്
-                          </p>
-                          <p className="text-xs font-black text-stone-800 dark:text-stone-200 mt-0.5">
+                      {/* Details Box - styled exactly like Costing Product Cards */}
+                      <div className="p-3 bg-stone-50 dark:bg-[#141212] rounded-xl border border-stone-100 dark:border-[#282323] space-y-2.5 my-3 text-xs font-malayalam">
+                        <div className="flex items-center justify-between">
+                          <span className="text-stone-500 dark:text-stone-400 font-semibold">
+                            ആകെ വാങ്ങിയത് (Billed)
+                          </span>
+                          <span className="font-black text-sm text-stone-900 dark:text-white font-mono">
                             {fmt(bs.totalBilled)}
-                          </p>
+                          </span>
                         </div>
-                        <div className="bg-stone-50 dark:bg-[#1A1717] rounded-xl p-2.5 text-center">
-                          <p className="text-[9px] font-bold text-stone-500 dark:text-stone-400 font-malayalam uppercase tracking-wide">
-                            അടച്ചത്
-                          </p>
-                          <p className="text-xs font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
+
+                        <div className="flex items-center justify-between pt-1 border-t border-stone-200/60 dark:border-[#282323]">
+                          <span className="text-stone-500 dark:text-stone-400 font-semibold">
+                            ആകെ അടച്ചത് (Paid)
+                          </span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
                             {fmt(bs.totalPaid)}
-                          </p>
+                          </span>
                         </div>
-                        <div className="bg-stone-50 dark:bg-[#1A1717] rounded-xl p-2.5 text-center">
-                          <p className="text-[9px] font-bold text-stone-500 dark:text-stone-400 font-malayalam uppercase tracking-wide">
-                            ബാക്കി
-                          </p>
-                          <p className={`text-xs font-black mt-0.5 ${creditClass}`}>
+
+                        <div className="flex items-center justify-between pt-1 border-t border-stone-200/60 dark:border-[#282323]">
+                          <span className="text-stone-500 dark:text-stone-400 font-semibold">
+                            ബാക്കി കുടിശ്ശിക (Credit Due)
+                          </span>
+                          <span className={`font-black text-sm font-mono ${creditClass}`}>
                             {fmt(bs.netCredit)}
-                          </p>
+                          </span>
                         </div>
                       </div>
+                    </div>
 
-                      {/* Action buttons */}
-                      <div className="flex gap-2 mt-3">
+                    {/* Action buttons & Expandable History */}
+                    <div className="space-y-2 pt-2 border-t border-stone-100 dark:border-[#282323]">
+                      <div className="flex gap-2">
                         <button
                           onClick={() => {
                             setPaymentBuyer(bs.buyer);
@@ -813,50 +788,42 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
                           className="press-apple cursor-pointer flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold font-malayalam bg-epso-red text-white dark:bg-amber-500 dark:text-stone-950 shadow-sm"
                         >
                           <FiCreditCard className="w-3.5 h-3.5" />
-                          അടവ് രേഖ. (Payment)
+                          അടവ് (Pay)
                         </button>
                         <button
-                          onClick={() =>
-                            setExpandedBuyerId(isExpanded ? null : bs.buyer.id)
-                          }
+                          onClick={() => setExpandedBuyerId(isExpanded ? null : bs.buyer.id)}
                           className="press-apple cursor-pointer flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-bold font-malayalam bg-stone-100 dark:bg-[#2E2828] text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-[#3A3333] transition-colors"
                         >
-                          {isExpanded ? (
-                            <FiChevronUp className="w-3.5 h-3.5" />
-                          ) : (
-                            <FiChevronDown className="w-3.5 h-3.5" />
-                          )}
-                          ഹിസ്റ്ററി (History)
+                          {isExpanded ? <FiChevronUp className="w-3.5 h-3.5" /> : <FiChevronDown className="w-3.5 h-3.5" />}
+                          {isExpanded ? 'ഹൈഡ്' : 'ഹിസ്റ്ററി'}
                         </button>
                       </div>
-                    </div>
 
-                    {/* Expanded history */}
-                    {isExpanded && (
-                      <div className="border-t border-stone-100 dark:border-[#2E2828] bg-stone-50 dark:bg-[#141212] p-4 space-y-2">
-                        <p className="text-xs font-black text-stone-500 dark:text-stone-400 uppercase tracking-wide font-malayalam">
-                          ഇടപാട് ചരിത്രം — Transaction History
-                        </p>
-                        {timeline.length === 0 ? (
-                          <p className="text-xs text-stone-400 dark:text-stone-500 font-malayalam py-4 text-center">
-                            ഇടപാടുകൾ ഒന്നും ഇല്ല (No transactions)
+                      {/* Expanded History within Card */}
+                      {isExpanded && (
+                        <div className="mt-3 pt-3 border-t border-stone-200/60 dark:border-[#282323] max-h-52 overflow-y-auto space-y-2">
+                          <p className="text-[10px] font-black text-stone-500 dark:text-stone-400 uppercase tracking-wide font-malayalam">
+                            ഇടപാട് ചരിത്രം ({timeline.length})
                           </p>
-                        ) : (
-                          <div className="space-y-2">
-                            {timeline.map((item, idx) => (
+                          {timeline.length === 0 ? (
+                            <p className="text-xs text-stone-400 py-3 text-center font-malayalam">
+                              ഇടപാടുകൾ ഒന്നും ഇല്ല
+                            </p>
+                          ) : (
+                            timeline.map((item, idx) => (
                               <div
                                 key={idx}
-                                className={`flex items-center justify-between gap-3 p-2.5 rounded-xl border text-xs ${
+                                className={`flex items-center justify-between gap-2 p-2 rounded-xl border text-xs ${
                                   item.type === 'sale'
-                                    ? 'bg-white dark:bg-[#1A1717] border-stone-200 dark:border-[#2E2828]'
-                                    : 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40'
+                                    ? 'bg-stone-50 dark:bg-[#141212] border-stone-200 dark:border-[#282323]'
+                                    : 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/50 dark:border-emerald-900/30'
                                 }`}
                               >
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
                                   <div
-                                    className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                                    className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${
                                       item.type === 'sale'
-                                        ? 'bg-stone-100 dark:bg-[#2E2828]'
+                                        ? 'bg-stone-200 dark:bg-[#2E2828]'
                                         : 'bg-emerald-100 dark:bg-emerald-900/40'
                                     }`}
                                   >
@@ -866,22 +833,22 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
                                       <FiCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                                     )}
                                   </div>
-                                  <div>
-                                    <p className="font-bold text-stone-700 dark:text-stone-300 font-malayalam">
+                                  <div className="min-w-0">
+                                    <p className="font-bold text-stone-700 dark:text-stone-300 font-malayalam text-[11px] truncate">
                                       {item.type === 'sale'
                                         ? (item.record as SaleRecord).product_name
                                         : 'അടവ് (Payment)'}
                                     </p>
-                                    <p className="text-stone-400 dark:text-stone-500">
+                                    <p className="text-[10px] text-stone-400">
                                       {item.date}
                                       {item.type === 'payment' &&
                                         ` · ${(item.record as BuyerPayment).payment_method}`}
                                     </p>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
+                                <div className="flex items-center gap-1.5 shrink-0">
                                   <span
-                                    className={`font-black ${
+                                    className={`font-mono font-bold text-xs ${
                                       item.type === 'sale'
                                         ? 'text-stone-800 dark:text-stone-200'
                                         : 'text-emerald-600 dark:text-emerald-400'
@@ -893,21 +860,20 @@ export const AccountsLedgerAdminView: React.FC<AccountsLedgerAdminViewProps> = (
                                   </span>
                                   {item.type === 'payment' && (
                                     <button
-                                      onClick={() =>
-                                        handleDeletePayment(item.record as BuyerPayment)
-                                      }
-                                      className="press-apple cursor-pointer p-1 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/40 text-stone-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                                      onClick={() => handleDeletePayment(item.record as BuyerPayment)}
+                                      className="press-apple cursor-pointer p-1 rounded-md hover:bg-red-100 dark:hover:bg-red-950/40 text-stone-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                                      title="Delete Payment"
                                     >
                                       <FiTrash2 className="w-3 h-3" />
                                     </button>
                                   )}
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}

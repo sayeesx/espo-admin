@@ -17,21 +17,26 @@ import {
   FiShoppingBag,
   FiRotateCcw,
 } from 'react-icons/fi';
-import { Product, SaleRecord, FactoryProfile, DEFAULT_FACTORY_PROFILE } from '../types';
+import { Product, SaleRecord, FactoryProfile, DEFAULT_FACTORY_PROFILE, ProductionRun } from '../types';
 import {
   fetchSales,
   recordSale,
   recordSalesBatch,
   deleteSale,
   fetchProductSellingPrices,
+  fetchBuyers,
+  saveBuyer,
   supabase,
 } from '../services/supabase';
 import { AnimatedNumber } from './AnimatedNumber';
 import { createPortal } from 'react-dom';
 import { useFeedback } from '../context/FeedbackContext';
+import { useFullCostStockValuation } from '../hooks/useFullCostStockValuation';
+import { roundCurrency } from '../services/costing';
 
 interface SalesAdminViewProps {
   products: Product[];
+  productionRuns?: ProductionRun[];
   onRefresh?: () => Promise<void> | void;
 }
 
@@ -74,8 +79,9 @@ export interface BillData {
   gstBreakdown: Record<number, number>;
 }
 
-export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, onRefresh }) => {
+export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, productionRuns, onRefresh }) => {
   const { showToast, confirm } = useFeedback();
+  const { costPerKgMap } = useFullCostStockValuation(products, productionRuns || []);
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [costingPrices, setCostingPrices] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -204,9 +210,10 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, onRefr
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [salesData, pricesData] = await Promise.all([
+      const [salesData, pricesData, dbBuyers] = await Promise.all([
         fetchSales(),
         fetchProductSellingPrices(),
+        fetchBuyers().catch(() => []),
       ]);
 
       setSales(salesData);
@@ -220,17 +227,25 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, onRefr
       }
       setCostingPrices(priceMap);
 
+      // Map buyers from Accounts & Ledger DB
+      const mappedDbBuyers: BuyerInfo[] = (dbBuyers || []).map((b) => ({
+        name: b.name,
+        phone: b.phone,
+        shopName: b.shop_name,
+      }));
+
       // Extract past buyers if not in list
       const pastBuyerNames = Array.from(new Set(salesData.map((s) => s.customer_name).filter(Boolean)));
       setBuyersList((prev) => {
-        const existingNames = new Set(prev.map((b) => b.name.toLowerCase()));
-        const additions: BuyerInfo[] = [];
+        const mergedMap = new Map<string, BuyerInfo>();
+        for (const b of prev) mergedMap.set(b.name.toLowerCase().trim(), b);
+        for (const b of mappedDbBuyers) mergedMap.set(b.name.toLowerCase().trim(), b);
         for (const name of pastBuyerNames) {
-          if (name && !existingNames.has(name.toLowerCase())) {
-            additions.push({ name });
+          if (name && !mergedMap.has(name.toLowerCase().trim())) {
+            mergedMap.set(name.toLowerCase().trim(), { name });
           }
         }
-        return [...prev, ...additions];
+        return Array.from(mergedMap.values());
       });
     } catch (err) {
       console.error('Failed to load sales data:', err);
@@ -254,7 +269,7 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, onRefr
     loadData();
   }, []);
 
-  // Save buyers list to localStorage
+  // Save buyers list to localStorage and Supabase
   const handleAddNewBuyer = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newBuyerName.trim()) return;
@@ -264,6 +279,14 @@ export const SalesAdminView: React.FC<SalesAdminViewProps> = ({ products, onRefr
       phone: newBuyerPhone.trim() || undefined,
       shopName: newBuyerShop.trim() || undefined,
     };
+
+    // Save to database so Accounts & Ledger also syncs
+    saveBuyer({
+      name: newBuyer.name,
+      phone: newBuyer.phone,
+      shop_name: newBuyer.shopName,
+      is_active: true,
+    }).catch((err) => console.error('Failed to sync new buyer to DB:', err));
 
     const updated = [newBuyer, ...buyersList.filter((b) => b.name.toLowerCase() !== newBuyer.name.toLowerCase())];
     setBuyersList(updated);
@@ -862,51 +885,84 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-[#2E2828]">
-                {filteredSales.map((sale) => (
-                  <tr key={sale.id} className="hover:bg-orange-50/30 dark:hover:bg-[#252020] transition-colors">
-                    <td className="py-3 px-3.5 font-mono text-stone-500 dark:text-stone-400">
-                      {sale.sale_date}
-                    </td>
-                    <td className="py-3 px-3.5 font-bold text-stone-900 dark:text-white">
-                      {sale.product_name}
-                      {sale.notes && (
-                        <p className="text-[10px] text-stone-400 font-normal mt-0.5">{sale.notes}</p>
-                      )}
-                    </td>
-                    <td className="py-3 px-3.5 text-right font-mono font-bold text-stone-700 dark:text-stone-300">
-                      {sale.quantity} <span className="text-[10px] text-stone-400 font-sans">{sale.unit}</span>
-                    </td>
-                    <td className="py-3 px-3.5 text-right font-mono text-stone-600 dark:text-stone-400">
-                      ₹{Number(sale.unit_price).toFixed(2)}
-                    </td>
-                    <td className="py-3 px-3.5 text-right font-mono font-black text-stone-900 dark:text-white">
-                      ₹{Number(sale.total_amount).toFixed(2)}
-                      {Number(sale.discount) > 0 && (
-                        <div className="text-[10px] text-amber-600 dark:text-amber-400 font-normal">
-                          (-₹{Number(sale.discount).toFixed(2)})
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-3 px-3.5 text-right font-mono">
-                      {sale.cogs_status === 'unverified_missing_cost' || sale.cogs === null || sale.cogs === undefined ? (
-                        <span
-                          className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
-                          title="COGS unverified due to missing product valuation at time of sale"
-                        >
-                          അൺവെരിഫൈഡ്
-                        </span>
-                      ) : (
-                        <span
-                          className={`font-bold ${
-                            Number(sale.total_amount) - Number(sale.cogs) >= 0
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : 'text-rose-600 dark:text-rose-400'
-                          }`}
-                        >
-                          ₹{(Number(sale.total_amount) - Number(sale.cogs)).toFixed(2)}
-                        </span>
-                      )}
-                    </td>
+                {filteredSales.map((sale) => {
+                  const prod = products.find(
+                    (p) => p.id === sale.product_id || p.name.toLowerCase().trim() === (sale.product_name || '').toLowerCase().trim()
+                  );
+                  const costPerKg = prod && costPerKgMap[prod.id] > 0 ? costPerKgMap[prod.id] : 0;
+                  const qty = Number(sale.quantity) || 0;
+                  const totalAmt = Number(sale.total_amount) || 0;
+
+                  // Use Costing tab's dynamic batch cost per kg when available
+                  const hasCostingData = costPerKg > 0;
+                  const calculatedCost = hasCostingData
+                    ? roundCurrency(qty * costPerKg)
+                    : (sale.cogs ? Number(sale.cogs) : null);
+                  const rowProfit = calculatedCost !== null
+                    ? roundCurrency(totalAmt - calculatedCost)
+                    : null;
+                  const profitPerKg = hasCostingData && qty > 0
+                    ? roundCurrency(rowProfit! / qty)
+                    : null;
+
+                  return (
+                    <tr key={sale.id} className="hover:bg-orange-50/30 dark:hover:bg-[#252020] transition-colors">
+                      <td className="py-3 px-3.5 font-mono text-stone-500 dark:text-stone-400">
+                        {sale.sale_date}
+                      </td>
+                      <td className="py-3 px-3.5 font-bold text-stone-900 dark:text-white">
+                        {sale.product_name}
+                        {sale.notes && (
+                          <p className="text-[10px] text-stone-400 font-normal mt-0.5">{sale.notes}</p>
+                        )}
+                      </td>
+                      <td className="py-3 px-3.5 text-right font-mono font-bold text-stone-700 dark:text-stone-300">
+                        {sale.quantity} <span className="text-[10px] text-stone-400 font-sans">{sale.unit}</span>
+                      </td>
+                      <td className="py-3 px-3.5 text-right font-mono text-stone-600 dark:text-stone-400">
+                        ₹{Number(sale.unit_price).toFixed(2)}
+                      </td>
+                      <td className="py-3 px-3.5 text-right font-mono font-black text-stone-900 dark:text-white">
+                        ₹{Number(sale.total_amount).toFixed(2)}
+                        {Number(sale.discount) > 0 && (
+                          <div className="text-[10px] text-amber-600 dark:text-amber-400 font-normal">
+                            (-₹{Number(sale.discount).toFixed(2)})
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 px-3.5 text-right font-mono">
+                        {rowProfit === null ? (
+                          <span
+                            className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
+                            title="COGS unverified due to missing product valuation at time of sale"
+                          >
+                            അൺവെരിഫൈഡ്
+                          </span>
+                        ) : (
+                          <div>
+                            <span
+                              className={`font-bold ${
+                                rowProfit >= 0
+                                  ? 'text-emerald-600 dark:text-emerald-400'
+                                  : 'text-rose-600 dark:text-rose-400'
+                              }`}
+                            >
+                              {rowProfit >= 0 ? `₹${rowProfit.toFixed(2)}` : `-₹${Math.abs(rowProfit).toFixed(2)}`}
+                            </span>
+                            {profitPerKg !== null && (
+                              <div
+                                className={`text-[10px] font-bold ${
+                                  profitPerKg >= 0
+                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                    : 'text-rose-600 dark:text-rose-400'
+                                }`}
+                              >
+                                ({profitPerKg >= 0 ? '+' : '-'}₹{Math.abs(profitPerKg).toFixed(2)}/kg)
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </td>
                     <td className="py-3 px-3.5 text-stone-700 dark:text-stone-300 font-medium">
                       {sale.customer_name || '—'}
                     </td>
@@ -950,7 +1006,8 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
                       </button>
                     </td>
                   </tr>
-                ))}
+                );
+              })}
               </tbody>
             </table>
           </div>
