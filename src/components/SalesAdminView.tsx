@@ -691,28 +691,50 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
     let monthTotal = 0;
     let allTotal = 0;
     let totalQty = 0;
+    let totalProfit = 0;
+    let todayProfit = 0;
+    let monthProfit = 0;
 
     sales.forEach((s) => {
       const amt = Number(s.total_amount) || 0;
+      const qty = Number(s.quantity) || 0;
       allTotal += amt;
-      totalQty += Number(s.quantity) || 0;
+      totalQty += qty;
+
+      // Real profit based on Costing tab unit cost per kg
+      const prod = products.find(
+        (p) => p.id === s.product_id || p.name.toLowerCase().trim() === (s.product_name || '').toLowerCase().trim()
+      );
+      const costPerKg = prod && costPerKgMap[prod.id] > 0 ? costPerKgMap[prod.id] : 0;
+      const cost = costPerKg > 0 ? roundCurrency(qty * costPerKg) : (s.cogs ? Number(s.cogs) : null);
+      const profit = cost !== null ? roundCurrency(amt - cost) : 0;
+
+      totalProfit += profit;
 
       if (s.sale_date === todayStr) {
         todayTotal += amt;
+        todayProfit += profit;
       }
       if (s.sale_date.startsWith(currentMonthStr)) {
         monthTotal += amt;
+        monthProfit += profit;
       }
     });
+
+    const profitMargin = allTotal > 0 ? ((totalProfit / allTotal) * 100).toFixed(1) : '0';
 
     return {
       todayTotal,
       monthTotal,
       allTotal,
       totalQty,
+      totalProfit,
+      todayProfit,
+      monthProfit,
+      profitMargin,
       ordersCount: sales.length,
     };
-  }, [sales, todayStr, currentMonthStr]);
+  }, [sales, todayStr, currentMonthStr, products, costPerKgMap]);
 
   const allItemsSelected = invoiceItems.length > 0 && invoiceItems.every((i) => i.selected);
 
@@ -814,7 +836,7 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
 {viewMode === 'list' && (
   <div className="space-y-4 font-sans animate-fade-in">
       {/* Clean Statistics Strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border border-stone-200 dark:border-[#2E2828] shadow-sm">
           <p className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam">ഇന്നത്തെ വിൽപ്പന</p>
           <p className="text-xl sm:text-2xl font-black text-epso-orange dark:text-amber-400 font-mono mt-0.5">
@@ -845,6 +867,37 @@ ${phoneEmailLine ? `${phoneEmailLine}\n` : ''}${taxLine ? `${taxLine}\n` : ''}${
             <AnimatedNumber value={stats.totalQty} decimals={1} suffix=" kg" />
           </p>
           <p className="text-[10px] text-stone-400 mt-0.5 font-malayalam">കിലോ (kg)</p>
+        </div>
+
+        {/* Total Profit Card */}
+        <div className={`p-4 rounded-2xl bg-white dark:bg-[#1E1B1B] border shadow-sm transition-all ${
+          stats.totalProfit >= 0
+            ? 'border-emerald-200 dark:border-emerald-900/50 bg-gradient-to-br from-white to-emerald-50/20 dark:from-[#1E1B1B] dark:to-emerald-950/10'
+            : 'border-rose-200 dark:border-rose-900/50 bg-gradient-to-br from-white to-rose-50/20 dark:from-[#1E1B1B] dark:to-rose-950/10'
+        }`}>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold text-stone-500 dark:text-stone-400 font-malayalam">ആകെ ലാഭം (Profit)</p>
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-black font-mono ${
+              stats.totalProfit >= 0
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300'
+            }`}>
+              {stats.profitMargin}%
+            </span>
+          </div>
+          <p className={`text-xl sm:text-2xl font-black font-mono mt-0.5 ${
+            stats.totalProfit >= 0
+              ? 'text-emerald-600 dark:text-emerald-400'
+              : 'text-rose-600 dark:text-rose-400'
+          }`}>
+            <AnimatedNumber value={stats.totalProfit} prefix="₹" decimals={2} />
+          </p>
+          <p className="text-[10px] text-stone-400 mt-0.5 font-malayalam flex items-center justify-between">
+            <span>ഇന്ന് (Today):</span>
+            <span className={`font-mono font-bold ${stats.todayProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+              {stats.todayProfit >= 0 ? '+' : ''}₹{stats.todayProfit.toFixed(2)}
+            </span>
+          </p>
         </div>
       </div>
 
